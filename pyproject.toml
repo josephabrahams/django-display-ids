@@ -26,11 +26,6 @@ dependencies = [
     "django>=4.2",
 ]
 
-[project.optional-dependencies]
-drf = [
-    "djangorestframework>=3.14",
-]
-
 [dependency-groups]
 dev = [
     "pytest>=8.0",

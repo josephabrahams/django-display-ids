@@ -31,7 +31,7 @@ def tests(session: nox.Session, django: str) -> None:
 
     session.install(f"django~={django}.0")
     session.install("pytest", "pytest-django", "djangorestframework", "shortuuid")
-    session.install("-e", ".")
+    session.install(".")
     session.run("pytest", *session.posargs)
 
 
@@ -46,5 +46,5 @@ def lint(session: nox.Session) -> None:
 def typecheck(session: nox.Session) -> None:
     """Run type checking."""
     session.install("mypy", "django-stubs", "djangorestframework-stubs")
-    session.install("-e", ".")
+    session.install(".")
     session.run("mypy", "src")

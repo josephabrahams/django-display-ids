@@ -10,12 +10,6 @@ Handles lookup only — not ID generation, persistence, or serialization.
 pip install django-display-ids
 ```
 
-For DRF support:
-
-```bash
-pip install django-display-ids[drf]
-```
-
 ## Quick Start
 
 ```python

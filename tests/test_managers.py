@@ -1,0 +1,210 @@
+"""Tests for managers module."""
+
+import uuid
+
+import pytest
+
+from django_display_ids.encoding import encode_display_id
+from django_display_ids.exceptions import (
+    InvalidIdentifierError,
+    MissingPrefixError,
+    ObjectNotFoundError,
+    UnknownPrefixError,
+)
+
+from .models import Invoice, Order, Product
+
+
+@pytest.fixture
+def invoice(db):
+    """Create a test invoice."""
+    return Invoice.objects.create(name="Test Invoice", slug="test-invoice")
+
+
+@pytest.fixture
+def product(db):
+    """Create a test product."""
+    return Product.objects.create(name="Test Product", handle="test-product")
+
+
+@pytest.fixture
+def order(db):
+    """Create a test order (no display ID prefix)."""
+    return Order.objects.create(name="Test Order", slug="test-order")
+
+
+@pytest.mark.django_db
+class TestGetByDisplayId:
+    """Tests for get_by_display_id method."""
+
+    def test_get_by_display_id(self, invoice):
+        """Object is retrieved by display ID."""
+        display_id = invoice.display_id
+        result = Invoice.objects.get_by_display_id(display_id)
+        assert result == invoice
+
+    def test_display_id_not_found(self, invoice):
+        """ObjectNotFoundError raised when display ID doesn't exist."""
+        fake_display_id = encode_display_id("inv", uuid.uuid4())
+        with pytest.raises(ObjectNotFoundError) as exc_info:
+            Invoice.objects.get_by_display_id(fake_display_id)
+        assert exc_info.value.model_name == "Invoice"
+
+    def test_invalid_format(self, invoice):
+        """InvalidIdentifierError raised for invalid display ID format."""
+        with pytest.raises(InvalidIdentifierError):
+            Invoice.objects.get_by_display_id("invalid-format")
+
+    def test_wrong_prefix(self, invoice):
+        """UnknownPrefixError raised when prefix doesn't match."""
+        # Create a display ID with wrong prefix
+        wrong_prefix_id = encode_display_id("prod", invoice.id)
+        with pytest.raises(UnknownPrefixError) as exc_info:
+            Invoice.objects.get_by_display_id(wrong_prefix_id)
+        assert exc_info.value.actual == "prod"
+        assert exc_info.value.expected == "inv"
+
+    def test_explicit_prefix(self, invoice):
+        """Explicit prefix parameter overrides model prefix."""
+        # This would normally fail because of wrong prefix
+        display_id = encode_display_id("custom", invoice.id)
+        result = Invoice.objects.get_by_display_id(display_id, prefix="custom")
+        assert result == invoice
+
+    def test_model_without_prefix_raises_error(self, order):
+        """MissingPrefixError raised for model without prefix."""
+        fake_display_id = encode_display_id("ord", order.id)
+        with pytest.raises(MissingPrefixError) as exc_info:
+            Order.objects.get_by_display_id(fake_display_id)
+        assert exc_info.value.model_name == "Order"
+
+
+@pytest.mark.django_db
+class TestGetByIdentifier:
+    """Tests for get_by_identifier method."""
+
+    def test_by_uuid(self, invoice):
+        """Object is retrieved by UUID."""
+        result = Invoice.objects.get_by_identifier(str(invoice.id))
+        assert result == invoice
+
+    def test_by_display_id(self, invoice):
+        """Object is retrieved by display ID."""
+        result = Invoice.objects.get_by_identifier(invoice.display_id)
+        assert result == invoice
+
+    def test_by_slug(self, invoice):
+        """Object is retrieved by slug."""
+        result = Invoice.objects.get_by_identifier(
+            "test-invoice",
+            strategies=("uuid", "display_id", "slug"),
+        )
+        assert result == invoice
+
+    def test_not_found(self, invoice):
+        """ObjectNotFoundError raised when identifier doesn't exist."""
+        fake_uuid = uuid.uuid4()
+        with pytest.raises(ObjectNotFoundError):
+            Invoice.objects.get_by_identifier(str(fake_uuid))
+
+    def test_invalid_identifier(self, invoice):
+        """InvalidIdentifierError raised for invalid identifier."""
+        with pytest.raises(InvalidIdentifierError):
+            Invoice.objects.get_by_identifier(
+                "invalid",
+                strategies=("uuid",),  # Only UUID, won't match
+            )
+
+    def test_display_id_skipped_without_prefix(self, order):
+        """display_id strategy is skipped for models without prefix."""
+        # Order doesn't have display_id_prefix
+        # UUID should still work
+        result = Order.objects.get_by_identifier(str(order.id))
+        assert result == order
+
+    def test_display_id_only_without_prefix_raises_error(self, order):
+        """InvalidIdentifierError when display_id is only strategy and no prefix."""
+        with pytest.raises(InvalidIdentifierError) as exc_info:
+            Order.objects.get_by_identifier(
+                "anything",
+                strategies=("display_id",),
+            )
+        assert "No strategies available" in str(exc_info.value)
+
+    def test_custom_strategies(self, invoice):
+        """Custom strategies are used."""
+        # Only use slug strategy
+        result = Invoice.objects.get_by_identifier(
+            "test-invoice",
+            strategies=("slug",),
+        )
+        assert result == invoice
+
+    def test_explicit_prefix(self, invoice):
+        """Explicit prefix parameter is used."""
+        # Use a custom prefix
+        display_id = encode_display_id("custom", invoice.id)
+        result = Invoice.objects.get_by_identifier(
+            display_id,
+            strategies=("display_id",),
+            prefix="custom",
+        )
+        assert result == invoice
+
+
+@pytest.mark.django_db
+class TestQuerySetChaining:
+    """Tests for queryset method chaining."""
+
+    def test_filter_then_get_by_display_id(self, db):
+        """get_by_display_id works on filtered queryset."""
+        invoice1 = Invoice.objects.create(name="Invoice 1", slug="invoice-1")
+        Invoice.objects.create(name="Invoice 2", slug="invoice-2")
+
+        result = Invoice.objects.filter(slug="invoice-1").get_by_display_id(
+            invoice1.display_id
+        )
+        assert result == invoice1
+
+    def test_filter_excludes_object(self, db):
+        """ObjectNotFoundError when object excluded by filter."""
+        Invoice.objects.create(name="Invoice 1", slug="invoice-1")
+        invoice2 = Invoice.objects.create(name="Invoice 2", slug="invoice-2")
+
+        with pytest.raises(ObjectNotFoundError):
+            Invoice.objects.filter(slug="invoice-1").get_by_display_id(
+                invoice2.display_id
+            )
+
+    def test_filter_then_get_by_identifier(self, db):
+        """get_by_identifier works on filtered queryset."""
+        invoice1 = Invoice.objects.create(name="Invoice 1", slug="invoice-1")
+        Invoice.objects.create(name="Invoice 2", slug="invoice-2")
+
+        result = Invoice.objects.filter(slug="invoice-1").get_by_identifier(
+            str(invoice1.id)
+        )
+        assert result == invoice1
+
+
+@pytest.mark.django_db
+class TestCustomFieldNames:
+    """Tests for custom field name configuration."""
+
+    def test_custom_uuid_field_in_manager(self, product):
+        """Manager uses custom uuid_field from model."""
+        result = Product.objects.get_by_identifier(str(product.uid))
+        assert result == product
+
+    def test_custom_slug_field_in_manager(self, product):
+        """Manager uses custom slug_field from model."""
+        result = Product.objects.get_by_identifier(
+            "test-product",
+            strategies=("slug",),
+        )
+        assert result == product
+
+    def test_custom_fields_in_get_by_display_id(self, product):
+        """get_by_display_id uses custom uuid_field."""
+        result = Product.objects.get_by_display_id(product.display_id)
+        assert result == product

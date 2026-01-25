@@ -1,0 +1,88 @@
+"""django-display-ids: Resolve external identifiers to Django model instances.
+
+This package provides a clean way to resolve external identifiers (UUIDs,
+display IDs, slugs) to model instances in Django and DRF views without
+requiring model inheritance, custom fields, or serializers.
+
+Example:
+    from django_display_ids import (
+        encode_display_id,
+        decode_display_id,
+        resolve_object,
+        DisplayIDObjectMixin,
+    )
+
+    # Encode a UUID to a display ID
+    display_id = encode_display_id("inv", invoice.id)
+    # -> "inv_1a2B3c4D5e6F7g8H9i0J1k"
+
+    # Use in Django views
+    class InvoiceDetailView(DisplayIDObjectMixin, DetailView):
+        model = Invoice
+        lookup_param = "id"
+        display_id_prefix = "inv"
+"""
+
+from .encoding import (
+    decode_display_id,
+    decode_uuid,
+    encode_display_id,
+    encode_uuid,
+)
+from .exceptions import (
+    AmbiguousIdentifierError,
+    InvalidIdentifierError,
+    LookupError,
+    MissingPrefixError,
+    ObjectNotFoundError,
+    UnknownPrefixError,
+)
+from .managers import DisplayIDManager, DisplayIDQuerySet
+from .models import DisplayIDMixin, get_model_for_prefix
+from .resolver import resolve_object
+from .typing import DEFAULT_STRATEGIES, StrategyName
+from .views import DisplayIDObjectMixin
+
+__all__ = [  # noqa: RUF022 - keep categorized order for readability
+    # Encoding
+    "encode_uuid",
+    "decode_uuid",
+    "encode_display_id",
+    "decode_display_id",
+    # Core resolver
+    "resolve_object",
+    # Errors
+    "LookupError",
+    "InvalidIdentifierError",
+    "UnknownPrefixError",
+    "MissingPrefixError",
+    "ObjectNotFoundError",
+    "AmbiguousIdentifierError",
+    # Django mixins
+    "DisplayIDObjectMixin",
+    # Model mixin
+    "DisplayIDMixin",
+    "get_model_for_prefix",
+    # Managers
+    "DisplayIDManager",
+    "DisplayIDQuerySet",
+    # Types
+    "StrategyName",
+    "DEFAULT_STRATEGIES",
+]
+
+__version__ = "0.1.0"
+
+
+def get_drf_mixin():
+    """Lazily import the DRF mixin to avoid hard dependency.
+
+    Returns:
+        DisplayIDLookupMixin class.
+
+    Raises:
+        ImportError: If Django REST Framework is not installed.
+    """
+    from .contrib.rest_framework import DisplayIDLookupMixin
+
+    return DisplayIDLookupMixin

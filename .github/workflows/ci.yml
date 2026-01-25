@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pre-commit/action@v3.0.1
+
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        session:
+          - "tests-3.12(django='4.2')"
+          - "tests-3.12(django='5.2')"
+          - "tests-3.12(django='6.0')"
+          - "tests-3.13(django='5.2')"
+          - "tests-3.13(django='6.0')"
+          - "tests-3.14(django='6.0')"
+
+    name: ${{ matrix.session }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Run nox session
+        run: uvx nox -s "${{ matrix.session }}"

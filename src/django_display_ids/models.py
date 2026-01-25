@@ -30,36 +30,27 @@ def get_model_for_prefix(prefix: str) -> str | None:
     return _prefix_registry.get(prefix)
 
 
-class DisplayIDMeta(models.base.ModelBase):
-    """Metaclass that registers display ID prefixes and detects collisions."""
+def _register_prefix(prefix: str, model_name: str) -> None:
+    """Register a prefix for a model, checking for collisions.
 
-    def __new__(
-        mcs,
-        name: str,
-        bases: tuple[type, ...],
-        namespace: dict,
-        **kwargs,
-    ):
-        cls = super().__new__(mcs, name, bases, namespace, **kwargs)
+    Args:
+        prefix: The display ID prefix.
+        model_name: The model class name.
 
-        # Skip abstract models
-        if getattr(cls, "_meta", None) and getattr(cls._meta, "abstract", False):  # type: ignore[attr-defined]
-            return cls
-
-        # Check if this model defines a prefix (not inherited)
-        prefix = namespace.get("display_id_prefix")
-        if prefix is not None:
-            if prefix in _prefix_registry:
-                raise ValueError(
-                    f"Display ID prefix '{prefix}' is already used by "
-                    f"{_prefix_registry[prefix]}, cannot reuse for {name}"
-                )
-            _prefix_registry[prefix] = name
-
-        return cls
+    Raises:
+        ValueError: If prefix is already registered to a different model.
+    """
+    if prefix in _prefix_registry:
+        existing = _prefix_registry[prefix]
+        if existing != model_name:
+            raise ValueError(
+                f"Display ID prefix '{prefix}' is already used by "
+                f"{existing}, cannot reuse for {model_name}"
+            )
+    _prefix_registry[prefix] = model_name
 
 
-class DisplayIDMixin(models.Model, metaclass=DisplayIDMeta):
+class DisplayIDMixin(models.Model):
     """Mixin that adds display_id support to a Django model.
 
     Subclasses must define `display_id_prefix` as a class attribute.
@@ -86,12 +77,22 @@ class DisplayIDMixin(models.Model, metaclass=DisplayIDMeta):
             # ...
     """
 
-    display_id_prefix: ClassVar[str]
+    display_id_prefix: ClassVar[str | None] = None
     uuid_field: ClassVar[str | None] = None
     slug_field: ClassVar[str | None] = None
 
     class Meta:
         abstract = True
+
+    def __init_subclass__(cls, **kwargs) -> None:
+        """Register prefix when subclass is created."""
+        super().__init_subclass__(**kwargs)
+
+        # Only register if THIS class defines the prefix (not inherited)
+        if "display_id_prefix" in cls.__dict__:
+            prefix = cls.__dict__["display_id_prefix"]
+            if prefix is not None:
+                _register_prefix(prefix, cls.__name__)
 
     @classmethod
     def _get_uuid_field(cls) -> str:
@@ -106,33 +107,23 @@ class DisplayIDMixin(models.Model, metaclass=DisplayIDMeta):
         return str(get_setting("SLUG_FIELD"))
 
     @classmethod
-    def get_display_id_prefix(cls) -> str:
+    def get_display_id_prefix(cls) -> str | None:
         """Get the display ID prefix for this model.
 
         Returns:
-            The prefix string.
-
-        Raises:
-            NotImplementedError: If display_id_prefix is not defined.
+            The prefix string, or None if not defined.
         """
-        # Check if prefix is defined on this class (not just inherited as the ClassVar)
-        prefix = getattr(cls, "display_id_prefix", None)
-        if prefix is None:
-            raise NotImplementedError(
-                f"{cls.__name__} must define 'display_id_prefix' class attribute"
-            )
-        return prefix
+        return getattr(cls, "display_id_prefix", None)
 
     @property
-    def display_id(self) -> str:
+    def display_id(self) -> str | None:
         """Generate the display ID for this instance.
 
         Returns:
-            Display ID in format {prefix}_{base62(uuid)}.
-
-        Raises:
-            NotImplementedError: If display_id_prefix is not defined.
+            Display ID in format {prefix}_{base62(uuid)}, or None if no prefix.
         """
         prefix = self.get_display_id_prefix()
+        if prefix is None:
+            return None
         uuid_value = getattr(self, self._get_uuid_field())
         return encode_display_id(prefix, uuid_value)

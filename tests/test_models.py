@@ -94,8 +94,14 @@ class TestPrefixRegistry:
                 class Meta:
                     app_label = "tests"
 
-    def test_abstract_models_not_registered(self):
-        """Abstract models don't register their prefix."""
+    def test_abstract_models_are_registered(self):
+        """Abstract models with prefixes are registered.
+
+        This is intentional - registering abstract models ensures collision
+        detection works across the inheritance hierarchy. If an abstract base
+        claims a prefix, concrete subclasses that don't override it will
+        inherit it, and other models cannot reuse it.
+        """
 
         # Define an abstract model
         class AbstractModel(DisplayIDMixin):
@@ -105,8 +111,8 @@ class TestPrefixRegistry:
                 abstract = True
                 app_label = "tests"
 
-        # The prefix should not be registered
-        assert get_model_for_prefix("abstract") is None
+        # Abstract models are registered for collision detection
+        assert get_model_for_prefix("abstract") == "AbstractModel"
 
 
 @pytest.mark.django_db

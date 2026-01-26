@@ -47,6 +47,44 @@ Now your view accepts both formats:
 
 ## Usage
 
+### Model Mixin
+
+Add a `display_id` property to your models:
+
+```python
+import uuid
+from django.db import models
+from django_display_ids import DisplayIDMixin
+
+class Invoice(DisplayIDMixin, models.Model):
+    display_id_prefix = "inv"
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+
+invoice = Invoice.objects.first()
+invoice.display_id  # -> "inv_2aUyqjCzEIiEcYMKj7TZtw"
+```
+
+### Model Manager
+
+```python
+from django_display_ids import DisplayIDMixin, DisplayIDManager
+
+class Invoice(DisplayIDMixin, models.Model):
+    display_id_prefix = "inv"
+    objects = DisplayIDManager()
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+
+# Get by display ID
+invoice = Invoice.objects.get_by_display_id("inv_2aUyqjCzEIiEcYMKj7TZtw")
+
+# Get by any identifier type
+invoice = Invoice.objects.get_by_identifier("inv_2aUyqjCzEIiEcYMKj7TZtw")
+invoice = Invoice.objects.get_by_identifier("550e8400-e29b-41d4-a716-446655440000")
+
+# Works with filtered querysets
+invoice = Invoice.objects.filter(active=True).get_by_identifier("inv_xxx")
+```
+
 ### Django Class-Based Views
 
 ```python
@@ -124,11 +162,13 @@ display_id = DisplayIDField(prefix="inv")  # Use custom prefix
 
 Prefix must be 1-16 lowercase letters. Invalid prefixes raise `ValueError` at initialization.
 
-**OpenAPI/drf-spectacular**: When drf-spectacular is installed, the field automatically generates proper schema with prefix-specific examples (e.g., `inv_2aUyqjCzEIiEcYMKj7TZtw`). The prefix is resolved from (in order): field's `prefix=` argument, serializer's `Meta.model.display_id_prefix`, or the view's queryset model.
+#### OpenAPI / drf-spectacular
 
-#### OpenAPI Parameter Descriptions
+When drf-spectacular is installed, `DisplayIDField` automatically generates proper schema with prefix-specific examples. No configuration needed — just import from `django_display_ids.contrib.rest_framework`.
 
-For consistent API documentation, use the provided description helpers:
+The extension resolves the prefix from (in order): field's `prefix=` argument, serializer's `Meta.model.display_id_prefix`, or the view's queryset model.
+
+For path parameter descriptions, use the provided helpers:
 
 ```python
 from django_display_ids.contrib.rest_framework import id_param_description
@@ -166,64 +206,17 @@ from django_display_ids.contrib.rest_framework import (
 )
 ```
 
-#### Deterministic Examples for OpenAPI
-
-Generate consistent example UUIDs and display IDs for OpenAPI schemas:
+For custom schemas, generate deterministic examples:
 
 ```python
 from django_display_ids import example_uuid, example_display_id
 
-# Generate deterministic UUID for a prefix
-example_uuid("inv")
-# -> UUID('a172cedc-ae47-474b-615c-54d510a5d84a')
-
-# Generate deterministic display ID
-example_display_id("inv")
-# -> "inv_4ueEO5Nz4X7u9qc3FVHokM"
-
-# Also works with model classes
-example_uuid(Invoice)  # Uses Invoice.display_id_prefix
+example_uuid("inv")        # -> UUID('a172cedc-ae47-474b-...')
+example_display_id("inv")  # -> "inv_4ueEO5Nz4X7u9qc3FVHokM"
+example_display_id(Invoice)  # Also works with model classes
 ```
 
 The same prefix always produces the same example, ensuring consistent documentation across regenerations.
-
-### Model Mixin
-
-Add a `display_id` property to your models:
-
-```python
-import uuid
-from django.db import models
-from django_display_ids import DisplayIDMixin
-
-class Invoice(DisplayIDMixin, models.Model):
-    display_id_prefix = "inv"
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
-
-invoice = Invoice.objects.first()
-invoice.display_id  # -> "inv_2aUyqjCzEIiEcYMKj7TZtw"
-```
-
-### Model Manager
-
-```python
-from django_display_ids import DisplayIDMixin, DisplayIDManager
-
-class Invoice(DisplayIDMixin, models.Model):
-    display_id_prefix = "inv"
-    objects = DisplayIDManager()
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
-
-# Get by display ID
-invoice = Invoice.objects.get_by_display_id("inv_2aUyqjCzEIiEcYMKj7TZtw")
-
-# Get by any identifier type
-invoice = Invoice.objects.get_by_identifier("inv_2aUyqjCzEIiEcYMKj7TZtw")
-invoice = Invoice.objects.get_by_identifier("550e8400-e29b-41d4-a716-446655440000")
-
-# Works with filtered querysets
-invoice = Invoice.objects.filter(active=True).get_by_identifier("inv_xxx")
-```
 
 ### Django Admin
 
@@ -350,6 +343,7 @@ In views, errors are converted to HTTP responses:
 - Python 3.12+
 - Django 4.2+
 - Django REST Framework 3.14+ (optional)
+- drf-spectacular 0.28+ (optional, for OpenAPI schema)
 
 ## Development
 

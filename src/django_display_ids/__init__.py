@@ -14,7 +14,7 @@ Example:
 
     # Encode a UUID to a display ID
     display_id = encode_display_id("inv", invoice.id)
-    # -> "inv_1a2B3c4D5e6F7g8H9i0J1k"
+    # -> "inv_2aUyqjCzEIiEcYMKj7TZtw"
 
     # Use in Django views
     class InvoiceDetailView(DisplayIDObjectMixin, DetailView):
@@ -23,6 +23,7 @@ Example:
         display_id_prefix = "inv"
 """
 
+from .admin import DisplayIDSearchMixin
 from .encoding import (
     decode_display_id,
     decode_uuid,
@@ -60,6 +61,8 @@ __all__ = [  # noqa: RUF022 - keep categorized order for readability
     "AmbiguousIdentifierError",
     # Django mixins
     "DisplayIDObjectMixin",
+    # Admin mixins
+    "DisplayIDSearchMixin",
     # Model mixin
     "DisplayIDMixin",
     "get_model_for_prefix",
@@ -71,7 +74,7 @@ __all__ = [  # noqa: RUF022 - keep categorized order for readability
     "DEFAULT_STRATEGIES",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 
 def get_drf_mixin():

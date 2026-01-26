@@ -64,7 +64,7 @@ class DisplayIDMixin(models.Model):
             # ...
 
         invoice = Invoice.objects.first()
-        invoice.display_id  # -> "inv_1a2B3c4D5e6F7g8H9i0J1k"
+        invoice.display_id  # -> "inv_2aUyqjCzEIiEcYMKj7TZtw"
 
     Example with custom field names:
         class Product(DisplayIDMixin):
@@ -127,3 +127,6 @@ class DisplayIDMixin(models.Model):
             return None
         uuid_value = getattr(self, self._get_uuid_field())
         return encode_display_id(prefix, uuid_value)
+
+    # Django admin display configuration
+    display_id.fget.short_description = "Display ID"

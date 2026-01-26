@@ -1,8 +1,10 @@
 # django-display-ids
 
-Resolve external identifiers (display ID, UUID, slug) to Django model instances.
+Stripe-like prefixed IDs for Django. Works with existing UUIDs — no schema changes.
 
-Handles lookup only — not ID generation, persistence, or serialization.
+Display IDs are human-friendly identifiers like `inv_2aUyqjCzEIiEcYMKj7TZtw` — a short prefix indicating the object type, followed by a base62-encoded UUID. This format, popularized by Stripe, makes IDs recognizable at a glance while remaining URL-safe and compact.
+
+This library focuses on **lookup only** — it works with your existing UUID fields and requires no migrations or schema changes.
 
 ## Installation
 
@@ -31,7 +33,7 @@ urlpatterns = [
 ```
 
 Now your view accepts both formats:
-- `inv_1a2B3c4D5e6F7g8H9i0J1k` (display ID)
+- `inv_2aUyqjCzEIiEcYMKj7TZtw` (display ID)
 - `550e8400-e29b-41d4-a716-446655440000` (UUID)
 
 ## Features
@@ -110,7 +112,7 @@ class Invoice(DisplayIDMixin, models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4)
 
 invoice = Invoice.objects.first()
-invoice.display_id  # -> "inv_1a2B3c4D5e6F7g8H9i0J1k"
+invoice.display_id  # -> "inv_2aUyqjCzEIiEcYMKj7TZtw"
 ```
 
 ### Model Manager
@@ -124,14 +126,40 @@ class Invoice(DisplayIDMixin, models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4)
 
 # Get by display ID
-invoice = Invoice.objects.get_by_display_id("inv_1a2B3c4D5e6F7g8H9i0J1k")
+invoice = Invoice.objects.get_by_display_id("inv_2aUyqjCzEIiEcYMKj7TZtw")
 
 # Get by any identifier type
-invoice = Invoice.objects.get_by_identifier("inv_1a2B3c4D5e6F7g8H9i0J1k")
+invoice = Invoice.objects.get_by_identifier("inv_2aUyqjCzEIiEcYMKj7TZtw")
 invoice = Invoice.objects.get_by_identifier("550e8400-e29b-41d4-a716-446655440000")
 
 # Works with filtered querysets
 invoice = Invoice.objects.filter(active=True).get_by_identifier("inv_xxx")
+```
+
+### Django Admin
+
+Enable searching by display ID or raw UUID in the admin:
+
+```python
+from django.contrib import admin
+from django_display_ids import DisplayIDSearchMixin
+
+@admin.register(Invoice)
+class InvoiceAdmin(DisplayIDSearchMixin, admin.ModelAdmin):
+    list_display = ["id", "display_id", "name", "created"]
+    search_fields = ["name"]  # display_id/UUID search is automatic
+```
+
+Now you can search by either format in the admin search box:
+- `inv_2aUyqjCzEIiEcYMKj7TZtw` (display ID)
+- `550e8400-e29b-41d4-a716-446655440000` (raw UUID from logs)
+
+The mixin automatically detects the UUID field from your model's `uuid_field`
+attribute (if using `DisplayIDMixin`), or defaults to `id`. Override with:
+
+```python
+class InvoiceAdmin(DisplayIDSearchMixin, admin.ModelAdmin):
+    uuid_field = "uid"  # custom UUID field name
 ```
 
 ### Encoding and Decoding
@@ -143,7 +171,7 @@ from django_display_ids import encode_display_id, decode_display_id
 # Create a display ID from a UUID
 invoice_id = uuid.uuid4()
 display_id = encode_display_id("inv", invoice_id)
-# -> "inv_1a2B3c4D5e6F7g8H9i0J1k"
+# -> "inv_2aUyqjCzEIiEcYMKj7TZtw"
 
 # Decode back to prefix and UUID
 prefix, decoded_uuid = decode_display_id(display_id)
@@ -156,7 +184,7 @@ from django_display_ids import resolve_object
 
 invoice = resolve_object(
     model=Invoice,
-    value="inv_1a2B3c4D5e6F7g8H9i0J1k",
+    value="inv_2aUyqjCzEIiEcYMKj7TZtw",
     strategies=("display_id", "uuid", "slug"),
     prefix="inv",
 )
@@ -166,7 +194,7 @@ invoice = resolve_object(
 
 | Format | Example | Description |
 |--------|---------|-------------|
-| Display ID | `inv_1a2B3c4D5e6F7g8H9i0J1k` | Prefix + base62-encoded UUID |
+| Display ID | `inv_2aUyqjCzEIiEcYMKj7TZtw` | Prefix + base62-encoded UUID |
 | UUID | `550e8400-e29b-41d4-a716-446655440000` | Standard UUID (v4/v7) |
 | Slug | `my-invoice-slug` | Human-readable identifier |
 
@@ -259,6 +287,16 @@ Lint and format:
 ```bash
 uvx pre-commit run --all-files
 ```
+
+## Related Projects
+
+If you need ID generation and storage (custom model fields), consider these alternatives:
+
+- **[django-prefix-id](https://github.com/jaddison/django-prefix-id)** — PrefixIDField that generates and stores base62-encoded UUIDs
+- **[django-spicy-id](https://github.com/mik3y/django-spicy-id)** — Drop-in AutoField replacement that displays numeric IDs as prefixed strings
+- **[django-charid-field](https://github.com/yunojuno/django-charid-field)** — CharField wrapper supporting cuid, ksuid, ulid, and other generators
+
+**django-display-ids** takes a different approach: it works with your existing UUID fields and handles resolution only. No migrations, no schema changes — just add the mixin to your views.
 
 ## License
 

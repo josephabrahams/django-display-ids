@@ -1,14 +1,24 @@
 [project]
 name = "django-display-ids"
-version = "0.1.0"
-description = "Resolve external identifiers (display ID, UUID, slug) to Django model instances"
+version = "0.1.1"
+description = "Stripe-like prefixed IDs for Django. Works with existing UUIDs — no schema changes."
 readme = "README.md"
-authors = [
-    { name = "Joseph Abrahams", email = "hello@josephabrahams.com" }
-]
 requires-python = ">=3.12"
 license = { text = "ISC" }
-keywords = ["django", "uuid", "display-id", "identifier", "lookup", "drf"]
+keywords = [
+    "django",
+    "drf",
+    "uuid",
+    "stripe",
+    "prefixed-id",
+    "display-id",
+    "short-id",
+    "hashid",
+    "base62",
+    "shortuuid",
+    "nanoid",
+    "ulid",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Framework :: Django",
@@ -36,10 +46,6 @@ dev = [
     "ruff>=0.8",
     "pre-commit>=4.0",
 ]
-
-[project.urls]
-Homepage = "https://github.com/josephabrahams/django-display-ids"
-Repository = "https://github.com/josephabrahams/django-display-ids"
 
 [build-system]
 requires = ["uv_build>=0.9.26,<0.10.0"]

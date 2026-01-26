@@ -1,20 +1,17 @@
 [project]
 name = "django-display-ids"
-version = "0.1.1"
+version = "0.1.2"
 description = "Stripe-like prefixed IDs for Django. Works with existing UUIDs — no schema changes."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "ISC" }
 keywords = [
     "django",
-    "drf",
-    "uuid",
     "stripe",
-    "prefixed-id",
-    "display-id",
-    "short-id",
-    "hashid",
+    "uuid",
     "base62",
+    "prefixed-id",
+    "drf",
     "shortuuid",
     "nanoid",
     "ulid",
@@ -35,6 +32,9 @@ classifiers = [
 dependencies = [
     "django>=4.2",
 ]
+
+[project.urls]
+Source = "https://joseph.is/django-display-ids"
 
 [dependency-groups]
 dev = [

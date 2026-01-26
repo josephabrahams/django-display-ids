@@ -34,7 +34,7 @@ dependencies = [
 ]
 
 [project.urls]
-Source = "https://joseph.is/django-display-ids"
+Homepage = "https://joseph.is/django-display-ids"
 
 [dependency-groups]
 dev = [

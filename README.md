@@ -12,6 +12,8 @@ This library focuses on **lookup only** — it works with your existing UUID fie
 pip install django-display-ids
 ```
 
+No `INSTALLED_APPS` entry required — just import and use.
+
 ## Quick Start
 
 ```python
@@ -231,7 +233,9 @@ The `display_id` strategy requires a prefix. If no prefix is configured, the str
 | `uuid_field` | `"id"` | UUID field name on model |
 | `slug_field` | `"slug"` | Slug field name on model |
 
-### Django Settings
+### Django Settings (Optional)
+
+All settings have sensible defaults. Only add this if you need to override them:
 
 ```python
 # settings.py

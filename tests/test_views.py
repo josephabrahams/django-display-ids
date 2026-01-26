@@ -37,7 +37,15 @@ class NoPrefixView(DisplayIDObjectMixin, DetailView):
 
     model = Invoice
     lookup_param = "id"
-    # No display_id_prefix set
+    display_id_prefix = None  # Explicitly disable model's prefix
+
+
+class ModelPrefixFallbackView(DisplayIDObjectMixin, DetailView):
+    """Test view that inherits prefix from model."""
+
+    model = Invoice
+    lookup_param = "id"
+    # display_id_prefix not set - should fall back to model's "inv"
 
 
 @pytest.fixture
@@ -228,4 +236,87 @@ class TestModelAttribute:
         view.request = rf.get("/")
 
         with pytest.raises(AttributeError, match="must define 'model'"):
+            view.get_object()
+
+
+@pytest.mark.django_db
+class TestModelPrefixFallback:
+    """Tests for automatic prefix inheritance from model."""
+
+    def test_inherits_prefix_from_model(self, rf, invoice):
+        """View without display_id_prefix uses model's prefix."""
+        view = ModelPrefixFallbackView()
+        view.kwargs = {"id": invoice.display_id}
+        view.request = rf.get("/")
+
+        obj = view.get_object()
+        assert obj == invoice
+
+    def test_view_prefix_overrides_model(self, rf, invoice):
+        """View's explicit prefix takes precedence over model's."""
+        # InvoiceDetailView has display_id_prefix = "inv" explicitly set
+        view = InvoiceDetailView()
+        view.kwargs = {"id": invoice.display_id}
+        view.request = rf.get("/")
+
+        obj = view.get_object()
+        assert obj == invoice
+
+    def test_none_disables_model_prefix(self, rf, invoice):
+        """Setting display_id_prefix = None disables model's prefix."""
+        view = NoPrefixView()
+        view.kwargs = {"id": invoice.display_id}
+        view.request = rf.get("/")
+
+        # Should raise 404 because display_id strategy is skipped
+        with pytest.raises(Http404):
+            view.get_object()
+
+
+class TestPrefixValidation:
+    """Tests for prefix validation on views."""
+
+    def test_empty_string_raises_error(self, rf):
+        """Empty string prefix raises ValueError."""
+
+        class EmptyPrefixView(DisplayIDObjectMixin, DetailView):
+            model = Invoice
+            lookup_param = "id"
+            display_id_prefix = ""
+
+        view = EmptyPrefixView()
+        view.kwargs = {"id": "test"}
+        view.request = rf.get("/")
+
+        with pytest.raises(ValueError, match="1-16 lowercase letters"):
+            view.get_object()
+
+    def test_invalid_prefix_raises_error(self, rf):
+        """Invalid prefix format raises ValueError."""
+
+        class InvalidPrefixView(DisplayIDObjectMixin, DetailView):
+            model = Invoice
+            lookup_param = "id"
+            display_id_prefix = "Invalid123"
+
+        view = InvalidPrefixView()
+        view.kwargs = {"id": "test"}
+        view.request = rf.get("/")
+
+        with pytest.raises(ValueError, match="1-16 lowercase letters"):
+            view.get_object()
+
+    def test_too_long_prefix_raises_error(self, rf):
+        """Prefix longer than 16 chars raises ValueError."""
+
+        class LongPrefixView(DisplayIDObjectMixin, DetailView):
+            model = Invoice
+            lookup_param = "id"
+            display_id_prefix = "waytoolongprefix123"
+
+        view = LongPrefixView()
+        view.kwargs = {"id": "test"}
+        view.request = rf.get("/")
+
+        with pytest.raises(ValueError, match="1-16 lowercase letters"):
             view.get_object()

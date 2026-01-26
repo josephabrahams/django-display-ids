@@ -114,6 +114,36 @@ class TestPrefixRegistry:
         # Abstract models are registered for collision detection
         assert get_model_for_prefix("abstract") == "AbstractModel"
 
+    def test_empty_prefix_raises_error(self):
+        """Empty string prefix raises ValueError at class definition."""
+        with pytest.raises(ValueError, match="1-16 lowercase letters"):
+
+            class EmptyPrefixModel(DisplayIDMixin):
+                display_id_prefix = ""
+
+                class Meta:
+                    app_label = "tests"
+
+    def test_invalid_prefix_raises_error(self):
+        """Invalid prefix format raises ValueError at class definition."""
+        with pytest.raises(ValueError, match="1-16 lowercase letters"):
+
+            class InvalidPrefixModel(DisplayIDMixin):
+                display_id_prefix = "Invalid123"
+
+                class Meta:
+                    app_label = "tests"
+
+    def test_too_long_prefix_raises_error(self):
+        """Prefix longer than 16 chars raises ValueError at class definition."""
+        with pytest.raises(ValueError, match="1-16 lowercase letters"):
+
+            class LongPrefixModel(DisplayIDMixin):
+                display_id_prefix = "waytoolongprefix123"
+
+                class Meta:
+                    app_label = "tests"
+
 
 @pytest.mark.django_db
 class TestDisplayIDMixinWithDatabase:

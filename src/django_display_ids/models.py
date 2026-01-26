@@ -7,7 +7,7 @@ from typing import ClassVar
 from django.db import models
 
 from .conf import get_setting
-from .encoding import encode_display_id
+from .encoding import PREFIX_PATTERN, encode_display_id
 
 __all__ = [
     "DisplayIDMixin",
@@ -92,6 +92,11 @@ class DisplayIDMixin(models.Model):
         if "display_id_prefix" in cls.__dict__:
             prefix = cls.__dict__["display_id_prefix"]
             if prefix is not None:
+                if not PREFIX_PATTERN.match(prefix):
+                    raise ValueError(
+                        f"{cls.__name__}.display_id_prefix must be 1-16 "
+                        f"lowercase letters, got: {prefix!r}"
+                    )
                 _register_prefix(prefix, cls.__name__)
 
     @classmethod

@@ -229,7 +229,7 @@ The `display_id` strategy requires a prefix. If no prefix is configured, the str
 |-----------|---------|-------------|
 | `lookup_param` / `lookup_url_kwarg` | `"pk"` | URL parameter name |
 | `lookup_strategies` | from settings | Strategies to try |
-| `display_id_prefix` | `None` | Expected prefix |
+| `display_id_prefix` | from model | Expected prefix (falls back to model's `display_id_prefix`) |
 | `uuid_field` | `"id"` | UUID field name on model |
 | `slug_field` | `"slug"` | Slug field name on model |
 
@@ -280,10 +280,16 @@ Run tests:
 uv run pytest
 ```
 
+Run tests with coverage:
+
+```bash
+uv run pytest --cov=src/django_display_ids
+```
+
 Run tests across Python and Django versions:
 
 ```bash
-uvx nox -p
+uvx nox
 ```
 
 Lint and format:

@@ -6,6 +6,8 @@ build/
 dist/
 
 # Testing
+.coverage
+coverage.xml
 .nox/
 .pytest_cache/
 

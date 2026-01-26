@@ -30,6 +30,12 @@ from .encoding import (
     encode_display_id,
     encode_uuid,
 )
+from .examples import (
+    example_display_id,
+    example_display_id_for_prefix,
+    example_uuid,
+    example_uuid_for_prefix,
+)
 from .exceptions import (
     AmbiguousIdentifierError,
     InvalidIdentifierError,
@@ -50,6 +56,11 @@ __all__ = [  # noqa: RUF022 - keep categorized order for readability
     "decode_uuid",
     "encode_display_id",
     "decode_display_id",
+    # Examples (for OpenAPI schemas, documentation)
+    "example_uuid",
+    "example_display_id",
+    "example_uuid_for_prefix",  # alias
+    "example_display_id_for_prefix",  # alias
     # Core resolver
     "resolve_object",
     # Errors

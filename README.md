@@ -100,6 +100,93 @@ class InvoiceView(DisplayIDLookupMixin, APIView):
         return Response({"id": str(invoice.id)})
 ```
 
+#### Serializer Field
+
+Include `display_id` in your API responses:
+
+```python
+from rest_framework import serializers
+from django_display_ids.contrib.rest_framework import DisplayIDField
+
+class InvoiceSerializer(serializers.Serializer):
+    id = serializers.UUIDField(read_only=True)
+    display_id = DisplayIDField()
+    name = serializers.CharField()
+
+# Output: {"id": "...", "display_id": "inv_2aUyqjCzEIiEcYMKj7TZtw", ...}
+```
+
+The field reads `display_id_prefix` from the model. You can override it:
+
+```python
+display_id = DisplayIDField(prefix="inv")  # Use custom prefix
+```
+
+Prefix must be 1-16 lowercase letters. Invalid prefixes raise `ValueError` at initialization.
+
+**OpenAPI/drf-spectacular**: When drf-spectacular is installed, the field automatically generates proper schema with prefix-specific examples (e.g., `inv_2aUyqjCzEIiEcYMKj7TZtw`). The prefix is resolved from (in order): field's `prefix=` argument, serializer's `Meta.model.display_id_prefix`, or the view's queryset model.
+
+#### OpenAPI Parameter Descriptions
+
+For consistent API documentation, use the provided description helpers:
+
+```python
+from django_display_ids.contrib.rest_framework import id_param_description
+from drf_spectacular.utils import extend_schema, OpenApiParameter
+from drf_spectacular.types import OpenApiTypes
+
+@extend_schema(
+    parameters=[
+        OpenApiParameter(
+            "id",
+            OpenApiTypes.STR,
+            OpenApiParameter.PATH,
+            description=id_param_description("inv"),
+            # -> "Identifier: display_id (inv_xxx) or UUID"
+        )
+    ],
+)
+class InvoiceViewSet(DisplayIDLookupMixin, ModelViewSet):
+    ...
+```
+
+For endpoints that also accept slugs:
+
+```python
+description=id_param_description("app", with_slug=True)
+# -> "Identifier: display_id (app_xxx), UUID, or slug"
+```
+
+Generic constants are also available:
+
+```python
+from django_display_ids.contrib.rest_framework import (
+    ID_PARAM_DESCRIPTION,           # "Identifier: display_id (prefix_xxx) or UUID"
+    ID_PARAM_DESCRIPTION_WITH_SLUG, # "Identifier: display_id (prefix_xxx), UUID, or slug"
+)
+```
+
+#### Deterministic Examples for OpenAPI
+
+Generate consistent example UUIDs and display IDs for OpenAPI schemas:
+
+```python
+from django_display_ids import example_uuid, example_display_id
+
+# Generate deterministic UUID for a prefix
+example_uuid("inv")
+# -> UUID('a172cedc-ae47-474b-615c-54d510a5d84a')
+
+# Generate deterministic display ID
+example_display_id("inv")
+# -> "inv_4ueEO5Nz4X7u9qc3FVHokM"
+
+# Also works with model classes
+example_uuid(Invoice)  # Uses Invoice.display_id_prefix
+```
+
+The same prefix always produces the same example, ensuring consistent documentation across regenerations.
+
 ### Model Mixin
 
 Add a `display_id` property to your models:

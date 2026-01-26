@@ -62,9 +62,7 @@ class TestDisplayIDSearchMixin:
         request = request_factory.get("/admin/tests/invoice/", {"q": display_id})
         queryset = Invoice.objects.all()
 
-        result_qs, use_distinct = invoice_admin.get_search_results(
-            request, queryset, display_id
-        )
+        result_qs, _ = invoice_admin.get_search_results(request, queryset, display_id)
 
         assert invoice in result_qs
         assert result_qs.count() == 1
@@ -76,9 +74,7 @@ class TestDisplayIDSearchMixin:
         request = request_factory.get("/admin/tests/invoice/", {"q": "Unique"})
         queryset = Invoice.objects.all()
 
-        result_qs, use_distinct = invoice_admin.get_search_results(
-            request, queryset, "Unique"
-        )
+        result_qs, _ = invoice_admin.get_search_results(request, queryset, "Unique")
 
         assert invoice in result_qs
 
@@ -90,7 +86,7 @@ class TestDisplayIDSearchMixin:
         queryset = Invoice.objects.all()
 
         # Should not raise, just return empty or original results
-        result_qs, use_distinct = invoice_admin.get_search_results(
+        result_qs, _ = invoice_admin.get_search_results(
             request, queryset, "invalid_xxx"
         )
 
@@ -105,9 +101,7 @@ class TestDisplayIDSearchMixin:
         request = request_factory.get("/admin/tests/product/", {"q": display_id})
         queryset = Product.objects.all()
 
-        result_qs, use_distinct = product_admin.get_search_results(
-            request, queryset, display_id
-        )
+        result_qs, _ = product_admin.get_search_results(request, queryset, display_id)
 
         assert product in result_qs
         assert result_qs.count() == 1
@@ -120,7 +114,7 @@ class TestDisplayIDSearchMixin:
         request = request_factory.get("/admin/tests/invoice/", {"q": fake_display_id})
         queryset = Invoice.objects.all()
 
-        result_qs, use_distinct = invoice_admin.get_search_results(
+        result_qs, _ = invoice_admin.get_search_results(
             request, queryset, fake_display_id
         )
 
@@ -135,9 +129,7 @@ class TestDisplayIDSearchMixin:
         request = request_factory.get("/admin/tests/invoice/", {"q": display_id})
         queryset = Invoice.objects.all()
 
-        result_qs, use_distinct = invoice_admin.get_search_results(
-            request, queryset, display_id
-        )
+        result_qs, _ = invoice_admin.get_search_results(request, queryset, display_id)
 
         # Should find invoice1 via display_id
         assert invoice1 in result_qs
@@ -152,9 +144,7 @@ class TestDisplayIDSearchMixin:
         request = request_factory.get("/admin/tests/invoice/", {"q": raw_uuid})
         queryset = Invoice.objects.all()
 
-        result_qs, use_distinct = invoice_admin.get_search_results(
-            request, queryset, raw_uuid
-        )
+        result_qs, _ = invoice_admin.get_search_results(request, queryset, raw_uuid)
 
         assert invoice in result_qs
         assert result_qs.count() == 1
@@ -167,9 +157,7 @@ class TestDisplayIDSearchMixin:
         request = request_factory.get("/admin/tests/product/", {"q": raw_uuid})
         queryset = Product.objects.all()
 
-        result_qs, use_distinct = product_admin.get_search_results(
-            request, queryset, raw_uuid
-        )
+        result_qs, _ = product_admin.get_search_results(request, queryset, raw_uuid)
 
         assert product in result_qs
         assert result_qs.count() == 1
@@ -182,8 +170,6 @@ class TestDisplayIDSearchMixin:
         request = request_factory.get("/admin/tests/invoice/", {"q": fake_uuid})
         queryset = Invoice.objects.all()
 
-        result_qs, use_distinct = invoice_admin.get_search_results(
-            request, queryset, fake_uuid
-        )
+        result_qs, _ = invoice_admin.get_search_results(request, queryset, fake_uuid)
 
         assert result_qs.count() == 0

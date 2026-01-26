@@ -1,16 +1,23 @@
-"""Tests for Django REST Framework view mixins."""
+"""Tests for Django REST Framework view mixins and serializer fields."""
 
 import uuid
 
 import pytest
+from rest_framework import serializers
 from rest_framework.exceptions import NotFound, ParseError
 from rest_framework.test import APIRequestFactory
 from rest_framework.views import APIView
 
-from django_display_ids.contrib.rest_framework import DisplayIDLookupMixin
+from django_display_ids.contrib.rest_framework import (
+    ID_PARAM_DESCRIPTION,
+    ID_PARAM_DESCRIPTION_WITH_SLUG,
+    DisplayIDField,
+    DisplayIDLookupMixin,
+    id_param_description,
+)
 from django_display_ids.encoding import encode_display_id
 
-from .models import Invoice, Product
+from .models import Invoice, Order, Product
 
 # Skip all tests if DRF is not installed
 pytest.importorskip("rest_framework")
@@ -343,3 +350,187 @@ class TestPrefixValidation:
 
         with pytest.raises(ValueError, match="1-16 lowercase letters"):
             view.get_object()
+
+
+# =============================================================================
+# DisplayIDField Tests
+# =============================================================================
+
+
+class InvoiceSerializer(serializers.Serializer):
+    """Test serializer with DisplayIDField."""
+
+    id = serializers.UUIDField(read_only=True)
+    display_id = DisplayIDField()
+    name = serializers.CharField()
+
+
+class ProductSerializer(serializers.Serializer):
+    """Test serializer with custom prefix override."""
+
+    id = serializers.UUIDField(source="uid", read_only=True)
+    display_id = DisplayIDField(prefix="item")  # Override model's "prod" prefix
+    name = serializers.CharField()
+
+
+class OrderSerializer(serializers.Serializer):
+    """Test serializer for model without display_id_prefix."""
+
+    id = serializers.UUIDField(read_only=True)
+    display_id = DisplayIDField()
+    name = serializers.CharField()
+
+
+@pytest.fixture
+def order(db):
+    """Create a test order (no display_id_prefix)."""
+    return Order.objects.create(name="Test Order", slug="test-order")
+
+
+@pytest.mark.django_db
+class TestDisplayIDField:
+    """Tests for DisplayIDField serializer field."""
+
+    def test_returns_display_id_from_model(self, invoice):
+        serializer = InvoiceSerializer(invoice)
+        data = serializer.data
+
+        assert data["display_id"] == invoice.display_id
+        assert data["display_id"].startswith("inv_")
+
+    def test_raises_error_for_model_without_prefix(self, order):
+        serializer = OrderSerializer(order)
+
+        with pytest.raises(ValueError, match="requires a prefix"):
+            _ = serializer.data
+
+    def test_prefix_override(self, product):
+        serializer = ProductSerializer(product)
+        data = serializer.data
+
+        # Should use "item" prefix from field, not "prod" from model
+        assert data["display_id"].startswith("item_")
+
+        # Verify the display_id decodes to the correct UUID
+        # Product uses uuid_field = "uid", so the field should read from that
+        from django_display_ids.encoding import decode_display_id
+
+        prefix, decoded_uuid = decode_display_id(data["display_id"])
+        assert prefix == "item"
+        assert decoded_uuid == product.uid
+
+    def test_field_is_read_only(self, invoice):
+        serializer = InvoiceSerializer(
+            invoice, data={"display_id": "should_be_ignored", "name": "New Name"}
+        )
+        # Field should be read-only, input ignored
+        assert serializer.fields["display_id"].read_only is True
+
+
+class InvoiceModelSerializer(serializers.ModelSerializer):
+    """Test ModelSerializer with DisplayIDField - has Meta.model for schema generation."""
+
+    display_id = DisplayIDField()
+
+    class Meta:
+        model = Invoice
+        fields = ("id", "display_id", "name")
+
+
+@pytest.mark.django_db
+class TestDisplayIDFieldSchema:
+    """Tests for DisplayIDField OpenAPI schema generation via drf-spectacular extension."""
+
+    def test_extension_generates_schema_with_model_prefix(self, invoice):
+        """Extension generates proper schema when serializer has Meta.model."""
+        pytest.importorskip("drf_spectacular")
+        from django_display_ids.contrib.drf_spectacular import DisplayIDFieldExtension
+
+        serializer = InvoiceModelSerializer(invoice)
+        field = serializer.fields["display_id"]
+
+        # Create extension instance targeting our field
+        ext = DisplayIDFieldExtension(target=field)
+        schema = ext.map_serializer_field(None, "response")
+
+        assert schema["type"] == "string"
+        assert "pattern" in schema
+        # Model has display_id_prefix = "inv"
+        assert schema["example"].startswith("inv_")
+
+    def test_extension_generates_schema_with_prefix_override(self, product):
+        """Extension uses field's prefix override."""
+        pytest.importorskip("drf_spectacular")
+        from django_display_ids.contrib.drf_spectacular import DisplayIDFieldExtension
+
+        serializer = ProductSerializer(product)
+        field = serializer.fields["display_id"]
+
+        ext = DisplayIDFieldExtension(target=field)
+        schema = ext.map_serializer_field(None, "response")
+
+        # Field has prefix="item" override
+        assert schema["example"].startswith("item_")
+
+    def test_extension_generates_generic_schema_without_prefix(self):
+        """Extension generates generic schema when no prefix available."""
+        pytest.importorskip("drf_spectacular")
+        from django_display_ids.contrib.drf_spectacular import DisplayIDFieldExtension
+
+        field = DisplayIDField()
+        # Simulate binding without a parent that has Meta.model
+        field._prefix_override = None
+        field.parent = None
+
+        ext = DisplayIDFieldExtension(target=field)
+        schema = ext.map_serializer_field(None, "response")
+
+        assert schema["type"] == "string"
+        assert "type_" in schema["example"]  # Generic example
+
+    def test_plain_serializer_gets_generic_schema(self, invoice):
+        """Plain Serializer without Meta.model gets generic schema."""
+        pytest.importorskip("drf_spectacular")
+        from django_display_ids.contrib.drf_spectacular import DisplayIDFieldExtension
+
+        # InvoiceSerializer is a plain Serializer, not ModelSerializer
+        serializer = InvoiceSerializer(invoice)
+        field = serializer.fields["display_id"]
+
+        ext = DisplayIDFieldExtension(target=field)
+        schema = ext.map_serializer_field(None, "response")
+
+        # No Meta.model, so generic schema
+        assert schema["type"] == "string"
+        assert "type_" in schema["example"]
+
+
+# =============================================================================
+# ID Parameter Description Tests
+# =============================================================================
+
+
+class TestIdParamDescription:
+    """Tests for id_param_description function and constants."""
+
+    def test_constant_without_slug(self):
+        assert ID_PARAM_DESCRIPTION == "Identifier: display_id (prefix_xxx) or UUID"
+
+    def test_constant_with_slug(self):
+        assert (
+            ID_PARAM_DESCRIPTION_WITH_SLUG
+            == "Identifier: display_id (prefix_xxx), UUID, or slug"
+        )
+
+    def test_function_without_slug(self):
+        result = id_param_description("user")
+        assert result == "Identifier: display_id (user_xxx) or UUID"
+
+    def test_function_with_slug(self):
+        result = id_param_description("app", with_slug=True)
+        assert result == "Identifier: display_id (app_xxx), UUID, or slug"
+
+    def test_various_prefixes(self):
+        assert "inv_xxx" in id_param_description("inv")
+        assert "product_xxx" in id_param_description("product")
+        assert "a_xxx" in id_param_description("a")

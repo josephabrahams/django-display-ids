@@ -1,6 +1,6 @@
 [project]
 name = "django-display-ids"
-version = "0.1.4"
+version = "0.2.0"
 description = "Stripe-like prefixed IDs for Django. Works with existing UUIDs — no schema changes."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -34,7 +34,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://joseph.is/django-display-ids"
+Documentation = "https://django-display-ids.readthedocs.io/"
+Repository = "https://github.com/josephabrahams/django-display-ids"
 
 [dependency-groups]
 dev = [

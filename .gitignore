@@ -13,3 +13,6 @@ coverage.xml
 
 # Environments
 .venv/
+
+# Documentation build output
+docs/_build/

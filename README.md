@@ -3,10 +3,12 @@
 [![PyPI](https://img.shields.io/pypi/v/django-display-ids)](https://pypi.org/project/django-display-ids/)
 [![Python](https://img.shields.io/pypi/pyversions/django-display-ids)](https://pypi.org/project/django-display-ids/)
 [![Django](https://img.shields.io/badge/django-4.2%20%7C%205.2%20%7C%206.0-blue)](https://pypi.org/project/django-display-ids/)
+[![CI](https://github.com/josephabrahams/django-display-ids/actions/workflows/ci.yml/badge.svg)](https://github.com/josephabrahams/django-display-ids/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/josephabrahams/django-display-ids/graph/badge.svg)](https://codecov.io/gh/josephabrahams/django-display-ids)
+[![Docs](https://readthedocs.org/projects/django-display-ids/badge/?version=stable)](https://django-display-ids.readthedocs.io/)
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://github.com/josephabrahams/django-display-ids/blob/main/LICENSE)
 
 Stripe-like prefixed IDs for Django. Works with existing UUIDs — no schema changes.
-
-**Documentation**: [django-display-ids.readthedocs.io](https://django-display-ids.readthedocs.io/)
 
 ## Installation
 
@@ -82,7 +84,3 @@ If you need ID generation and storage (custom model fields), consider:
 - **[django-charid-field](https://github.com/yunojuno/django-charid-field)** — CharField wrapper supporting cuid, ksuid, ulid
 
 **django-display-ids** works with existing UUID fields and handles resolution only — no migrations required.
-
-## License
-
-ISC

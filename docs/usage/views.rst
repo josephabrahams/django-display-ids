@@ -16,7 +16,7 @@ Add to any view that uses ``get_object()``:
    class InvoiceDetailView(DisplayIDObjectMixin, DetailView):
        model = Invoice
        lookup_param = "id"
-       lookup_strategies = ("display_id", "uuid")
+       lookup_strategies = ("display_id", "uuid", "slug")
        display_id_prefix = "inv"
 
    # Works with any view that uses get_object()

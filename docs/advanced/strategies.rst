@@ -87,13 +87,13 @@ Because it matches anything, **always put it last** in the strategy list.
 Strategy Ordering Best Practices
 --------------------------------
 
-1. **Always put ``display_id`` first** — it's the most specific and will
+1. **Always put** ``display_id`` **first** — it's the most specific and will
    correctly reject display IDs with wrong prefixes.
 
-2. **Put ``uuid`` second** — UUIDs have a distinct format that won't
+2. **Put** ``uuid`` **second** — UUIDs have a distinct format that won't
    accidentally match slugs.
 
-3. **Put ``slug`` last** — it's a catch-all that matches any string.
+3. **Put** ``slug`` **last** — it's a catch-all that matches any string.
 
 Recommended orders:
 

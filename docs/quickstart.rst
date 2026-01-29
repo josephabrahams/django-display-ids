@@ -1,10 +1,10 @@
 Quick Start
 ===========
 
-This guide shows you how to add display ID support to a Django view in under a minute.
+This guide shows you how to add display ID support to your views.
 
-Basic Example
--------------
+Django Views
+------------
 
 Add the mixin to any Django class-based view:
 
@@ -16,7 +16,7 @@ Add the mixin to any Django class-based view:
    class InvoiceDetailView(DisplayIDObjectMixin, DetailView):
        model = Invoice
        lookup_param = "id"
-       lookup_strategies = ("display_id", "uuid")
+       lookup_strategies = ("display_id", "uuid", "slug")
        display_id_prefix = "inv"
 
 Configure your URL:
@@ -28,19 +28,37 @@ Configure your URL:
        path("invoices/<str:id>/", InvoiceDetailView.as_view()),
    ]
 
-Now your view accepts both formats:
+Django REST Framework
+---------------------
+
+The DRF mixin works the same way:
+
+.. code-block:: python
+
+   from rest_framework.viewsets import ModelViewSet
+   from django_display_ids.contrib.rest_framework import DisplayIDLookupMixin
+
+   class InvoiceViewSet(DisplayIDLookupMixin, ModelViewSet):
+       queryset = Invoice.objects.all()
+       serializer_class = InvoiceSerializer
+       lookup_url_kwarg = "id"
+       lookup_strategies = ("display_id", "uuid", "slug")
+       display_id_prefix = "inv"
+
+Now your views accept:
 
 - ``inv_2aUyqjCzEIiEcYMKj7TZtw`` (display ID)
 - ``550e8400-e29b-41d4-a716-446655440000`` (UUID)
+- ``my-invoice`` (slug)
 
 What's Happening
 ----------------
 
-1. The ``lookup_param = "id"`` tells the mixin to read from the ``id`` URL parameter
-2. The ``lookup_strategies`` defines which formats to accept (in order)
-3. The ``display_id_prefix = "inv"`` validates that display IDs start with ``inv_``
+1. ``lookup_param`` / ``lookup_url_kwarg`` tells the mixin which URL parameter to read
+2. ``lookup_strategies`` defines which formats to accept, in order
+3. ``display_id_prefix`` validates that display IDs start with the expected prefix
 
-The mixin decodes the display ID to extract the UUID, then looks up the object.
+The mixin decodes the identifier and looks up the object by UUID (or slug).
 
 Next Steps
 ----------

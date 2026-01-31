@@ -106,3 +106,52 @@ Parameters:
 
 ``prefix``
    Expected display ID prefix. Defaults to the model's ``display_id_prefix``.
+
+get_by_identifiers
+~~~~~~~~~~~~~~~~~~
+
+Look up multiple objects by any supported identifier type in a single query:
+
+.. code-block:: python
+
+   # By display IDs
+   invoices = Invoice.objects.get_by_identifiers([
+       "inv_2aUyqjCzEIiEcYMKj7TZtw",
+       "inv_7kN3xPqRmLwYvTzJ5HfUaB",
+   ])
+
+   # By UUIDs
+   invoices = Invoice.objects.get_by_identifiers([
+       "550e8400-e29b-41d4-a716-446655440000",
+       "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+   ])
+
+   # Mixed identifier types
+   invoices = Invoice.objects.get_by_identifiers([
+       "inv_2aUyqjCzEIiEcYMKj7TZtw",
+       "550e8400-e29b-41d4-a716-446655440000",
+       "my-invoice-slug",
+   ], strategies=("display_id", "uuid", "slug"))
+
+Returns a queryset, so it can be chained:
+
+.. code-block:: python
+
+   invoices = Invoice.objects.filter(active=True).get_by_identifiers([...])
+
+Parameters:
+
+``values``
+   A sequence of identifier strings to look up.
+
+``strategies``
+   Tuple of strategies to try. Defaults to ``("display_id", "uuid")``.
+
+``prefix``
+   Expected display ID prefix. Defaults to the model's ``display_id_prefix``.
+
+Notes:
+
+- Missing identifiers are silently excluded from the results
+- Order is not guaranteed to match input order
+- Raises ``InvalidIdentifierError`` if any identifier cannot be parsed

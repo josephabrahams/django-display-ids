@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from django.db import models
+from django.db.models import Q
 
 from .conf import get_setting
 from .encoding import decode_display_id
@@ -18,6 +19,8 @@ from .exceptions import (
 from .strategies import parse_identifier
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from .typing import StrategyName
 
 __all__ = [
@@ -146,6 +149,67 @@ class DisplayIDQuerySet(models.QuerySet[M]):
             count = self.filter(**lookup).count()
             raise AmbiguousIdentifierError(value, count) from None
 
+    def get_by_identifiers(
+        self,
+        values: Sequence[str],
+        *,
+        strategies: tuple[StrategyName, ...] | None = None,
+        prefix: str | None = None,
+    ) -> DisplayIDQuerySet[M]:
+        """Get multiple objects by any supported identifier type in a single query.
+
+        Parses each identifier to determine its type (display ID, UUID, or slug),
+        then executes a single database query using `__in` lookups.
+
+        Args:
+            values: A sequence of identifier strings (display IDs, UUIDs, or slugs).
+            strategies: Strategies to try. Defaults to settings.
+            prefix: Expected display ID prefix for validation.
+
+        Returns:
+            A queryset containing matching objects. Order is not guaranteed
+            to match input order. Missing identifiers are silently excluded.
+
+        Raises:
+            InvalidIdentifierError: If any identifier cannot be parsed.
+
+        Example:
+            invoices = Invoice.objects.get_by_identifiers([
+                'inv_2aUyqjCzEIiEcYMKj7TZtw',
+                'inv_7kN3xPqRmLwYvTzJ5HfUaB',
+                '550e8400-e29b-41d4-a716-446655440000',
+            ])
+        """
+        if not values:
+            return self.none()
+
+        uuid_field = self._get_uuid_field()
+        slug_field = self._get_slug_field()
+        expected_prefix = prefix or self._get_model_prefix()
+        lookup_strategies = strategies or self._get_strategies()
+
+        # Collect UUIDs and slugs separately
+        uuids: list[Any] = []
+        slugs: list[str] = []
+
+        for value in values:
+            result = parse_identifier(
+                value, lookup_strategies, expected_prefix=expected_prefix
+            )
+            if result.strategy in ("uuid", "display_id"):
+                uuids.append(result.uuid)
+            else:
+                slugs.append(result.slug)  # type: ignore[arg-type]
+
+        # Build query with OR conditions
+        query = Q()
+        if uuids:
+            query |= Q(**{f"{uuid_field}__in": uuids})
+        if slugs:
+            query |= Q(**{f"{slug_field}__in": slugs})
+
+        return self.filter(query)
+
     def _get_uuid_field(self) -> str:
         """Get the UUID field name for this model."""
         if hasattr(self.model, "_get_uuid_field"):
@@ -212,4 +276,19 @@ class DisplayIDManager(models.Manager[M]):
         """
         return self.get_queryset().get_by_identifier(
             value, strategies=strategies, prefix=prefix
+        )
+
+    def get_by_identifiers(
+        self,
+        values: Sequence[str],
+        *,
+        strategies: tuple[StrategyName, ...] | None = None,
+        prefix: str | None = None,
+    ) -> DisplayIDQuerySet[M]:
+        """Get multiple objects by any supported identifier type.
+
+        See DisplayIDQuerySet.get_by_identifiers for details.
+        """
+        return self.get_queryset().get_by_identifiers(
+            values, strategies=strategies, prefix=prefix
         )

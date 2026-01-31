@@ -208,3 +208,133 @@ class TestCustomFieldNames:
         """get_by_display_id uses custom uuid_field."""
         result = Product.objects.get_by_display_id(product.display_id)
         assert result == product
+
+
+@pytest.mark.django_db
+class TestGetByIdentifiers:
+    """Tests for get_by_identifiers batch lookup method."""
+
+    def test_empty_list_returns_empty_queryset(self, db):
+        """Empty input returns empty queryset."""
+        result = Invoice.objects.get_by_identifiers([])
+        assert result.count() == 0
+
+    def test_by_display_ids(self, db):
+        """Multiple objects retrieved by display IDs."""
+        inv1 = Invoice.objects.create(name="Invoice 1", slug="invoice-1")
+        inv2 = Invoice.objects.create(name="Invoice 2", slug="invoice-2")
+        Invoice.objects.create(name="Invoice 3", slug="invoice-3")
+
+        result = Invoice.objects.get_by_identifiers(
+            [
+                inv1.display_id,
+                inv2.display_id,
+            ]
+        )
+        assert set(result) == {inv1, inv2}
+
+    def test_by_uuids(self, db):
+        """Multiple objects retrieved by UUIDs."""
+        inv1 = Invoice.objects.create(name="Invoice 1", slug="invoice-1")
+        inv2 = Invoice.objects.create(name="Invoice 2", slug="invoice-2")
+        Invoice.objects.create(name="Invoice 3", slug="invoice-3")
+
+        result = Invoice.objects.get_by_identifiers(
+            [
+                str(inv1.id),
+                str(inv2.id),
+            ]
+        )
+        assert set(result) == {inv1, inv2}
+
+    def test_by_slugs(self, db):
+        """Multiple objects retrieved by slugs."""
+        inv1 = Invoice.objects.create(name="Invoice 1", slug="invoice-1")
+        inv2 = Invoice.objects.create(name="Invoice 2", slug="invoice-2")
+        Invoice.objects.create(name="Invoice 3", slug="invoice-3")
+
+        result = Invoice.objects.get_by_identifiers(
+            ["invoice-1", "invoice-2"],
+            strategies=("uuid", "display_id", "slug"),
+        )
+        assert set(result) == {inv1, inv2}
+
+    def test_mixed_identifier_types(self, db):
+        """Handles mixed display ID, UUID, and slug in single query."""
+        inv1 = Invoice.objects.create(name="Invoice 1", slug="invoice-1")
+        inv2 = Invoice.objects.create(name="Invoice 2", slug="invoice-2")
+        inv3 = Invoice.objects.create(name="Invoice 3", slug="invoice-3")
+        Invoice.objects.create(name="Invoice 4", slug="invoice-4")
+
+        result = Invoice.objects.get_by_identifiers(
+            [
+                inv1.display_id,
+                str(inv2.id),
+                "invoice-3",
+            ],
+            strategies=("uuid", "display_id", "slug"),
+        )
+        assert set(result) == {inv1, inv2, inv3}
+
+    def test_missing_identifiers_excluded(self, db):
+        """Missing identifiers are silently excluded from results."""
+        inv1 = Invoice.objects.create(name="Invoice 1", slug="invoice-1")
+        fake_uuid = uuid.uuid4()
+
+        result = Invoice.objects.get_by_identifiers(
+            [
+                inv1.display_id,
+                str(fake_uuid),
+            ]
+        )
+        assert list(result) == [inv1]
+
+    def test_invalid_identifier_raises_error(self, db):
+        """InvalidIdentifierError raised for unparseable identifier."""
+        Invoice.objects.create(name="Invoice 1", slug="invoice-1")
+
+        with pytest.raises(InvalidIdentifierError):
+            Invoice.objects.get_by_identifiers(
+                ["invalid-not-a-uuid"],
+                strategies=("uuid",),
+            )
+
+    def test_works_with_filtered_queryset(self, db):
+        """Batch lookup respects queryset filters."""
+        inv1 = Invoice.objects.create(name="Invoice 1", slug="invoice-1")
+        inv2 = Invoice.objects.create(name="Invoice 2", slug="invoice-2")
+
+        result = Invoice.objects.filter(slug="invoice-1").get_by_identifiers(
+            [
+                inv1.display_id,
+                inv2.display_id,
+            ]
+        )
+        assert list(result) == [inv1]
+
+    def test_custom_prefix(self, db):
+        """Explicit prefix parameter is used."""
+        from django_display_ids.encoding import encode_display_id
+
+        inv1 = Invoice.objects.create(name="Invoice 1", slug="invoice-1")
+        custom_display_id = encode_display_id("custom", inv1.id)
+
+        result = Invoice.objects.get_by_identifiers(
+            [custom_display_id],
+            strategies=("display_id",),
+            prefix="custom",
+        )
+        assert list(result) == [inv1]
+
+    def test_custom_fields(self, db):
+        """Works with models using custom field names."""
+        prod1 = Product.objects.create(name="Product 1", handle="product-1")
+        prod2 = Product.objects.create(name="Product 2", handle="product-2")
+
+        result = Product.objects.get_by_identifiers(
+            [
+                prod1.display_id,
+                str(prod2.uid),
+            ]
+        )
+        assert set(result) == {prod1, prod2}

@@ -100,8 +100,8 @@ See the [contributing guide](https://django-display-ids.readthedocs.io/en/latest
 
 If you need ID generation and storage (custom model fields), consider:
 
-- **[django-prefix-id](https://github.com/jaddison/django-prefix-id)** — PrefixIDField that generates and stores base62-encoded UUIDs
-- **[django-spicy-id](https://github.com/mik3y/django-spicy-id)** — Drop-in AutoField replacement
-- **[django-charid-field](https://github.com/yunojuno/django-charid-field)** — CharField wrapper supporting cuid, ksuid, ulid
+- [django-prefix-id](https://github.com/jaddison/django-prefix-id) — PrefixIDField that generates and stores base62-encoded UUIDs
+- [django-spicy-id](https://github.com/mik3y/django-spicy-id) — Drop-in AutoField replacement
+- [django-charid-field](https://github.com/yunojuno/django-charid-field) — CharField wrapper supporting cuid, ksuid, ulid
 
 **django-display-ids** works with existing UUID fields and handles resolution only — no migrations required.

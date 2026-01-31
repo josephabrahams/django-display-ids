@@ -5,6 +5,7 @@ SECRET_KEY = "test-secret-key-not-for-production"
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
+    "django_display_ids.apps.DjangoDisplayIdsConfig",
     "tests",
 ]
 
@@ -16,6 +17,17 @@ DATABASES = {
 }
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [],
+        },
+    },
+]
 
 # Default display ID settings
 DISPLAY_IDS = {

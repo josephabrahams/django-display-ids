@@ -23,6 +23,8 @@ Example:
         display_id_prefix = "inv"
 """
 
+from typing import Any
+
 from .admin import DisplayIDSearchMixin
 from .converters import DisplayIDConverter, DisplayIDOrUUIDConverter, UUIDConverter
 from .encoding import (
@@ -46,10 +48,23 @@ from .exceptions import (
     UnknownPrefixError,
 )
 from .managers import DisplayIDManager, DisplayIDQuerySet
-from .models import DisplayIDMixin, get_model_for_prefix
 from .resolver import resolve_object
 from .typing import DEFAULT_STRATEGIES, StrategyName
 from .views import DisplayIDObjectMixin
+
+
+def __getattr__(name: str) -> Any:
+    """Lazy import for model-related items to avoid app registry issues."""
+    if name == "DisplayIDMixin":
+        from .models import DisplayIDMixin
+
+        return DisplayIDMixin
+    if name == "get_model_for_prefix":
+        from .models import get_model_for_prefix
+
+        return get_model_for_prefix
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [  # noqa: RUF022 - keep categorized order for readability
     # URL converters

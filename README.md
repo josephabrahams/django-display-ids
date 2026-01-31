@@ -28,7 +28,14 @@ This library gives you the best of both worlds: accept any format in your URLs a
 pip install django-display-ids
 ```
 
-No `INSTALLED_APPS` entry required.
+Add to `INSTALLED_APPS`:
+
+```python
+INSTALLED_APPS = [
+    # ...
+    "django_display_ids",
+]
+```
 
 ## Quick Start
 
@@ -64,10 +71,20 @@ Now your views accept:
 - `550e8400-e29b-41d4-a716-446655440000` (UUID)
 - `my-invoice-slug` (slug)
 
+**Templates:**
+
+```django
+{% load display_ids %}
+
+{{ invoice.display_id }}                       {# inv_2aUyqjCzEIiEcYMKj7TZtw #}
+{{ order.customer_id|display_id:"cust" }}      {# encode any UUID #}
+```
+
 ## Features
 
 - **Multiple identifier formats**: display ID (`prefix_base62uuid`), UUID (v4/v7), slug
 - **Framework support**: Django CBVs and Django REST Framework
+- **Template filter**: Encode UUIDs as display IDs in templates
 - **Zero model changes required**: Works with any existing UUID field
 - **OpenAPI integration**: Automatic schema generation with drf-spectacular
 

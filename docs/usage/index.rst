@@ -10,6 +10,7 @@ This section covers how to integrate django-display-ids into your Django project
    views
    drf
    admin
+   templatetags
 
 Overview
 --------
@@ -30,3 +31,6 @@ django-display-ids provides several integration points:
 
 **Django Admin**
    Add :class:`DisplayIDSearchMixin` to enable searching by display ID or UUID.
+
+**Templates**
+   Use the ``display_id`` filter to encode UUIDs as display IDs.

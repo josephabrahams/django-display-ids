@@ -7,7 +7,19 @@ Install from PyPI:
 
    pip install django-display-ids
 
-No ``INSTALLED_APPS`` entry required — just import and use.
+Add to ``INSTALLED_APPS``:
+
+.. code-block:: python
+
+   INSTALLED_APPS = [
+       # ...
+       "django_display_ids",
+   ]
+
+.. note::
+
+   Adding to ``INSTALLED_APPS`` is only required for template tags. All other
+   features (view mixins, managers, encoding functions) work without it.
 
 Requirements
 ------------

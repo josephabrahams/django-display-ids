@@ -95,9 +95,9 @@ class DisplayIDField(serializers.SerializerMethodField):
         # If using prefix override, generate display_id with that prefix
         if self._prefix_override is not None:
             # Get uuid_field name from model, then fall back to settings
-            uuid_field_name = getattr(obj, "uuid_field", None)
+            uuid_field_name: str | None = getattr(obj, "uuid_field", None)
             if uuid_field_name is None:
-                uuid_field_name = get_setting("UUID_FIELD")
+                uuid_field_name = str(get_setting("UUID_FIELD"))
             uuid_value = getattr(obj, uuid_field_name, None)
             if uuid_value is None:
                 raise ValueError(
@@ -108,7 +108,8 @@ class DisplayIDField(serializers.SerializerMethodField):
 
         # Use the model's display_id property
         if hasattr(obj, "display_id"):
-            return obj.display_id
+            display_id: str = obj.display_id
+            return display_id
 
         raise ValueError(
             f"Cannot generate display_id: {obj.__class__.__name__} "

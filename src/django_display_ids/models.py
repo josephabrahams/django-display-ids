@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from django.db import models
 
@@ -84,7 +84,7 @@ class DisplayIDMixin(models.Model):
     class Meta:
         abstract = True
 
-    def __init_subclass__(cls, **kwargs) -> None:
+    def __init_subclass__(cls, **kwargs: Any) -> None:
         """Register prefix when subclass is created."""
         super().__init_subclass__(**kwargs)
 
@@ -134,4 +134,4 @@ class DisplayIDMixin(models.Model):
         return encode_display_id(prefix, uuid_value)
 
     # Django admin display configuration
-    display_id.fget.short_description = "Display ID"
+    display_id.fget.short_description = "Display ID"  # type: ignore[attr-defined]

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import contextlib
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .encoding import decode_display_id
 
 if TYPE_CHECKING:
-    from django.db.models import QuerySet
+    from django.db.models import Model, QuerySet
     from django.http import HttpRequest
 
 __all__ = ["DisplayIDSearchMixin"]
@@ -39,13 +39,15 @@ class DisplayIDSearchMixin:
     """
 
     uuid_field: str | None = None
+    model: type[Model]
 
     def _get_uuid_field(self) -> str:
         """Get the UUID field name to search."""
         if self.uuid_field is not None:
             return self.uuid_field
         # Try to get from model's uuid_field attribute
-        return getattr(self.model, "uuid_field", None) or "id"
+        uuid_field: str | None = getattr(self.model, "uuid_field", None)
+        return uuid_field or "id"
 
     def _try_parse_uuid(self, value: str) -> uuid.UUID | None:
         """Try to parse a string as a UUID."""
@@ -57,16 +59,16 @@ class DisplayIDSearchMixin:
     def get_search_results(
         self,
         request: HttpRequest,
-        queryset: QuerySet,
+        queryset: QuerySet[Any],
         search_term: str,
-    ) -> tuple[QuerySet, bool]:
+    ) -> tuple[QuerySet[Any], bool]:
         """Extend search to handle display IDs and raw UUIDs.
 
         Tries to match the search term as:
         1. A display ID (prefix_base62uuid) if it contains an underscore
         2. A raw UUID if it looks like a UUID format
         """
-        queryset, use_distinct = super().get_search_results(
+        queryset, use_distinct = super().get_search_results(  # type: ignore[misc]
             request, queryset, search_term
         )
 

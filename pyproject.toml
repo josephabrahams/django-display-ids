@@ -48,14 +48,26 @@ dev = [
     "nox>=2024.0",
     "ruff>=0.8",
     "pre-commit>=4.0",
+    "mypy>=1.13",
+    "django-stubs>=5.1",
+    "djangorestframework-stubs>=3.15",
 ]
 
 [build-system]
 requires = ["uv_build>=0.9.26,<0.10.0"]
 build-backend = "uv_build"
 
-[tool.uv]
-default-groups = ["dev"]
+[tool.django-stubs]
+django_settings_module = "tests.settings"
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+strict = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disable_error_code = ["no-untyped-def"]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "tests.settings"
@@ -94,3 +106,6 @@ known-first-party = ["django_display_ids"]
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[tool.uv]
+default-groups = ["dev"]

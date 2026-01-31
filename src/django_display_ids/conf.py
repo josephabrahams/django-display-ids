@@ -45,5 +45,8 @@ def get_setting(name: str) -> str | tuple[StrategyName, ...]:
     if name not in DEFAULTS:
         raise KeyError(f"Unknown setting: {name}")
 
-    user_settings = getattr(settings, "DISPLAY_IDS", {})
-    return user_settings.get(name, DEFAULTS[name])
+    user_settings: dict[str, str | tuple[str, ...]] = getattr(
+        settings, "DISPLAY_IDS", {}
+    )
+    result = user_settings.get(name, DEFAULTS[name])
+    return result  # type: ignore[return-value]

@@ -70,8 +70,8 @@ def resolve_object(
     # Execute the query
     try:
         return qs.get(**lookup)
-    except model.DoesNotExist:
+    except model.DoesNotExist:  # type: ignore[attr-defined]
         raise ObjectNotFoundError(value, model_name=model.__name__) from None
-    except model.MultipleObjectsReturned:
+    except model.MultipleObjectsReturned:  # type: ignore[attr-defined]
         count = qs.filter(**lookup).count()
         raise AmbiguousIdentifierError(value, count) from None

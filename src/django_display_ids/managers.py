@@ -91,7 +91,7 @@ class DisplayIDQuerySet(models.QuerySet[M]):
         # Query the database
         try:
             return self.get(**{uuid_field: uuid_value})
-        except model.DoesNotExist:
+        except model.DoesNotExist:  # type: ignore[attr-defined]
             raise ObjectNotFoundError(value, model_name=model.__name__) from None
 
     def get_by_identifier(
@@ -140,22 +140,24 @@ class DisplayIDQuerySet(models.QuerySet[M]):
         # Execute the query
         try:
             return self.get(**lookup)
-        except model.DoesNotExist:
+        except model.DoesNotExist:  # type: ignore[attr-defined]
             raise ObjectNotFoundError(value, model_name=model.__name__) from None
-        except model.MultipleObjectsReturned:
+        except model.MultipleObjectsReturned:  # type: ignore[attr-defined]
             count = self.filter(**lookup).count()
             raise AmbiguousIdentifierError(value, count) from None
 
     def _get_uuid_field(self) -> str:
         """Get the UUID field name for this model."""
         if hasattr(self.model, "_get_uuid_field"):
-            return self.model._get_uuid_field()  # type: ignore[attr-defined]
+            result: str = self.model._get_uuid_field()  # type: ignore[attr-defined]
+            return result
         return str(get_setting("UUID_FIELD"))
 
     def _get_slug_field(self) -> str:
         """Get the slug field name for this model."""
         if hasattr(self.model, "_get_slug_field"):
-            return self.model._get_slug_field()  # type: ignore[attr-defined]
+            result: str = self.model._get_slug_field()  # type: ignore[attr-defined]
+            return result
         return str(get_setting("SLUG_FIELD"))
 
     def _get_strategies(self) -> tuple[StrategyName, ...]:
@@ -166,7 +168,8 @@ class DisplayIDQuerySet(models.QuerySet[M]):
         """Get the display ID prefix from the model, if defined."""
         if hasattr(self.model, "get_display_id_prefix"):
             try:
-                return self.model.get_display_id_prefix()  # type: ignore[attr-defined]
+                result: str | None = self.model.get_display_id_prefix()  # type: ignore[attr-defined]
+                return result
             except NotImplementedError:
                 return None
         return None

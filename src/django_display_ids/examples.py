@@ -26,7 +26,7 @@ def _get_prefix(prefix_or_model: str | type[Model]) -> str:
     if isinstance(prefix_or_model, str):
         return prefix_or_model
     # It's a model class
-    prefix = getattr(prefix_or_model, "display_id_prefix", None)
+    prefix: str | None = getattr(prefix_or_model, "display_id_prefix", None)
     if prefix is None:
         raise ValueError(f"Model {prefix_or_model.__name__} has no display_id_prefix")
     return prefix

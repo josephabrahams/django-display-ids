@@ -174,4 +174,4 @@ class DisplayIDLookupMixin:
         # Check object-level permissions
         self.check_object_permissions(self.request, obj)
 
-        return obj
+        return obj  # type: ignore[no-any-return]

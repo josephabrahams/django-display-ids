@@ -1,4 +1,13 @@
 repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.8.0
     hooks:
@@ -6,14 +15,15 @@ repos:
         args: [--fix]
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+  - repo: local
     hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
-      - id: check-yaml
-      - id: check-added-large-files
-      - id: check-toml
+      - id: mypy
+        name: mypy
+        entry: uv run mypy src/
+        language: system
+        types: [python]
+        files: ^src/
+        pass_filenames: false
 
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: 0.5.24

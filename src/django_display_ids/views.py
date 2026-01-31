@@ -133,7 +133,7 @@ class DisplayIDObjectMixin:
         qs = queryset if queryset is not None else self.get_queryset()
 
         try:
-            return resolve_object(
+            return resolve_object(  # type: ignore[no-any-return]
                 model=self.model,
                 value=str(value),
                 strategies=self._get_strategies(),

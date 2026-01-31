@@ -6,16 +6,21 @@ proper OpenAPI schema generation for DisplayIDField.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 try:
     from drf_spectacular.extensions import OpenApiSerializerFieldExtension
 except ImportError:
     # drf-spectacular not installed, skip extension registration
     pass
 else:
+    if TYPE_CHECKING:
+        from drf_spectacular.openapi import AutoSchema
+
     from django_display_ids.encoding import ENCODED_UUID_LENGTH, encode_uuid
     from django_display_ids.examples import example_uuid_for_prefix
 
-    class DisplayIDFieldExtension(OpenApiSerializerFieldExtension):
+    class DisplayIDFieldExtension(OpenApiSerializerFieldExtension):  # type: ignore[no-untyped-call]
         """OpenAPI schema extension for DisplayIDField.
 
         Generates schema with correct prefix example based on the field's
@@ -27,7 +32,7 @@ else:
         )
         match_subclasses = True
 
-        def _get_model_from_view(self, auto_schema):
+        def _get_model_from_view(self, auto_schema: AutoSchema | None) -> Any:
             """Try to get model from the view's queryset."""
             if auto_schema is None:
                 return None
@@ -48,7 +53,9 @@ else:
                 return queryset.model
             return None
 
-        def map_serializer_field(self, auto_schema, direction):
+        def map_serializer_field(
+            self, auto_schema: AutoSchema, direction: str
+        ) -> dict[str, Any]:
             """Generate OpenAPI schema for DisplayIDField."""
             # Get prefix from field override or try to get from model
             prefix = self.target._prefix_override

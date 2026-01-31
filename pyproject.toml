@@ -1,10 +1,10 @@
 [project]
 name = "django-display-ids"
-version = "0.2.0"
+version = "0.3.0"
 description = "Stripe-like prefixed IDs for Django. Works with existing UUIDs — no schema changes."
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "ISC" }
+license = { text = "MIT" }
 keywords = [
     "django",
     "stripe",
@@ -22,7 +22,7 @@ classifiers = [
     "Framework :: Django :: 4.2",
     "Framework :: Django :: 5.2",
     "Framework :: Django :: 6.0",
-    "License :: OSI Approved :: ISC License (ISCL)",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",

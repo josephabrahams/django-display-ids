@@ -3,7 +3,7 @@ Installation
 
 Install from PyPI:
 
-.. code-block:: bash
+.. code-block:: console
 
    pip install django-display-ids
 
@@ -32,13 +32,13 @@ Optional Dependencies
 
 For Django REST Framework integration:
 
-.. code-block:: bash
+.. code-block:: console
 
    pip install djangorestframework>=3.14
 
 For automatic OpenAPI schema generation with drf-spectacular:
 
-.. code-block:: bash
+.. code-block:: console
 
    pip install drf-spectacular>=0.28
 

@@ -105,8 +105,6 @@ __all__ = [  # noqa: RUF022 - keep categorized order for readability
     "DEFAULT_STRATEGIES",
 ]
 
-__version__ = "0.1.1"
-
 
 def get_drf_mixin() -> type:
     """Lazily import the DRF mixin to avoid hard dependency.

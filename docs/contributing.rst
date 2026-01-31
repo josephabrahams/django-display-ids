@@ -8,7 +8,7 @@ Setup
 
 Clone the repository and install dependencies:
 
-.. code-block:: bash
+.. code-block:: console
 
    git clone https://github.com/josephabrahams/django-display-ids.git
    cd django-display-ids
@@ -19,19 +19,19 @@ Running Tests
 
 Run the test suite:
 
-.. code-block:: bash
+.. code-block:: console
 
    uv run pytest
 
 Run with coverage:
 
-.. code-block:: bash
+.. code-block:: console
 
    uv run pytest --cov=src/django_display_ids
 
 Run across Python and Django versions:
 
-.. code-block:: bash
+.. code-block:: console
 
    uvx nox
 
@@ -40,7 +40,7 @@ Nox Sessions
 
 Available nox sessions:
 
-.. code-block:: bash
+.. code-block:: console
 
    uvx nox -s lint        # Run ruff linting
    uvx nox -s typecheck   # Run mypy type checking
@@ -53,13 +53,13 @@ Linting and Formatting
 
 The project uses ruff for linting and formatting, managed via pre-commit:
 
-.. code-block:: bash
+.. code-block:: console
 
    uvx pre-commit run --all-files
 
 Install the pre-commit hooks to run automatically on commit:
 
-.. code-block:: bash
+.. code-block:: console
 
    uvx pre-commit install
 
@@ -70,7 +70,7 @@ Docs dependencies are installed automatically with ``uv sync``.
 
 Run a live-reloading server that rebuilds on changes:
 
-.. code-block:: bash
+.. code-block:: console
 
    uv run sphinx-autobuild docs docs/_build/html
 
@@ -78,7 +78,7 @@ This starts a server at http://127.0.0.1:8000 that automatically rebuilds when y
 
 Alternatively, build the docs once:
 
-.. code-block:: bash
+.. code-block:: console
 
    uv run sphinx-build docs docs/_build/html
    python -m http.server -d docs/_build/html

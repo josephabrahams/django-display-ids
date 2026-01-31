@@ -6,7 +6,7 @@
 [![CI](https://github.com/josephabrahams/django-display-ids/actions/workflows/ci.yml/badge.svg)](https://github.com/josephabrahams/django-display-ids/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/josephabrahams/django-display-ids/graph/badge.svg)](https://codecov.io/gh/josephabrahams/django-display-ids)
 [![Docs](https://readthedocs.org/projects/django-display-ids/badge/?version=stable)](https://django-display-ids.readthedocs.io/)
-[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://github.com/josephabrahams/django-display-ids/blob/main/LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/josephabrahams/django-display-ids/blob/main/LICENSE)
 
 Stripe-like prefixed IDs for Django. Works with existing UUIDs — no schema changes.
 

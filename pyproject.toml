@@ -51,6 +51,12 @@ dev = [
     "mypy>=1.13",
     "django-stubs>=5.1",
     "djangorestframework-stubs>=3.15",
+    "sphinx-autobuild",
+]
+docs = [
+    "sphinx>=7.0",
+    "furo",
+    "sphinx-copybutton",
 ]
 
 [build-system]
@@ -108,4 +114,4 @@ quote-style = "double"
 indent-style = "space"
 
 [tool.uv]
-default-groups = ["dev"]
+default-groups = ["dev", "docs"]

@@ -66,17 +66,13 @@ Install the pre-commit hooks to run automatically on commit:
 Building Documentation
 ----------------------
 
-Install the docs dependencies:
-
-.. code-block:: bash
-
-   uv pip install -r docs/requirements-dev.txt
+Docs dependencies are installed automatically with ``uv sync``.
 
 Run a live-reloading server that rebuilds on changes:
 
 .. code-block:: bash
 
-   sphinx-autobuild docs docs/_build/html
+   uv run sphinx-autobuild docs docs/_build/html
 
 This starts a server at http://127.0.0.1:8000 that automatically rebuilds when you edit any docs.
 
@@ -84,7 +80,7 @@ Alternatively, build the docs once:
 
 .. code-block:: bash
 
-   sphinx-build docs docs/_build/html
+   uv run sphinx-build docs docs/_build/html
    python -m http.server -d docs/_build/html
 
 Reporting Issues

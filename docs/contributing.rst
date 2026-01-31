@@ -35,6 +35,19 @@ Run across Python and Django versions:
 
    uvx nox
 
+Nox Sessions
+------------
+
+Available nox sessions:
+
+.. code-block:: bash
+
+   uvx nox -s lint        # Run ruff linting
+   uvx nox -s typecheck   # Run mypy type checking
+   uvx nox                # Run all test matrix combinations
+
+List all sessions with ``uvx nox -l``.
+
 Linting and Formatting
 ----------------------
 

@@ -45,6 +45,8 @@ def lint(session: nox.Session) -> None:
 @nox.session(python="3.12")
 def typecheck(session: nox.Session) -> None:
     """Run type checking."""
-    session.install("mypy", "django-stubs", "djangorestframework-stubs")
+    session.install(
+        "mypy", "django-stubs", "djangorestframework-stubs", "drf-spectacular"
+    )
     session.install(".")
     session.run("mypy", "src")

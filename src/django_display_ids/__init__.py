@@ -24,6 +24,7 @@ Example:
 """
 
 from .admin import DisplayIDSearchMixin
+from .converters import DisplayIDConverter, DisplayIDOrUUIDConverter, UUIDConverter
 from .encoding import (
     decode_display_id,
     decode_uuid,
@@ -51,6 +52,10 @@ from .typing import DEFAULT_STRATEGIES, StrategyName
 from .views import DisplayIDObjectMixin
 
 __all__ = [  # noqa: RUF022 - keep categorized order for readability
+    # URL converters
+    "DisplayIDConverter",
+    "UUIDConverter",
+    "DisplayIDOrUUIDConverter",
     # Encoding
     "encode_uuid",
     "decode_uuid",

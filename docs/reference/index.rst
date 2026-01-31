@@ -7,6 +7,7 @@ Complete reference for all public functions, classes, and exceptions.
    :maxdepth: 2
 
    encoding
+   converters
    resolver
    exceptions
    settings

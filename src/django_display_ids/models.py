@@ -125,12 +125,15 @@ class DisplayIDMixin(models.Model):
         """Generate the display ID for this instance.
 
         Returns:
-            Display ID in format {prefix}_{base62(uuid)}, or None if no prefix.
+            Display ID in format {prefix}_{base62(uuid)}, or None if no prefix
+            or if the UUID field is None (e.g., unsaved instance).
         """
         prefix = self.get_display_id_prefix()
         if prefix is None:
             return None
         uuid_value = getattr(self, self._get_uuid_field())
+        if uuid_value is None:
+            return None
         return encode_display_id(prefix, uuid_value)
 
     # Django admin display configuration

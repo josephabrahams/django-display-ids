@@ -51,12 +51,21 @@ def resolve_object(
         UnknownPrefixError: If display ID prefix doesn't match expected.
         ObjectNotFoundError: If no matching object exists.
         AmbiguousIdentifierError: If multiple objects match (slug lookup).
+        TypeError: If queryset is not for the specified model.
     """
     # Parse the identifier to determine type
     result = parse_identifier(value, strategies, expected_prefix=prefix)
 
     # Get the base queryset
-    qs: QuerySet[M] = queryset if queryset is not None else model._default_manager.all()
+    if queryset is not None:
+        if queryset.model is not model:
+            raise TypeError(
+                f"queryset must be for {model.__name__}, "
+                f"got queryset for {queryset.model.__name__}"
+            )
+        qs: QuerySet[M] = queryset
+    else:
+        qs = model._default_manager.all()
 
     # Build the lookup based on strategy
     lookup: dict[str, Any]

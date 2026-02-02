@@ -109,11 +109,11 @@ The extension resolves the prefix from (in order):
 Path Parameter Descriptions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Use the provided helpers for consistent API documentation:
+Use the provided helper for consistent API documentation:
 
 .. code-block:: python
 
-   from django_display_ids.contrib.rest_framework import id_param_description
+   from django_display_ids.contrib.drf_spectacular import id_param_description
    from drf_spectacular.utils import extend_schema, OpenApiParameter
    from drf_spectacular.types import OpenApiTypes
 
@@ -138,11 +138,9 @@ For endpoints that also accept slugs:
    description=id_param_description("app", with_slug=True)
    # -> "Identifier: display_id (app_xxx), UUID, or slug"
 
-Generic constants are also available:
+For display ID only (no UUID fallback):
 
 .. code-block:: python
 
-   from django_display_ids.contrib.rest_framework import (
-       ID_PARAM_DESCRIPTION,           # "Identifier: display_id (prefix_xxx) or UUID"
-       ID_PARAM_DESCRIPTION_WITH_SLUG, # "Identifier: display_id (prefix_xxx), UUID, or slug"
-   )
+   description=id_param_description("inv", with_uuid=False)
+   # -> "Identifier: display_id (inv_xxx)"

@@ -9,11 +9,8 @@ from rest_framework.test import APIRequestFactory
 from rest_framework.views import APIView
 
 from django_display_ids.contrib.rest_framework import (
-    ID_PARAM_DESCRIPTION,
-    ID_PARAM_DESCRIPTION_WITH_SLUG,
     DisplayIDField,
     DisplayIDLookupMixin,
-    id_param_description,
 )
 from django_display_ids.encoding import encode_display_id
 
@@ -511,26 +508,35 @@ class TestDisplayIDFieldSchema:
 
 
 class TestIdParamDescription:
-    """Tests for id_param_description function and constants."""
+    """Tests for id_param_description function."""
 
-    def test_constant_without_slug(self):
-        assert ID_PARAM_DESCRIPTION == "Identifier: display_id (prefix_xxx) or UUID"
+    def test_function_default(self):
+        from django_display_ids.contrib.drf_spectacular import id_param_description
 
-    def test_constant_with_slug(self):
-        assert (
-            ID_PARAM_DESCRIPTION_WITH_SLUG
-            == "Identifier: display_id (prefix_xxx), UUID, or slug"
-        )
-
-    def test_function_without_slug(self):
         result = id_param_description("user")
         assert result == "Identifier: display_id (user_xxx) or UUID"
 
+    def test_function_without_uuid(self):
+        from django_display_ids.contrib.drf_spectacular import id_param_description
+
+        result = id_param_description("user", with_uuid=False)
+        assert result == "Identifier: display_id (user_xxx)"
+
     def test_function_with_slug(self):
+        from django_display_ids.contrib.drf_spectacular import id_param_description
+
         result = id_param_description("app", with_slug=True)
         assert result == "Identifier: display_id (app_xxx), UUID, or slug"
 
+    def test_function_without_uuid_with_slug(self):
+        from django_display_ids.contrib.drf_spectacular import id_param_description
+
+        result = id_param_description("app", with_uuid=False, with_slug=True)
+        assert result == "Identifier: display_id (app_xxx) or slug"
+
     def test_various_prefixes(self):
+        from django_display_ids.contrib.drf_spectacular import id_param_description
+
         assert "inv_xxx" in id_param_description("inv")
         assert "product_xxx" in id_param_description("product")
         assert "a_xxx" in id_param_description("a")

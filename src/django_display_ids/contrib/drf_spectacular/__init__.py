@@ -1,12 +1,61 @@
-"""drf-spectacular extension for DisplayIDField.
+"""drf-spectacular integration for django-display-ids.
 
-This extension auto-registers when drf-spectacular is installed, providing
-proper OpenAPI schema generation for DisplayIDField.
+This module provides:
+- OpenAPI schema extension for DisplayIDField (auto-registers when imported)
+- Helper functions for documenting URL path parameters
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+
+# OpenAPI parameter description helpers
+# These work regardless of whether drf-spectacular is installed
+
+
+def id_param_description(
+    prefix: str, *, with_uuid: bool = True, with_slug: bool = False
+) -> str:
+    """Generate ID parameter description with the actual prefix.
+
+    Args:
+        prefix: The display_id prefix (e.g., "user", "app").
+        with_uuid: Include UUID as an identifier option.
+        with_slug: Include slug as an identifier option.
+
+    Returns:
+        Description string for OpenAPI parameter.
+
+    Example:
+        >>> id_param_description("user")
+        'Identifier: display_id (user_xxx) or UUID'
+
+        >>> id_param_description("user", with_uuid=False)
+        'Identifier: display_id (user_xxx)'
+
+        >>> id_param_description("app", with_slug=True)
+        'Identifier: display_id (app_xxx), UUID, or slug'
+
+        >>> id_param_description("app", with_uuid=False, with_slug=True)
+        'Identifier: display_id (app_xxx) or slug'
+    """
+    parts = [f"display_id ({prefix}_xxx)"]
+    if with_uuid:
+        parts.append("UUID")
+    if with_slug:
+        parts.append("slug")
+
+    if len(parts) == 1:
+        return f"Identifier: {parts[0]}"
+    elif len(parts) == 2:
+        return f"Identifier: {parts[0]} or {parts[1]}"
+    else:
+        return f"Identifier: {', '.join(parts[:-1])}, or {parts[-1]}"
+
+
+__all__ = [
+    "id_param_description",
+]
 
 try:
     from drf_spectacular.extensions import OpenApiSerializerFieldExtension

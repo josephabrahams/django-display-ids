@@ -2,14 +2,37 @@
 
 from __future__ import annotations
 
+from .conf import SLUG_REGEX
+
 __all__ = [
+    "DISPLAY_ID_REGEX",
+    "SLUG_REGEX",
     "DisplayIDConverter",
+    "DisplayIDOrSlugConverter",
     "DisplayIDOrUUIDConverter",
-    "UUIDConverter",
+    "DisplayIDOrUUIDOrSlugConverter",
+    "make_display_id_or_slug_converter",
+    "make_display_id_or_uuid_or_slug_converter",
 ]
 
+# Regex pattern constants
+DISPLAY_ID_REGEX = r"[a-z]{1,16}_[0-9A-Za-z]{22}"
+UUID_REGEX = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 
-class DisplayIDConverter:
+
+class BaseConverter:
+    """Base class for URL path converters with pass-through conversion."""
+
+    def to_python(self, value: str) -> str:
+        """Convert the URL value to a Python object."""
+        return value
+
+    def to_url(self, value: str) -> str:
+        """Convert a Python object to a URL string."""
+        return value
+
+
+class DisplayIDConverter(BaseConverter):
     """Path converter for display IDs.
 
     Matches the format: {prefix}_{base62} where prefix is 1-16 lowercase
@@ -26,61 +49,15 @@ class DisplayIDConverter:
         ]
     """
 
-    regex = r"[a-z]{1,16}_[0-9A-Za-z]{22}"
-
-    def to_python(self, value: str) -> str:
-        """Convert the URL value to a Python object."""
-        return value
-
-    def to_url(self, value: str) -> str:
-        """Convert a Python object to a URL string."""
-        return value
+    regex = DISPLAY_ID_REGEX
 
 
-class UUIDConverter:
-    """Path converter for UUIDs.
-
-    Matches UUIDs in both hyphenated and unhyphenated formats:
-    - 550e8400-e29b-41d4-a716-446655440000 (hyphenated)
-    - 550e8400e29b41d4a716446655440000 (unhyphenated)
-
-    Example:
-        from django.urls import path, register_converter
-        from django_display_ids.converters import UUIDConverter
-
-        register_converter(UUIDConverter, "uuid")
-
-        urlpatterns = [
-            path("invoices/<uuid:id>/", InvoiceDetailView.as_view()),
-        ]
-
-    Note:
-        Django's built-in UUIDConverter only accepts hyphenated UUIDs.
-        This converter is more permissive.
-    """
-
-    # Hyphenated: 8-4-4-4-12 hex chars with hyphens
-    # Unhyphenated: 32 hex chars
-    # Note: Parentheses group the alternatives so ^ and $ anchor correctly
-    regex = (
-        r"(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{32})"
-    )
-
-    def to_python(self, value: str) -> str:
-        """Convert the URL value to a Python object."""
-        return value
-
-    def to_url(self, value: str) -> str:
-        """Convert a Python object to a URL string."""
-        return value
-
-
-class DisplayIDOrUUIDConverter:
+class DisplayIDOrUUIDConverter(BaseConverter):
     """Path converter for display IDs or UUIDs.
 
     Matches either format:
     - Display ID: {prefix}_{base62}
-    - UUID: hyphenated or unhyphenated
+    - UUID: hyphenated (e.g., 550e8400-e29b-41d4-a716-446655440000)
 
     Example:
         from django.urls import path, register_converter
@@ -93,19 +70,117 @@ class DisplayIDOrUUIDConverter:
         ]
     """
 
-    # Note: Parentheses group the alternatives so ^ and $ anchor correctly
-    regex = (
-        r"(?:"
-        r"[a-z]{1,16}_[0-9A-Za-z]{22}"
-        r"|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
-        r"|[0-9a-f]{32}"
-        r")"
-    )
+    regex = rf"(?:{DISPLAY_ID_REGEX}|{UUID_REGEX})"
 
-    def to_python(self, value: str) -> str:
-        """Convert the URL value to a Python object."""
-        return value
 
-    def to_url(self, value: str) -> str:
-        """Convert a Python object to a URL string."""
-        return value
+class DisplayIDOrSlugConverter(BaseConverter):
+    """Path converter for display IDs or slugs.
+
+    Matches either format:
+    - Display ID: {prefix}_{base62}
+    - Slug: Django's default slug pattern [-a-zA-Z0-9_]+
+
+    Example:
+        from django.urls import path, register_converter
+        from django_display_ids.converters import DisplayIDOrSlugConverter
+
+        register_converter(DisplayIDOrSlugConverter, "display_id_or_slug")
+
+        urlpatterns = [
+            path("products/<display_id_or_slug:id>/", ProductDetailView.as_view()),
+        ]
+    """
+
+    regex = rf"(?:{DISPLAY_ID_REGEX}|{SLUG_REGEX})"
+
+
+class DisplayIDOrUUIDOrSlugConverter(BaseConverter):
+    """Path converter for display IDs, UUIDs, or slugs.
+
+    Matches any of:
+    - Display ID: {prefix}_{base62}
+    - UUID: hyphenated (e.g., 550e8400-e29b-41d4-a716-446655440000)
+    - Slug: Django's default slug pattern [-a-zA-Z0-9_]+
+
+    Example:
+        from django.urls import path, register_converter
+        from django_display_ids.converters import DisplayIDOrUUIDOrSlugConverter
+
+        register_converter(DisplayIDOrUUIDOrSlugConverter, "identifier")
+
+        urlpatterns = [
+            path("products/<identifier:id>/", ProductDetailView.as_view()),
+        ]
+    """
+
+    regex = rf"(?:{DISPLAY_ID_REGEX}|{UUID_REGEX}|{SLUG_REGEX})"
+
+
+def make_display_id_or_slug_converter(
+    slug_regex: str | None = None,
+) -> type[DisplayIDOrSlugConverter]:
+    """Create a DisplayIDOrSlugConverter with a custom slug regex.
+
+    Args:
+        slug_regex: Custom slug regex pattern. If None, uses the
+            DISPLAY_IDS["SLUG_REGEX"] setting (defaults to Django's pattern).
+
+    Returns:
+        A DisplayIDOrSlugConverter subclass with the custom regex.
+
+    Example:
+        from django.urls import path, register_converter
+        from django_display_ids.converters import make_display_id_or_slug_converter
+
+        # Lowercase slugs only
+        LowercaseConverter = make_display_id_or_slug_converter(r"[a-z0-9-]+")
+        register_converter(LowercaseConverter, "display_id_or_slug")
+
+        urlpatterns = [
+            path("products/<display_id_or_slug:id>/", ProductDetailView.as_view()),
+        ]
+    """
+    from .conf import get_setting
+
+    pattern = slug_regex if slug_regex is not None else get_setting("SLUG_REGEX")
+
+    class CustomDisplayIDOrSlugConverter(DisplayIDOrSlugConverter):
+        regex = rf"(?:{DISPLAY_ID_REGEX}|{pattern})"
+
+    return CustomDisplayIDOrSlugConverter
+
+
+def make_display_id_or_uuid_or_slug_converter(
+    slug_regex: str | None = None,
+) -> type[DisplayIDOrUUIDOrSlugConverter]:
+    """Create a DisplayIDOrUUIDOrSlugConverter with a custom slug regex.
+
+    Args:
+        slug_regex: Custom slug regex pattern. If None, uses the
+            DISPLAY_IDS["SLUG_REGEX"] setting (defaults to Django's pattern).
+
+    Returns:
+        A DisplayIDOrUUIDOrSlugConverter subclass with the custom regex.
+
+    Example:
+        from django.urls import path, register_converter
+        from django_display_ids.converters import (
+            make_display_id_or_uuid_or_slug_converter,
+        )
+
+        # Lowercase slugs only
+        Converter = make_display_id_or_uuid_or_slug_converter(r"[a-z0-9-]+")
+        register_converter(Converter, "identifier")
+
+        urlpatterns = [
+            path("products/<identifier:id>/", ProductDetailView.as_view()),
+        ]
+    """
+    from .conf import get_setting
+
+    pattern = slug_regex if slug_regex is not None else get_setting("SLUG_REGEX")
+
+    class CustomDisplayIDOrUUIDOrSlugConverter(DisplayIDOrUUIDOrSlugConverter):
+        regex = rf"(?:{DISPLAY_ID_REGEX}|{UUID_REGEX}|{pattern})"
+
+    return CustomDisplayIDOrUUIDOrSlugConverter

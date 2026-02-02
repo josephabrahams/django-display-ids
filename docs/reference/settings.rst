@@ -14,13 +14,14 @@ Django settings module:
        "UUID_FIELD": "id",
        "SLUG_FIELD": "slug",
        "STRATEGIES": ("display_id", "uuid"),
+       "SLUG_REGEX": r"[-a-zA-Z0-9_]+",
    }
 
 Available Settings
 ~~~~~~~~~~~~~~~~~~
 
 .. list-table::
-   :widths: 25 15 60
+   :widths: 25 25 50
    :header-rows: 1
 
    * - Setting
@@ -35,6 +36,39 @@ Available Settings
    * - ``STRATEGIES``
      - ``("display_id", "uuid")``
      - Default lookup strategies (in order)
+   * - ``SLUG_REGEX``
+     - ``[-a-zA-Z0-9_]+``
+     - Regex pattern for slug matching in URL converters
+
+SLUG_REGEX
+~~~~~~~~~~
+
+The ``SLUG_REGEX`` setting controls what patterns are considered valid slugs
+in the :class:`~django_display_ids.converters.DisplayIDOrSlugConverter` and
+:class:`~django_display_ids.converters.DisplayIDOrUUIDOrSlugConverter`.
+
+By default, it uses Django's slug pattern (``[-a-zA-Z0-9_]+``), which allows:
+
+- Letters (uppercase and lowercase)
+- Numbers
+- Hyphens
+- Underscores
+
+To restrict to lowercase slugs only:
+
+.. code-block:: python
+
+   DISPLAY_IDS = {
+       "SLUG_REGEX": r"[a-z0-9-]+",
+   }
+
+To allow dots in slugs:
+
+.. code-block:: python
+
+   DISPLAY_IDS = {
+       "SLUG_REGEX": r"[-a-zA-Z0-9_.]+",
+   }
 
 View/Mixin Attributes
 ---------------------

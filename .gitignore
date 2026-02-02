@@ -11,6 +11,10 @@ coverage.xml
 .nox/
 .pytest_cache/
 
+# Linting/Type checking
+.ruff_cache/
+.mypy_cache/
+
 # Environments
 .venv/
 

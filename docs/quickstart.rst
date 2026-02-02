@@ -24,9 +24,20 @@ Configure your URL:
 .. code-block:: python
 
    # urls.py
+   from django.urls import path, register_converter
+   from django_display_ids import DisplayIDOrUUIDOrSlugConverter
+
+   register_converter(DisplayIDOrUUIDOrSlugConverter, "identifier")
+
    urlpatterns = [
-       path("invoices/<str:id>/", InvoiceDetailView.as_view()),
+       path("invoices/<identifier:id>/", InvoiceDetailView.as_view()),
    ]
+
+.. tip::
+
+   Using ``<str:id>`` also works but accepts any string. Path converters
+   validate the format at the routing layer, returning 404 for invalid formats.
+   See :doc:`reference/converters` for all available converters.
 
 Django REST Framework
 ---------------------

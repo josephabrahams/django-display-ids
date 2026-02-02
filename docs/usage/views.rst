@@ -70,62 +70,59 @@ on the view:
 URL Configuration
 -----------------
 
-Use a string parameter in your URL pattern:
-
-.. code-block:: python
-
-   urlpatterns = [
-       path("invoices/<str:id>/", InvoiceDetailView.as_view()),
-       path("invoices/<str:id>/edit/", InvoiceUpdateView.as_view()),
-       path("invoices/<str:id>/delete/", InvoiceDeleteView.as_view()),
-   ]
-
-URL Path Converters
-~~~~~~~~~~~~~~~~~~~
-
-For stricter URL validation, use the provided path converters. These validate
-the identifier format at the routing layer, so invalid formats get a 404 before
-reaching your view.
+Use path converters for URL validation. These validate the identifier format
+at the routing layer, so invalid formats get a 404 before reaching your view.
 
 .. code-block:: python
 
    from django.urls import path, register_converter
    from django_display_ids import (
        DisplayIDConverter,
-       UUIDConverter,
        DisplayIDOrUUIDConverter,
+       DisplayIDOrSlugConverter,
+       DisplayIDOrUUIDOrSlugConverter,
    )
 
    # Register converters (typically in urls.py)
    register_converter(DisplayIDConverter, "display_id")
-   register_converter(UUIDConverter, "uuid")
    register_converter(DisplayIDOrUUIDConverter, "display_id_or_uuid")
+   register_converter(DisplayIDOrSlugConverter, "display_id_or_slug")
+   register_converter(DisplayIDOrUUIDOrSlugConverter, "identifier")
 
    urlpatterns = [
        # Only accepts display IDs (e.g., inv_2aUyqjCzEIiEcYMKj7TZtw)
        path("invoices/<display_id:id>/", InvoiceDetailView.as_view()),
 
-       # Only accepts UUIDs (hyphenated or unhyphenated)
-       path("internal/<uuid:id>/", InternalDetailView.as_view()),
-
-       # Accepts either format
+       # Accepts display ID or UUID
        path("items/<display_id_or_uuid:id>/", ItemDetailView.as_view()),
+
+       # Accepts display ID or slug
+       path("products/<display_id_or_slug:id>/", ProductDetailView.as_view()),
+
+       # Accepts any format (display ID, UUID, or slug)
+       path("resources/<identifier:id>/", ResourceDetailView.as_view()),
    ]
+
+Using ``<str:id>`` also works but accepts any string without validation.
 
 Available Converters
 ^^^^^^^^^^^^^^^^^^^^
 
 ``DisplayIDConverter``
-   Matches display IDs: ``{prefix}_{base62}`` where prefix is 1-16 lowercase
-   letters and base62 is exactly 22 alphanumeric characters.
-
-``UUIDConverter``
-   Matches UUIDs in both hyphenated (``550e8400-e29b-41d4-a716-446655440000``)
-   and unhyphenated (``550e8400e29b41d4a716446655440000``) formats. This is
-   more permissive than Django's built-in ``uuid`` converter.
+   Matches display IDs only: ``{prefix}_{base62}``
 
 ``DisplayIDOrUUIDConverter``
-   Matches either display IDs or UUIDs.
+   Matches display IDs or UUIDs
+
+``DisplayIDOrSlugConverter``
+   Matches display IDs or slugs
+
+``DisplayIDOrUUIDOrSlugConverter``
+   Matches display IDs, UUIDs, or slugs
+
+For standalone UUID matching, use Django's built-in ``<uuid:id>`` converter.
+
+See :doc:`/reference/converters` for full details and custom slug patterns.
 
 .. note::
 

@@ -26,7 +26,14 @@ Example:
 from typing import Any
 
 from .admin import DisplayIDSearchMixin
-from .converters import DisplayIDConverter, DisplayIDOrUUIDConverter, UUIDConverter
+from .converters import (
+    DisplayIDConverter,
+    DisplayIDOrSlugConverter,
+    DisplayIDOrUUIDConverter,
+    DisplayIDOrUUIDOrSlugConverter,
+    make_display_id_or_slug_converter,
+    make_display_id_or_uuid_or_slug_converter,
+)
 from .encoding import (
     decode_display_id,
     decode_uuid,
@@ -69,8 +76,11 @@ def __getattr__(name: str) -> Any:
 __all__ = [  # noqa: RUF022 - keep categorized order for readability
     # URL converters
     "DisplayIDConverter",
-    "UUIDConverter",
+    "DisplayIDOrSlugConverter",
     "DisplayIDOrUUIDConverter",
+    "DisplayIDOrUUIDOrSlugConverter",
+    "make_display_id_or_slug_converter",
+    "make_display_id_or_uuid_or_slug_converter",
     # Encoding
     "encode_uuid",
     "decode_uuid",

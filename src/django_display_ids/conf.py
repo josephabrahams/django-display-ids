@@ -14,19 +14,25 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from django.conf import settings
+from django.urls.converters import SlugConverter
 
 if TYPE_CHECKING:
     from .typing import StrategyName
 
 __all__ = [
     "DEFAULTS",
+    "SLUG_REGEX",
     "get_setting",
 ]
+
+# Django's default slug regex pattern
+SLUG_REGEX: str = SlugConverter.regex
 
 DEFAULTS: dict[str, str | tuple[str, ...]] = {
     "UUID_FIELD": "id",
     "SLUG_FIELD": "slug",
     "STRATEGIES": ("display_id", "uuid"),
+    "SLUG_REGEX": SLUG_REGEX,
 }
 
 

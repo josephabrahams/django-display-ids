@@ -10,7 +10,7 @@ from rest_framework.views import APIView
 
 from django_display_ids.contrib.rest_framework import (
     DisplayIDField,
-    DisplayIDLookupMixin,
+    DisplayIDMixin,
 )
 from django_display_ids.encoding import encode_display_id
 
@@ -20,7 +20,7 @@ from .models import Invoice, Order, Product
 pytest.importorskip("rest_framework")
 
 
-class InvoiceAPIView(DisplayIDLookupMixin, APIView):
+class InvoiceAPIView(DisplayIDMixin, APIView):
     """Test API view for Invoice model."""
 
     lookup_url_kwarg = "id"
@@ -30,7 +30,7 @@ class InvoiceAPIView(DisplayIDLookupMixin, APIView):
         return Invoice.objects.all()
 
 
-class ProductAPIView(DisplayIDLookupMixin, APIView):
+class ProductAPIView(DisplayIDMixin, APIView):
     """Test API view for Product model with custom fields."""
 
     lookup_url_kwarg = "id"
@@ -43,7 +43,7 @@ class ProductAPIView(DisplayIDLookupMixin, APIView):
         return Product.objects.all()
 
 
-class NoPrefixAPIView(DisplayIDLookupMixin, APIView):
+class NoPrefixAPIView(DisplayIDMixin, APIView):
     """Test API view without display_id_prefix."""
 
     lookup_url_kwarg = "id"
@@ -53,7 +53,7 @@ class NoPrefixAPIView(DisplayIDLookupMixin, APIView):
         return Invoice.objects.all()
 
 
-class ModelPrefixFallbackAPIView(DisplayIDLookupMixin, APIView):
+class ModelPrefixFallbackAPIView(DisplayIDMixin, APIView):
     """Test API view that inherits prefix from model."""
 
     lookup_url_kwarg = "id"
@@ -82,8 +82,8 @@ def product(db):
 
 
 @pytest.mark.django_db
-class TestDisplayIDLookupMixin:
-    """Tests for DisplayIDLookupMixin."""
+class TestDisplayIDMixin:
+    """Tests for DisplayIDMixin."""
 
     def test_get_object_by_uuid(self, rf, invoice):
         """get_object works with UUID."""
@@ -174,7 +174,7 @@ class TestQuerysetFiltering:
         invoice1 = Invoice.objects.create(name="Invoice 1", slug="invoice-1")
         Invoice.objects.create(name="Invoice 2", slug="invoice-2")
 
-        class FilteredInvoiceView(DisplayIDLookupMixin, APIView):
+        class FilteredInvoiceView(DisplayIDMixin, APIView):
             lookup_url_kwarg = "id"
             display_id_prefix = "inv"
 
@@ -193,7 +193,7 @@ class TestQuerysetFiltering:
         Invoice.objects.create(name="Invoice 1", slug="invoice-1")
         invoice2 = Invoice.objects.create(name="Invoice 2", slug="invoice-2")
 
-        class FilteredInvoiceView(DisplayIDLookupMixin, APIView):
+        class FilteredInvoiceView(DisplayIDMixin, APIView):
             lookup_url_kwarg = "id"
             display_id_prefix = "inv"
 
@@ -241,7 +241,7 @@ class TestObjectPermissions:
         """check_object_permissions is called on retrieved object."""
         permissions_checked = []
 
-        class PermissionCheckView(DisplayIDLookupMixin, APIView):
+        class PermissionCheckView(DisplayIDMixin, APIView):
             lookup_url_kwarg = "id"
             display_id_prefix = "inv"
 
@@ -300,7 +300,7 @@ class TestPrefixValidation:
     def test_empty_string_raises_error(self, rf):
         """Empty string prefix raises ValueError."""
 
-        class EmptyPrefixView(DisplayIDLookupMixin, APIView):
+        class EmptyPrefixView(DisplayIDMixin, APIView):
             lookup_url_kwarg = "id"
             display_id_prefix = ""
 
@@ -317,7 +317,7 @@ class TestPrefixValidation:
     def test_invalid_prefix_raises_error(self, rf):
         """Invalid prefix format raises ValueError."""
 
-        class InvalidPrefixView(DisplayIDLookupMixin, APIView):
+        class InvalidPrefixView(DisplayIDMixin, APIView):
             lookup_url_kwarg = "id"
             display_id_prefix = "Invalid123"
 
@@ -334,7 +334,7 @@ class TestPrefixValidation:
     def test_too_long_prefix_raises_error(self, rf):
         """Prefix longer than 16 chars raises ValueError."""
 
-        class LongPrefixView(DisplayIDLookupMixin, APIView):
+        class LongPrefixView(DisplayIDMixin, APIView):
             lookup_url_kwarg = "id"
             display_id_prefix = "waytoolongprefix123"
 

@@ -3,29 +3,29 @@ Django Views
 
 Integrate display ID lookups with Django's class-based views.
 
-DisplayIDObjectMixin
---------------------
+DisplayIDMixin
+--------------
 
 Add to any view that uses ``get_object()``:
 
 .. code-block:: python
 
    from django.views.generic import DetailView, UpdateView, DeleteView
-   from django_display_ids import DisplayIDObjectMixin
+   from django_display_ids import DisplayIDMixin
 
-   class InvoiceDetailView(DisplayIDObjectMixin, DetailView):
+   class InvoiceDetailView(DisplayIDMixin, DetailView):
        model = Invoice
        lookup_param = "id"
        lookup_strategies = ("display_id", "uuid", "slug")
        display_id_prefix = "inv"
 
    # Works with any view that uses get_object()
-   class InvoiceUpdateView(DisplayIDObjectMixin, UpdateView):
+   class InvoiceUpdateView(DisplayIDMixin, UpdateView):
        model = Invoice
        lookup_param = "id"
        display_id_prefix = "inv"
 
-   class InvoiceDeleteView(DisplayIDObjectMixin, DeleteView):
+   class InvoiceDeleteView(DisplayIDMixin, DeleteView):
        model = Invoice
        lookup_param = "id"
        display_id_prefix = "inv"
@@ -42,7 +42,7 @@ Configuration Attributes
 
 ``display_id_prefix``
    Expected prefix for display IDs. Falls back to the model's
-   ``display_id_prefix`` if using ``DisplayIDMixin``.
+   ``display_id_prefix`` if using ``DisplayIDModel``.
 
 ``uuid_field``
    The UUID field name on the model. Defaults to ``"id"``.
@@ -53,16 +53,16 @@ Configuration Attributes
 Inheriting Prefix from Model
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If your model uses ``DisplayIDMixin``, you can omit ``display_id_prefix``
+If your model uses ``DisplayIDModel``, you can omit ``display_id_prefix``
 on the view:
 
 .. code-block:: python
 
-   class Invoice(DisplayIDMixin, models.Model):
+   class Invoice(DisplayIDModel, models.Model):
        display_id_prefix = "inv"
        # ...
 
-   class InvoiceDetailView(DisplayIDObjectMixin, DetailView):
+   class InvoiceDetailView(DisplayIDMixin, DetailView):
        model = Invoice
        lookup_param = "id"
        # display_id_prefix inherited from Invoice

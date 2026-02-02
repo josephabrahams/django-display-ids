@@ -1,14 +1,14 @@
 Exceptions
 ==========
 
-All exceptions inherit from Python's built-in ``LookupError``.
+All exceptions inherit from ``DisplayIDLookupError``.
 
 Exception Hierarchy
 -------------------
 
 .. code-block:: text
 
-   LookupError (built-in)
+   DisplayIDLookupError
    └── InvalidIdentifierError
    └── UnknownPrefixError
    └── MissingPrefixError
@@ -104,12 +104,12 @@ Raised when multiple records match (typically with slug lookups).
 Framework-Specific Handling
 ---------------------------
 
-**Django CBVs** (``DisplayIDObjectMixin``):
+**Django CBVs** (``DisplayIDMixin``):
    All exceptions are converted to ``Http404``.
 
-**Django REST Framework** (``DisplayIDLookupMixin``):
+**Django REST Framework** (``DisplayIDMixin`` from ``contrib.rest_framework``):
    - ``ObjectNotFoundError`` → ``NotFound`` (404)
    - Other exceptions → ``ParseError`` (400)
 
-**Django Admin** (``DisplayIDSearchMixin``):
+**Django Admin** (``DisplayIDAdminSearchMixin``):
    Exceptions are silently caught and the search falls back to normal behavior.

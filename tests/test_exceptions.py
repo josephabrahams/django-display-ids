@@ -4,33 +4,33 @@ import pytest
 
 from django_display_ids.exceptions import (
     AmbiguousIdentifierError,
+    DisplayIDLookupError,
     InvalidIdentifierError,
-    LookupError,
     MissingPrefixError,
     ObjectNotFoundError,
     UnknownPrefixError,
 )
 
 
-class TestLookupError:
-    """Tests for base LookupError."""
+class TestDisplayIDLookupError:
+    """Tests for base DisplayIDLookupError."""
 
     def test_is_exception(self):
-        """LookupError is an Exception."""
-        assert issubclass(LookupError, Exception)
+        """DisplayIDLookupError is an Exception."""
+        assert issubclass(DisplayIDLookupError, Exception)
 
     def test_can_be_raised(self):
-        """LookupError can be raised and caught."""
-        with pytest.raises(LookupError):
-            raise LookupError("test error")
+        """DisplayIDLookupError can be raised and caught."""
+        with pytest.raises(DisplayIDLookupError):
+            raise DisplayIDLookupError("test error")
 
 
 class TestInvalidIdentifierError:
     """Tests for InvalidIdentifierError."""
 
     def test_inherits_lookup_error(self):
-        """InvalidIdentifierError inherits from LookupError."""
-        assert issubclass(InvalidIdentifierError, LookupError)
+        """InvalidIdentifierError inherits from DisplayIDLookupError."""
+        assert issubclass(InvalidIdentifierError, DisplayIDLookupError)
 
     def test_attributes(self):
         """InvalidIdentifierError stores value and message."""
@@ -51,8 +51,8 @@ class TestUnknownPrefixError:
     """Tests for UnknownPrefixError."""
 
     def test_inherits_lookup_error(self):
-        """UnknownPrefixError inherits from LookupError."""
-        assert issubclass(UnknownPrefixError, LookupError)
+        """UnknownPrefixError inherits from DisplayIDLookupError."""
+        assert issubclass(UnknownPrefixError, DisplayIDLookupError)
 
     def test_attributes(self):
         """UnknownPrefixError stores all attributes."""
@@ -81,8 +81,8 @@ class TestMissingPrefixError:
     """Tests for MissingPrefixError."""
 
     def test_inherits_lookup_error(self):
-        """MissingPrefixError inherits from LookupError."""
-        assert issubclass(MissingPrefixError, LookupError)
+        """MissingPrefixError inherits from DisplayIDLookupError."""
+        assert issubclass(MissingPrefixError, DisplayIDLookupError)
 
     def test_with_model_name(self):
         """Message includes model name when provided."""
@@ -102,8 +102,8 @@ class TestObjectNotFoundError:
     """Tests for ObjectNotFoundError."""
 
     def test_inherits_lookup_error(self):
-        """ObjectNotFoundError inherits from LookupError."""
-        assert issubclass(ObjectNotFoundError, LookupError)
+        """ObjectNotFoundError inherits from DisplayIDLookupError."""
+        assert issubclass(ObjectNotFoundError, DisplayIDLookupError)
 
     def test_attributes(self):
         """ObjectNotFoundError stores all attributes."""
@@ -131,8 +131,8 @@ class TestAmbiguousIdentifierError:
     """Tests for AmbiguousIdentifierError."""
 
     def test_inherits_lookup_error(self):
-        """AmbiguousIdentifierError inherits from LookupError."""
-        assert issubclass(AmbiguousIdentifierError, LookupError)
+        """AmbiguousIdentifierError inherits from DisplayIDLookupError."""
+        assert issubclass(AmbiguousIdentifierError, DisplayIDLookupError)
 
     def test_attributes(self):
         """AmbiguousIdentifierError stores all attributes."""
@@ -153,7 +153,7 @@ class TestExceptionHierarchy:
     """Tests for exception hierarchy."""
 
     def test_all_inherit_from_lookup_error(self):
-        """All custom exceptions inherit from LookupError."""
+        """All custom exceptions inherit from DisplayIDLookupError."""
         exceptions = [
             InvalidIdentifierError,
             UnknownPrefixError,
@@ -162,10 +162,10 @@ class TestExceptionHierarchy:
             AmbiguousIdentifierError,
         ]
         for exc_class in exceptions:
-            assert issubclass(exc_class, LookupError)
+            assert issubclass(exc_class, DisplayIDLookupError)
 
     def test_catch_all_with_lookup_error(self):
-        """All exceptions can be caught with LookupError."""
+        """All exceptions can be caught with DisplayIDLookupError."""
         exceptions = [
             InvalidIdentifierError("test"),
             UnknownPrefixError("test", actual="a"),
@@ -174,5 +174,5 @@ class TestExceptionHierarchy:
             AmbiguousIdentifierError("test", count=2),
         ]
         for exc in exceptions:
-            with pytest.raises(LookupError):
+            with pytest.raises(DisplayIDLookupError):
                 raise exc

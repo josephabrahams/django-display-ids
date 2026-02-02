@@ -101,7 +101,7 @@ All mixins accept these attributes to override defaults:
 Model Class Attributes
 ----------------------
 
-Models using ``DisplayIDMixin`` can define:
+Models using ``DisplayIDModel`` can define:
 
 .. list-table::
    :widths: 30 20 50

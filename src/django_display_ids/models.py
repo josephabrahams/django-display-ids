@@ -10,7 +10,7 @@ from .conf import get_setting
 from .encoding import PREFIX_PATTERN, encode_display_id
 
 __all__ = [
-    "DisplayIDMixin",
+    "DisplayIDModel",
     "get_model_for_prefix",
 ]
 
@@ -50,14 +50,14 @@ def _register_prefix(prefix: str, model_name: str) -> None:
     _prefix_registry[prefix] = model_name
 
 
-class DisplayIDMixin(models.Model):
-    """Mixin that adds display_id support to a Django model.
+class DisplayIDModel(models.Model):
+    """Abstract base model that adds display_id support.
 
     Subclasses must define `display_id_prefix` as a class attribute.
     Optionally override `uuid_field` or `slug_field` if using non-default field names.
 
     Example:
-        class Invoice(DisplayIDMixin):
+        class Invoice(DisplayIDModel):
             display_id_prefix = "inv"
 
             id = models.UUIDField(primary_key=True, default=uuid.uuid4)
@@ -67,7 +67,7 @@ class DisplayIDMixin(models.Model):
         invoice.display_id  # -> "inv_2aUyqjCzEIiEcYMKj7TZtw"
 
     Example with custom field names:
-        class Product(DisplayIDMixin):
+        class Product(DisplayIDModel):
             display_id_prefix = "prod"
             uuid_field = "uid"
             slug_field = "handle"

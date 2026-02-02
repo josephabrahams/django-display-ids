@@ -43,7 +43,7 @@ The prefix argument is required and must be 1-16 lowercase letters.
 
 .. note::
 
-   For models with ``DisplayIDMixin``, use the ``display_id`` property directly:
+   For models with ``DisplayIDModel``, use the ``display_id`` property directly:
 
    .. code-block:: django
 

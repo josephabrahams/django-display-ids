@@ -1,25 +1,25 @@
 """Tests for Django admin integration."""
 
-import uuid
+import uuid  # Used for generating fake display IDs
 
 import pytest
 from django.contrib import admin
 from django.contrib.admin.sites import AdminSite
 from django.test import RequestFactory
 
-from django_display_ids import DisplayIDSearchMixin, encode_display_id
+from django_display_ids import DisplayIDAdminSearchMixin, encode_display_id
 
 from .models import Invoice, Product
 
 
-class InvoiceAdmin(DisplayIDSearchMixin, admin.ModelAdmin):
+class InvoiceAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
     """Test admin for Invoice model."""
 
     list_display = ("id", "name")
     search_fields = ("name",)
 
 
-class ProductAdmin(DisplayIDSearchMixin, admin.ModelAdmin):
+class ProductAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
     """Test admin for Product model with custom uuid_field."""
 
     list_display = ("uid", "name")
@@ -51,8 +51,8 @@ def request_factory():
 
 
 @pytest.mark.django_db
-class TestDisplayIDSearchMixin:
-    """Tests for DisplayIDSearchMixin."""
+class TestDisplayIDAdminSearchMixin:
+    """Tests for DisplayIDAdminSearchMixin."""
 
     def test_search_by_display_id(self, invoice_admin, request_factory):
         """Should find invoice by display_id search."""
@@ -136,8 +136,8 @@ class TestDisplayIDSearchMixin:
         # Should not find invoice2
         assert invoice2 not in result_qs
 
-    def test_search_by_raw_uuid(self, invoice_admin, request_factory):
-        """Should find invoice by raw UUID search."""
+    def test_raw_uuid_not_handled(self, invoice_admin, request_factory):
+        """Raw UUID search is not handled by mixin (use search_fields instead)."""
         invoice = Invoice.objects.create(name="Test Invoice")
         raw_uuid = str(invoice.id)
 
@@ -146,30 +146,5 @@ class TestDisplayIDSearchMixin:
 
         result_qs, _ = invoice_admin.get_search_results(request, queryset, raw_uuid)
 
-        assert invoice in result_qs
-        assert result_qs.count() == 1
-
-    def test_search_by_raw_uuid_custom_field(self, product_admin, request_factory):
-        """Should find product by raw UUID with custom uuid_field."""
-        product = Product.objects.create(name="Test Product")
-        raw_uuid = str(product.uid)
-
-        request = request_factory.get("/admin/tests/product/", {"q": raw_uuid})
-        queryset = Product.objects.all()
-
-        result_qs, _ = product_admin.get_search_results(request, queryset, raw_uuid)
-
-        assert product in result_qs
-        assert result_qs.count() == 1
-
-    def test_search_nonexistent_uuid(self, invoice_admin, request_factory):
-        """Should return empty when UUID doesn't match any record."""
-        Invoice.objects.create(name="Test Invoice")
-        fake_uuid = str(uuid.uuid4())
-
-        request = request_factory.get("/admin/tests/invoice/", {"q": fake_uuid})
-        queryset = Invoice.objects.all()
-
-        result_qs, _ = invoice_admin.get_search_results(request, queryset, fake_uuid)
-
+        # Raw UUID is not handled by the mixin - users should add "id" to search_fields
         assert result_qs.count() == 0

@@ -4,21 +4,21 @@ from __future__ import annotations
 
 __all__ = [
     "AmbiguousIdentifierError",
+    "DisplayIDLookupError",
     "InvalidIdentifierError",
-    "LookupError",
     "MissingPrefixError",
     "ObjectNotFoundError",
     "UnknownPrefixError",
 ]
 
 
-class LookupError(Exception):
+class DisplayIDLookupError(Exception):
     """Base exception for all lookup errors."""
 
     pass
 
 
-class InvalidIdentifierError(LookupError):
+class InvalidIdentifierError(DisplayIDLookupError):
     """Raised when an identifier has an invalid format.
 
     This indicates the identifier string cannot be parsed as any
@@ -31,7 +31,7 @@ class InvalidIdentifierError(LookupError):
         super().__init__(self.message)
 
 
-class UnknownPrefixError(LookupError):
+class UnknownPrefixError(DisplayIDLookupError):
     """Raised when a display ID has an unexpected prefix.
 
     This occurs when prefix enforcement is enabled and the
@@ -49,7 +49,7 @@ class UnknownPrefixError(LookupError):
         super().__init__(message)
 
 
-class MissingPrefixError(LookupError):
+class MissingPrefixError(DisplayIDLookupError):
     """Raised when a display ID lookup is attempted without a prefix.
 
     This occurs when calling get_by_display_id() on a model that
@@ -68,7 +68,7 @@ class MissingPrefixError(LookupError):
         super().__init__(message)
 
 
-class ObjectNotFoundError(LookupError):
+class ObjectNotFoundError(DisplayIDLookupError):
     """Raised when no object matches the identifier.
 
     This indicates the identifier was valid but no matching
@@ -85,7 +85,7 @@ class ObjectNotFoundError(LookupError):
         super().__init__(message)
 
 
-class AmbiguousIdentifierError(LookupError):
+class AmbiguousIdentifierError(DisplayIDLookupError):
     """Raised when an identifier matches multiple objects.
 
     This can occur with slug lookups if slugs are not unique,

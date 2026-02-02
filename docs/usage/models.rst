@@ -3,7 +3,7 @@ Model Integration
 
 Add display ID support directly to your Django models.
 
-DisplayIDMixin
+DisplayIDModel
 --------------
 
 Add a ``display_id`` property to your models:
@@ -12,9 +12,9 @@ Add a ``display_id`` property to your models:
 
    import uuid
    from django.db import models
-   from django_display_ids import DisplayIDMixin
+   from django_display_ids import DisplayIDModel
 
-   class Invoice(DisplayIDMixin, models.Model):
+   class Invoice(DisplayIDModel, models.Model):
        display_id_prefix = "inv"
        id = models.UUIDField(primary_key=True, default=uuid.uuid4)
 
@@ -36,7 +36,7 @@ Configuration Attributes
 Prefix Registry
 ~~~~~~~~~~~~~~~
 
-When you define a model with ``DisplayIDMixin``, the prefix is automatically
+When you define a model with ``DisplayIDModel``, the prefix is automatically
 registered. This allows the library to:
 
 - Validate that display IDs have the correct prefix
@@ -52,9 +52,9 @@ Add convenient lookup methods to your model:
 
 .. code-block:: python
 
-   from django_display_ids import DisplayIDMixin, DisplayIDManager
+   from django_display_ids import DisplayIDModel, DisplayIDManager
 
-   class Invoice(DisplayIDMixin, models.Model):
+   class Invoice(DisplayIDModel, models.Model):
        display_id_prefix = "inv"
        objects = DisplayIDManager()
        id = models.UUIDField(primary_key=True, default=uuid.uuid4)
@@ -137,7 +137,7 @@ Returns a queryset, so it can be chained:
 
 .. code-block:: python
 
-   invoices = Invoice.objects.filter(active=True).get_by_identifiers([...])
+   invoices = Invoice.objects.get_by_identifiers([...]).order_by("name")
 
 Parameters:
 

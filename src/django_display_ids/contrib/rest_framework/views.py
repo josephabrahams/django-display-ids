@@ -4,11 +4,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from django_display_ids.conf import get_setting
+from django_display_ids.conf import (
+    NOT_SET,
+    get_setting,
+    get_slug_field,
+    get_uuid_field,
+)
 from django_display_ids.encoding import PREFIX_PATTERN
 from django_display_ids.exceptions import (
+    DisplayIDLookupError,
     InvalidIdentifierError,
-    LookupError,
     ObjectNotFoundError,
     UnknownPrefixError,
 )
@@ -19,10 +24,8 @@ if TYPE_CHECKING:
     from django.db import models
 
 __all__ = [
-    "DisplayIDLookupMixin",
+    "DisplayIDMixin",
 ]
-
-_NOT_SET: Any = object()
 
 
 def _get_drf_exceptions() -> tuple[type[Exception], type[Exception]]:
@@ -33,12 +36,12 @@ def _get_drf_exceptions() -> tuple[type[Exception], type[Exception]]:
         return NotFound, ParseError
     except ImportError:
         raise ImportError(
-            "Django REST Framework is required for DisplayIDLookupMixin. "
+            "Django REST Framework is required for DisplayIDMixin. "
             "Install it with: pip install djangorestframework"
         ) from None
 
 
-class DisplayIDLookupMixin:
+class DisplayIDMixin:
     """Mixin for DRF views that resolves objects by display ID, UUID, or slug.
 
     Works with APIView, GenericAPIView, and ViewSets. Does not require
@@ -52,7 +55,7 @@ class DisplayIDLookupMixin:
         slug_field: Name of the slug field on the model.
 
     Example:
-        class InvoiceView(DisplayIDLookupMixin, APIView):
+        class InvoiceView(DisplayIDMixin, APIView):
             lookup_url_kwarg = "id"
             lookup_strategies = ("display_id", "uuid")
             display_id_prefix = "inv"
@@ -62,7 +65,7 @@ class DisplayIDLookupMixin:
                 return Response({"id": str(invoice.id)})
 
     Example with ViewSet:
-        class InvoiceViewSet(DisplayIDLookupMixin, ModelViewSet):
+        class InvoiceViewSet(DisplayIDMixin, ModelViewSet):
             queryset = Invoice.objects.all()
             serializer_class = InvoiceSerializer
             lookup_url_kwarg = "pk"
@@ -71,7 +74,7 @@ class DisplayIDLookupMixin:
 
     lookup_url_kwarg: str = "pk"
     lookup_strategies: tuple[StrategyName, ...] | None = None
-    display_id_prefix: str | None = _NOT_SET
+    display_id_prefix: str | None = NOT_SET
     uuid_field: str | None = None
     slug_field: str | None = None
 
@@ -80,14 +83,10 @@ class DisplayIDLookupMixin:
     request: Any
 
     def _get_uuid_field(self) -> str:
-        if self.uuid_field is not None:
-            return self.uuid_field
-        return str(get_setting("UUID_FIELD"))
+        return get_uuid_field(self.uuid_field)
 
     def _get_slug_field(self) -> str:
-        if self.slug_field is not None:
-            return self.slug_field
-        return str(get_setting("SLUG_FIELD"))
+        return get_slug_field(self.slug_field)
 
     def _get_strategies(self) -> tuple[StrategyName, ...]:
         if self.lookup_strategies is not None:
@@ -101,7 +100,7 @@ class DisplayIDLookupMixin:
         explicitly disable), otherwise falls back to the model's
         display_id_prefix attribute.
         """
-        if self.display_id_prefix is not _NOT_SET:
+        if self.display_id_prefix is not NOT_SET:
             if self.display_id_prefix is not None and not PREFIX_PATTERN.match(
                 self.display_id_prefix
             ):
@@ -168,7 +167,7 @@ class DisplayIDLookupMixin:
             raise NotFound(str(e)) from e
         except (InvalidIdentifierError, UnknownPrefixError) as e:
             raise ParseError(str(e)) from e
-        except LookupError as e:
+        except DisplayIDLookupError as e:
             raise ParseError(str(e)) from e
 
         # Check object-level permissions

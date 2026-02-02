@@ -75,4 +75,4 @@ Prefix Registration
 ~~~~~~~~~~~~~~~~~~~
 
 Prefixes are automatically registered when a model class with
-``DisplayIDMixin`` is defined. You don't need to manually register prefixes.
+``DisplayIDModel`` is defined. You don't need to manually register prefixes.

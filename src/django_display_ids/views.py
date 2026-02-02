@@ -6,11 +6,11 @@ from typing import TYPE_CHECKING, Any
 
 from django.http import Http404
 
-from .conf import get_setting
+from .conf import NOT_SET, get_setting, get_slug_field, get_uuid_field
 from .encoding import PREFIX_PATTERN
 from .exceptions import (
+    DisplayIDLookupError,
     InvalidIdentifierError,
-    LookupError,
     ObjectNotFoundError,
     UnknownPrefixError,
 )
@@ -21,13 +21,11 @@ if TYPE_CHECKING:
     from django.db import models
 
 __all__ = [
-    "DisplayIDObjectMixin",
+    "DisplayIDMixin",
 ]
 
-_NOT_SET: Any = object()
 
-
-class DisplayIDObjectMixin:
+class DisplayIDMixin:
     """Mixin for Django CBVs that resolves objects by display ID, UUID, or slug.
 
     Drop-in replacement for SingleObjectMixin's get_object() method.
@@ -42,7 +40,7 @@ class DisplayIDObjectMixin:
         slug_field: Name of the slug field on the model.
 
     Example:
-        class InvoiceDetailView(DisplayIDObjectMixin, DetailView):
+        class InvoiceDetailView(DisplayIDMixin, DetailView):
             model = Invoice
             lookup_param = "id"
             lookup_strategies = ("display_id", "uuid")
@@ -52,19 +50,15 @@ class DisplayIDObjectMixin:
     model: type[models.Model] | None = None
     lookup_param: str = "pk"
     lookup_strategies: tuple[StrategyName, ...] | None = None
-    display_id_prefix: str | None = _NOT_SET
+    display_id_prefix: str | None = NOT_SET
     uuid_field: str | None = None
     slug_field: str | None = None
 
     def _get_uuid_field(self) -> str:
-        if self.uuid_field is not None:
-            return self.uuid_field
-        return str(get_setting("UUID_FIELD"))
+        return get_uuid_field(self.uuid_field)
 
     def _get_slug_field(self) -> str:
-        if self.slug_field is not None:
-            return self.slug_field
-        return str(get_setting("SLUG_FIELD"))
+        return get_slug_field(self.slug_field)
 
     def _get_strategies(self) -> tuple[StrategyName, ...]:
         if self.lookup_strategies is not None:
@@ -78,7 +72,7 @@ class DisplayIDObjectMixin:
         explicitly disable), otherwise falls back to the model's
         display_id_prefix attribute.
         """
-        if self.display_id_prefix is not _NOT_SET:
+        if self.display_id_prefix is not NOT_SET:
             if self.display_id_prefix is not None and not PREFIX_PATTERN.match(
                 self.display_id_prefix
             ):
@@ -146,5 +140,5 @@ class DisplayIDObjectMixin:
             raise Http404(str(e)) from e
         except (InvalidIdentifierError, UnknownPrefixError) as e:
             raise Http404(str(e)) from e
-        except LookupError as e:
+        except DisplayIDLookupError as e:
             raise Http404(str(e)) from e

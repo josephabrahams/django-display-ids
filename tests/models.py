@@ -4,10 +4,10 @@ import uuid
 
 from django.db import models
 
-from django_display_ids import DisplayIDManager, DisplayIDMixin
+from django_display_ids import DisplayIDManager, DisplayIDModel
 
 
-class Invoice(DisplayIDMixin, models.Model):
+class Invoice(DisplayIDModel, models.Model):
     """Test model with display ID support."""
 
     display_id_prefix = "inv"
@@ -22,7 +22,7 @@ class Invoice(DisplayIDMixin, models.Model):
         app_label = "tests"
 
 
-class Product(DisplayIDMixin, models.Model):
+class Product(DisplayIDModel, models.Model):
     """Test model with custom field names."""
 
     display_id_prefix = "prod"
@@ -40,7 +40,7 @@ class Product(DisplayIDMixin, models.Model):
 
 
 class Order(models.Model):
-    """Test model without DisplayIDMixin (no prefix)."""
+    """Test model without DisplayIDModel (no prefix)."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     slug = models.SlugField(unique=True, null=True, blank=True)

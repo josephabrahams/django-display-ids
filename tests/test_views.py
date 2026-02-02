@@ -8,12 +8,12 @@ from django.test import RequestFactory
 from django.views.generic import DetailView
 
 from django_display_ids.encoding import encode_display_id
-from django_display_ids.views import DisplayIDObjectMixin
+from django_display_ids.views import DisplayIDMixin
 
 from .models import Invoice, Product
 
 
-class InvoiceDetailView(DisplayIDObjectMixin, DetailView):
+class InvoiceDetailView(DisplayIDMixin, DetailView):
     """Test view for Invoice model."""
 
     model = Invoice
@@ -21,7 +21,7 @@ class InvoiceDetailView(DisplayIDObjectMixin, DetailView):
     display_id_prefix = "inv"
 
 
-class ProductDetailView(DisplayIDObjectMixin, DetailView):
+class ProductDetailView(DisplayIDMixin, DetailView):
     """Test view for Product model with custom fields."""
 
     model = Product
@@ -32,7 +32,7 @@ class ProductDetailView(DisplayIDObjectMixin, DetailView):
     lookup_strategies = ("display_id", "uuid", "slug")
 
 
-class NoPrefixView(DisplayIDObjectMixin, DetailView):
+class NoPrefixView(DisplayIDMixin, DetailView):
     """Test view without display_id_prefix."""
 
     model = Invoice
@@ -40,7 +40,7 @@ class NoPrefixView(DisplayIDObjectMixin, DetailView):
     display_id_prefix = None  # Explicitly disable model's prefix
 
 
-class ModelPrefixFallbackView(DisplayIDObjectMixin, DetailView):
+class ModelPrefixFallbackView(DisplayIDMixin, DetailView):
     """Test view that inherits prefix from model."""
 
     model = Invoice
@@ -67,8 +67,8 @@ def product(db):
 
 
 @pytest.mark.django_db
-class TestDisplayIDObjectMixin:
-    """Tests for DisplayIDObjectMixin."""
+class TestDisplayIDMixin:
+    """Tests for DisplayIDMixin."""
 
     def test_get_object_by_uuid(self, rf, invoice):
         """get_object works with UUID."""
@@ -159,7 +159,7 @@ class TestQuerysetFiltering:
         invoice1 = Invoice.objects.create(name="Invoice 1", slug="invoice-1")
         Invoice.objects.create(name="Invoice 2", slug="invoice-2")
 
-        class FilteredInvoiceView(DisplayIDObjectMixin, DetailView):
+        class FilteredInvoiceView(DisplayIDMixin, DetailView):
             model = Invoice
             lookup_param = "id"
             display_id_prefix = "inv"
@@ -179,7 +179,7 @@ class TestQuerysetFiltering:
         Invoice.objects.create(name="Invoice 1", slug="invoice-1")
         invoice2 = Invoice.objects.create(name="Invoice 2", slug="invoice-2")
 
-        class FilteredInvoiceView(DisplayIDObjectMixin, DetailView):
+        class FilteredInvoiceView(DisplayIDMixin, DetailView):
             model = Invoice
             lookup_param = "id"
             display_id_prefix = "inv"
@@ -227,7 +227,7 @@ class TestModelAttribute:
     def test_missing_model_raises_error(self, rf):
         """AttributeError raised when model is not set."""
 
-        class NoModelView(DisplayIDObjectMixin, DetailView):
+        class NoModelView(DisplayIDMixin, DetailView):
             lookup_param = "id"
             # model not set (intentionally omitted)
 
@@ -279,7 +279,7 @@ class TestPrefixValidation:
     def test_empty_string_raises_error(self, rf):
         """Empty string prefix raises ValueError."""
 
-        class EmptyPrefixView(DisplayIDObjectMixin, DetailView):
+        class EmptyPrefixView(DisplayIDMixin, DetailView):
             model = Invoice
             lookup_param = "id"
             display_id_prefix = ""
@@ -294,7 +294,7 @@ class TestPrefixValidation:
     def test_invalid_prefix_raises_error(self, rf):
         """Invalid prefix format raises ValueError."""
 
-        class InvalidPrefixView(DisplayIDObjectMixin, DetailView):
+        class InvalidPrefixView(DisplayIDMixin, DetailView):
             model = Invoice
             lookup_param = "id"
             display_id_prefix = "Invalid123"
@@ -309,7 +309,7 @@ class TestPrefixValidation:
     def test_too_long_prefix_raises_error(self, rf):
         """Prefix longer than 16 chars raises ValueError."""
 
-        class LongPrefixView(DisplayIDObjectMixin, DetailView):
+        class LongPrefixView(DisplayIDMixin, DetailView):
             model = Invoice
             lookup_param = "id"
             display_id_prefix = "waytoolongprefix123"

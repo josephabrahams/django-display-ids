@@ -5,14 +5,14 @@ import uuid
 import pytest
 
 from django_display_ids.encoding import encode_display_id
-from django_display_ids.models import DisplayIDMixin, get_model_for_prefix
+from django_display_ids.models import DisplayIDModel, get_model_for_prefix
 
 from .models import Invoice, Order, Product
 
 
 @pytest.mark.django_db
-class TestDisplayIDMixin:
-    """Tests for DisplayIDMixin."""
+class TestDisplayIDModel:
+    """Tests for DisplayIDModel."""
 
     def test_display_id_property(self):
         """display_id property returns correct format."""
@@ -46,7 +46,7 @@ class TestDisplayIDMixin:
 
     def test_get_display_id_prefix_not_implemented(self):
         """get_display_id_prefix raises error for models without prefix."""
-        # Order doesn't use DisplayIDMixin
+        # Order doesn't use DisplayIDModel
         assert not hasattr(Order, "get_display_id_prefix")
 
 
@@ -88,7 +88,7 @@ class TestPrefixRegistry:
         """Defining duplicate prefix raises ValueError at class definition."""
         with pytest.raises(ValueError, match="already used"):
             # This should fail at class definition time
-            class DuplicateInvoice(DisplayIDMixin):
+            class DuplicateInvoice(DisplayIDModel):
                 display_id_prefix = "inv"  # Already used by Invoice
 
                 class Meta:
@@ -104,7 +104,7 @@ class TestPrefixRegistry:
         """
 
         # Define an abstract model
-        class AbstractModel(DisplayIDMixin):
+        class AbstractModel(DisplayIDModel):
             display_id_prefix = "abstract"
 
             class Meta:
@@ -118,7 +118,7 @@ class TestPrefixRegistry:
         """Empty string prefix raises ValueError at class definition."""
         with pytest.raises(ValueError, match="1-16 lowercase letters"):
 
-            class EmptyPrefixModel(DisplayIDMixin):
+            class EmptyPrefixModel(DisplayIDModel):
                 display_id_prefix = ""
 
                 class Meta:
@@ -128,7 +128,7 @@ class TestPrefixRegistry:
         """Invalid prefix format raises ValueError at class definition."""
         with pytest.raises(ValueError, match="1-16 lowercase letters"):
 
-            class InvalidPrefixModel(DisplayIDMixin):
+            class InvalidPrefixModel(DisplayIDModel):
                 display_id_prefix = "Invalid123"
 
                 class Meta:
@@ -138,7 +138,7 @@ class TestPrefixRegistry:
         """Prefix longer than 16 chars raises ValueError at class definition."""
         with pytest.raises(ValueError, match="1-16 lowercase letters"):
 
-            class LongPrefixModel(DisplayIDMixin):
+            class LongPrefixModel(DisplayIDModel):
                 display_id_prefix = "waytoolongprefix123"
 
                 class Meta:
@@ -146,7 +146,7 @@ class TestPrefixRegistry:
 
 
 @pytest.mark.django_db
-class TestDisplayIDMixinWithDatabase:
+class TestDisplayIDModelWithDatabase:
     """Tests requiring database access."""
 
     def test_display_id_after_save(self):

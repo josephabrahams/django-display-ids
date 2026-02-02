@@ -43,9 +43,9 @@ INSTALLED_APPS = [
 
 ```python
 from django.views.generic import DetailView
-from django_display_ids import DisplayIDObjectMixin
+from django_display_ids import DisplayIDMixin
 
-class InvoiceDetailView(DisplayIDObjectMixin, DetailView):
+class InvoiceDetailView(DisplayIDMixin, DetailView):
     model = Invoice
     lookup_param = "id"
     lookup_strategies = ("display_id", "uuid", "slug")
@@ -56,9 +56,9 @@ class InvoiceDetailView(DisplayIDObjectMixin, DetailView):
 
 ```python
 from rest_framework.viewsets import ModelViewSet
-from django_display_ids.contrib.rest_framework import DisplayIDLookupMixin
+from django_display_ids.contrib.rest_framework import DisplayIDMixin
 
-class InvoiceViewSet(DisplayIDLookupMixin, ModelViewSet):
+class InvoiceViewSet(DisplayIDMixin, ModelViewSet):
     queryset = Invoice.objects.all()
     serializer_class = InvoiceSerializer
     lookup_url_kwarg = "id"

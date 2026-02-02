@@ -3,7 +3,7 @@ Django REST Framework
 
 Full integration with Django REST Framework views and serializers.
 
-DisplayIDLookupMixin
+DisplayIDMixin
 --------------------
 
 For ViewSets
@@ -12,9 +12,9 @@ For ViewSets
 .. code-block:: python
 
    from rest_framework.viewsets import ModelViewSet
-   from django_display_ids.contrib.rest_framework import DisplayIDLookupMixin
+   from django_display_ids.contrib.rest_framework import DisplayIDMixin
 
-   class InvoiceViewSet(DisplayIDLookupMixin, ModelViewSet):
+   class InvoiceViewSet(DisplayIDMixin, ModelViewSet):
        queryset = Invoice.objects.all()
        serializer_class = InvoiceSerializer
        lookup_url_kwarg = "id"
@@ -28,9 +28,9 @@ For APIView
 
    from rest_framework.views import APIView
    from rest_framework.response import Response
-   from django_display_ids.contrib.rest_framework import DisplayIDLookupMixin
+   from django_display_ids.contrib.rest_framework import DisplayIDMixin
 
-   class InvoiceView(DisplayIDLookupMixin, APIView):
+   class InvoiceView(DisplayIDMixin, APIView):
        lookup_url_kwarg = "id"
        lookup_strategies = ("display_id", "uuid")
        display_id_prefix = "inv"
@@ -128,7 +128,7 @@ Use the provided helper for consistent API documentation:
            )
        ],
    )
-   class InvoiceViewSet(DisplayIDLookupMixin, ModelViewSet):
+   class InvoiceViewSet(DisplayIDMixin, ModelViewSet):
        ...
 
 For endpoints that also accept slugs:

@@ -66,6 +66,34 @@ class TestResolveObjectByUuid:
             )
         assert exc_info.value.model_name == "Invoice"
 
+    def test_resolve_by_uuid_object(self, invoice):
+        """Object is resolved by UUID object directly."""
+        result = resolve_object(
+            model=Invoice,
+            value=invoice.id,
+            strategies=("uuid",),
+        )
+        assert result == invoice
+
+    def test_uuid_object_not_found(self, invoice):
+        """ObjectNotFoundError raised when UUID object doesn't exist."""
+        with pytest.raises(ObjectNotFoundError):
+            resolve_object(
+                model=Invoice,
+                value=uuid.uuid4(),
+                strategies=("uuid",),
+            )
+
+    def test_uuid_object_skips_strategies(self, invoice):
+        """UUID object works regardless of strategies configured."""
+        result = resolve_object(
+            model=Invoice,
+            value=invoice.id,
+            strategies=("display_id",),
+            prefix="inv",
+        )
+        assert result == invoice
+
 
 @pytest.mark.django_db
 class TestResolveObjectByDisplayId:

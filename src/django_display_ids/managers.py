@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from django.db import models
@@ -51,14 +52,15 @@ class DisplayIDQuerySet(models.QuerySet[M]):
 
     def get_by_display_id(
         self,
-        value: str,
+        value: str | uuid.UUID,
         *,
         prefix: str | None = None,
     ) -> M:
         """Get an object by its display ID.
 
         Args:
-            value: The display ID string (e.g., "inv_1a2B3c4D5e6F7g8H").
+            value: The display ID string (e.g., "inv_1a2B3c4D5e6F7g8H"),
+                or a UUID instance for direct UUID lookup.
             prefix: Expected prefix for validation. If None, uses model's prefix.
 
         Returns:
@@ -70,9 +72,19 @@ class DisplayIDQuerySet(models.QuerySet[M]):
             UnknownPrefixError: If the prefix doesn't match expected.
             ObjectNotFoundError: If no matching object exists.
         """
-        # Get model config
         model = self.model
         uuid_field = self._get_uuid_field()
+
+        # UUID objects skip display ID parsing entirely
+        if isinstance(value, uuid.UUID):
+            try:
+                return self.get(**{uuid_field: value})
+            except model.DoesNotExist:  # type: ignore[attr-defined]
+                raise ObjectNotFoundError(
+                    str(value), model_name=model.__name__
+                ) from None
+
+        # Get model config
         expected_prefix = prefix or self._get_model_prefix()
 
         # Require a prefix for display ID lookups
@@ -99,7 +111,7 @@ class DisplayIDQuerySet(models.QuerySet[M]):
 
     def get_by_identifier(
         self,
-        value: str,
+        value: str | uuid.UUID,
         *,
         strategies: tuple[StrategyName, ...] | None = None,
         prefix: str | None = None,
@@ -109,7 +121,8 @@ class DisplayIDQuerySet(models.QuerySet[M]):
         Tries each strategy in order and returns the first match.
 
         Args:
-            value: The identifier string (display ID, UUID, or slug).
+            value: The identifier string (display ID, UUID, or slug),
+                or a UUID instance for direct UUID lookup.
             strategies: Strategies to try. Defaults to settings.
             prefix: Expected display ID prefix for validation.
 
@@ -124,6 +137,16 @@ class DisplayIDQuerySet(models.QuerySet[M]):
         """
         model = self.model
         uuid_field = self._get_uuid_field()
+
+        # UUID objects skip strategy parsing entirely
+        if isinstance(value, uuid.UUID):
+            try:
+                return self.get(**{uuid_field: value})
+            except model.DoesNotExist:  # type: ignore[attr-defined]
+                raise ObjectNotFoundError(
+                    str(value), model_name=model.__name__
+                ) from None
+
         slug_field = self._get_slug_field()
         expected_prefix = prefix or self._get_model_prefix()
         lookup_strategies = strategies or self._get_strategies()
@@ -144,14 +167,14 @@ class DisplayIDQuerySet(models.QuerySet[M]):
         try:
             return self.get(**lookup)
         except model.DoesNotExist:  # type: ignore[attr-defined]
-            raise ObjectNotFoundError(value, model_name=model.__name__) from None
+            raise ObjectNotFoundError(str(value), model_name=model.__name__) from None
         except model.MultipleObjectsReturned:  # type: ignore[attr-defined]
             count = self.filter(**lookup).count()
-            raise AmbiguousIdentifierError(value, count) from None
+            raise AmbiguousIdentifierError(str(value), count) from None
 
     def get_by_identifiers(
         self,
-        values: Sequence[str],
+        values: Sequence[str | uuid.UUID],
         *,
         strategies: tuple[StrategyName, ...] | None = None,
         prefix: str | None = None,
@@ -162,7 +185,8 @@ class DisplayIDQuerySet(models.QuerySet[M]):
         then executes a single database query using `__in` lookups.
 
         Args:
-            values: A sequence of identifier strings (display IDs, UUIDs, or slugs).
+            values: A sequence of identifier strings (display IDs, UUIDs, or slugs)
+                or UUID instances. UUID instances skip strategy parsing.
             strategies: Strategies to try. Defaults to settings.
             prefix: Expected display ID prefix for validation.
 
@@ -178,6 +202,7 @@ class DisplayIDQuerySet(models.QuerySet[M]):
                 'inv_2aUyqjCzEIiEcYMKj7TZtw',
                 'inv_7kN3xPqRmLwYvTzJ5HfUaB',
                 '550e8400-e29b-41d4-a716-446655440000',
+                uuid.UUID('550e8400-e29b-41d4-a716-446655440000'),
             ])
         """
         if not values:
@@ -193,6 +218,11 @@ class DisplayIDQuerySet(models.QuerySet[M]):
         slugs: list[str] = []
 
         for value in values:
+            # UUID objects skip strategy parsing entirely
+            if isinstance(value, uuid.UUID):
+                uuids.append(value)
+                continue
+
             result = parse_identifier(
                 value, lookup_strategies, expected_prefix=expected_prefix
             )
@@ -253,7 +283,7 @@ class DisplayIDManager(models.Manager[M]):
 
     def get_by_display_id(
         self,
-        value: str,
+        value: str | uuid.UUID,
         *,
         prefix: str | None = None,
     ) -> M:
@@ -265,7 +295,7 @@ class DisplayIDManager(models.Manager[M]):
 
     def get_by_identifier(
         self,
-        value: str,
+        value: str | uuid.UUID,
         *,
         strategies: tuple[StrategyName, ...] | None = None,
         prefix: str | None = None,
@@ -280,7 +310,7 @@ class DisplayIDManager(models.Manager[M]):
 
     def get_by_identifiers(
         self,
-        values: Sequence[str],
+        values: Sequence[str | uuid.UUID],
         *,
         strategies: tuple[StrategyName, ...] | None = None,
         prefix: str | None = None,

@@ -25,6 +25,13 @@ repos:
         files: ^src/
         pass_filenames: false
 
+      - id: changelog-version
+        name: changelog has entry for current version
+        entry: sh -c 'ver=$(python -c "import tomllib; print(tomllib.load(open(\"pyproject.toml\",\"rb\"))[\"project\"][\"version\"])") && grep -q "## $ver" CHANGELOG.md || { echo "CHANGELOG.md missing entry for $ver"; exit 1; }'
+        language: system
+        files: ^(pyproject\.toml|CHANGELOG\.md)$
+        pass_filenames: false
+
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: 0.5.24
     hooks:

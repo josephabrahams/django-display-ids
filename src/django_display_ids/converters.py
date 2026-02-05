@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .conf import SLUG_REGEX
+from .conf import SLUG_REGEX, get_setting
 
 __all__ = [
     "DISPLAY_ID_REGEX",
@@ -18,6 +18,9 @@ __all__ = [
 # Regex pattern constants
 DISPLAY_ID_REGEX = r"[a-z]{1,16}_[0-9A-Za-z]{22}"
 UUID_REGEX = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+
+# Slug regex from settings (respects DISPLAY_IDS["SLUG_REGEX"] Django setting)
+_SLUG_REGEX: str = str(get_setting("SLUG_REGEX"))
 
 
 class BaseConverter:
@@ -78,7 +81,7 @@ class DisplayIDOrSlugConverter(BaseConverter):
 
     Matches either format:
     - Display ID: {prefix}_{base62}
-    - Slug: Django's default slug pattern [-a-zA-Z0-9_]+
+    - Slug: matches DISPLAY_IDS["SLUG_REGEX"] setting (default: [-a-zA-Z0-9_]+)
 
     Example:
         from django.urls import path, register_converter
@@ -91,7 +94,7 @@ class DisplayIDOrSlugConverter(BaseConverter):
         ]
     """
 
-    regex = rf"(?:{DISPLAY_ID_REGEX}|{SLUG_REGEX})"
+    regex = rf"(?:{DISPLAY_ID_REGEX}|{_SLUG_REGEX})"
 
 
 class DisplayIDOrUUIDOrSlugConverter(BaseConverter):
@@ -100,7 +103,7 @@ class DisplayIDOrUUIDOrSlugConverter(BaseConverter):
     Matches any of:
     - Display ID: {prefix}_{base62}
     - UUID: hyphenated (e.g., 550e8400-e29b-41d4-a716-446655440000)
-    - Slug: Django's default slug pattern [-a-zA-Z0-9_]+
+    - Slug: matches DISPLAY_IDS["SLUG_REGEX"] setting (default: [-a-zA-Z0-9_]+)
 
     Example:
         from django.urls import path, register_converter
@@ -113,7 +116,7 @@ class DisplayIDOrUUIDOrSlugConverter(BaseConverter):
         ]
     """
 
-    regex = rf"(?:{DISPLAY_ID_REGEX}|{UUID_REGEX}|{SLUG_REGEX})"
+    regex = rf"(?:{DISPLAY_ID_REGEX}|{UUID_REGEX}|{_SLUG_REGEX})"
 
 
 def make_display_id_or_slug_converter(
@@ -140,8 +143,6 @@ def make_display_id_or_slug_converter(
             path("products/<display_id_or_slug:id>/", ProductDetailView.as_view()),
         ]
     """
-    from .conf import get_setting
-
     pattern = slug_regex if slug_regex is not None else get_setting("SLUG_REGEX")
 
     class CustomDisplayIDOrSlugConverter(DisplayIDOrSlugConverter):
@@ -176,8 +177,6 @@ def make_display_id_or_uuid_or_slug_converter(
             path("products/<identifier:id>/", ProductDetailView.as_view()),
         ]
     """
-    from .conf import get_setting
-
     pattern = slug_regex if slug_regex is not None else get_setting("SLUG_REGEX")
 
     class CustomDisplayIDOrUUIDOrSlugConverter(DisplayIDOrUUIDOrSlugConverter):

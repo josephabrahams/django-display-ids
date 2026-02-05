@@ -78,6 +78,16 @@ class TestGetByDisplayId:
             Order.objects.get_by_display_id(fake_display_id)
         assert exc_info.value.model_name == "Order"
 
+    def test_uuid_object(self, invoice):
+        """Object is retrieved by UUID object directly."""
+        result = Invoice.objects.get_by_display_id(invoice.id)
+        assert result == invoice
+
+    def test_uuid_object_not_found(self, invoice):
+        """ObjectNotFoundError raised when UUID object doesn't exist."""
+        with pytest.raises(ObjectNotFoundError):
+            Invoice.objects.get_by_display_id(uuid.uuid4())
+
 
 @pytest.mark.django_db
 class TestGetByIdentifier:
@@ -150,6 +160,21 @@ class TestGetByIdentifier:
             prefix="custom",
         )
         assert result == invoice
+
+    def test_uuid_object(self, invoice):
+        """Object is retrieved by UUID object directly."""
+        result = Invoice.objects.get_by_identifier(invoice.id)
+        assert result == invoice
+
+    def test_uuid_object_not_found(self, invoice):
+        """ObjectNotFoundError raised when UUID object doesn't exist."""
+        with pytest.raises(ObjectNotFoundError):
+            Invoice.objects.get_by_identifier(uuid.uuid4())
+
+    def test_uuid_object_skips_strategies(self, order):
+        """UUID object works even for models without prefix."""
+        result = Order.objects.get_by_identifier(order.id)
+        assert result == order
 
 
 @pytest.mark.django_db
@@ -338,3 +363,32 @@ class TestGetByIdentifiers:
             ]
         )
         assert set(result) == {prod1, prod2}
+
+    def test_uuid_objects(self, db):
+        """UUID objects are accepted alongside strings."""
+        inv1 = Invoice.objects.create(name="Invoice 1", slug="invoice-1")
+        inv2 = Invoice.objects.create(name="Invoice 2", slug="invoice-2")
+        Invoice.objects.create(name="Invoice 3", slug="invoice-3")
+
+        result = Invoice.objects.get_by_identifiers(
+            [
+                inv1.id,  # UUID object
+                inv2.id,  # UUID object
+            ]
+        )
+        assert set(result) == {inv1, inv2}
+
+    def test_mixed_uuid_objects_and_strings(self, db):
+        """Handles mix of UUID objects, display IDs, and string UUIDs."""
+        inv1 = Invoice.objects.create(name="Invoice 1", slug="invoice-1")
+        inv2 = Invoice.objects.create(name="Invoice 2", slug="invoice-2")
+        inv3 = Invoice.objects.create(name="Invoice 3", slug="invoice-3")
+
+        result = Invoice.objects.get_by_identifiers(
+            [
+                inv1.id,  # UUID object
+                inv2.display_id,  # display ID string
+                str(inv3.id),  # UUID string
+            ]
+        )
+        assert set(result) == {inv1, inv2, inv3}

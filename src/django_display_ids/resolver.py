@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from django.db import models
@@ -23,7 +24,7 @@ M = TypeVar("M", bound=models.Model)
 def resolve_object(
     *,
     model: type[M],
-    value: str,
+    value: str | uuid.UUID,
     strategies: tuple[StrategyName, ...] = DEFAULT_STRATEGIES,
     prefix: str | None = None,
     uuid_field: str = "id",
@@ -36,7 +37,8 @@ def resolve_object(
 
     Args:
         model: The Django model class.
-        value: The identifier string (UUID, display ID, or slug).
+        value: The identifier string (UUID, display ID, or slug),
+            or a UUID instance for direct UUID lookup.
         strategies: Tuple of strategy names to try in order.
         prefix: Expected display ID prefix (for validation).
         uuid_field: Name of the UUID field on the model.
@@ -53,9 +55,6 @@ def resolve_object(
         AmbiguousIdentifierError: If multiple objects match (slug lookup).
         TypeError: If queryset is not for the specified model.
     """
-    # Parse the identifier to determine type
-    result = parse_identifier(value, strategies, expected_prefix=prefix)
-
     # Get the base queryset
     if queryset is not None:
         if queryset.model is not model:
@@ -66,6 +65,16 @@ def resolve_object(
         qs: QuerySet[M] = queryset
     else:
         qs = model._default_manager.all()
+
+    # UUID objects skip strategy parsing entirely
+    if isinstance(value, uuid.UUID):
+        try:
+            return qs.get(**{uuid_field: value})
+        except model.DoesNotExist:  # type: ignore[attr-defined]
+            raise ObjectNotFoundError(str(value), model_name=model.__name__) from None
+
+    # Parse the identifier to determine type
+    result = parse_identifier(value, strategies, expected_prefix=prefix)
 
     # Build the lookup based on strategy
     lookup: dict[str, Any]

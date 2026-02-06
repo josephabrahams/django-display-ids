@@ -368,8 +368,11 @@ class DisplayIDManager(models.Manager[M]):
             objects = DisplayIDManager()
     """
 
-    def get_queryset(self) -> DisplayIDQuerySet[M]:
-        return DisplayIDQuerySet(self.model, using=self._db)
+    _queryset_class = DisplayIDQuerySet
+
+    if TYPE_CHECKING:
+
+        def get_queryset(self) -> DisplayIDQuerySet[M]: ...
 
     def get_by_display_id(
         self,

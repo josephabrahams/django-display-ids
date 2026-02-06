@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.2 — 2026-02-05
+
+- **MRO-friendly manager**: `DisplayIDManager` now sets `_queryset_class` instead of overriding `get_queryset()`, allowing custom managers to override `get_queryset()` without being shadowed in multi-inheritance scenarios.
+
 ## 0.5.1 — 2026-02-05
 
 - **`resolve_identifier()` method**: Resolve an identifier (display ID, UUID, or slug) to a `uuid.UUID` value without fetching the full model instance. For UUID and display_id identifiers, the UUID is extracted by parsing alone — zero database queries. Only slug identifiers require a DB lookup. Useful for cursor-based pagination where you need a UUID for a `WHERE` clause but don't need the object.

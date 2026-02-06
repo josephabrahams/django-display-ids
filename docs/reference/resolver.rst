@@ -64,7 +64,7 @@ Look up a model class by its registered display ID prefix.
 
 .. code-block:: python
 
-   from django_display_ids.resolver import get_model_for_prefix
+   from django_display_ids import get_model_for_prefix
 
    model_class = get_model_for_prefix("inv")
    # -> <class 'myapp.models.Invoice'>

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, Self, TypeVar
 
 from django.core.exceptions import FieldDoesNotExist
 from django.db import models
@@ -47,6 +47,33 @@ class DisplayIDQuerySet(models.QuerySet[M]):
         # Get by display ID only (stricter)
         invoice = Invoice.objects.get_by_display_id("inv_1a2B3c4D5e6F7g8H")
     """
+
+    # Re-annotate inherited QuerySet methods with -> Self so that
+    # display ID methods remain visible to type checkers after chaining
+    # (e.g. Invoice.objects.filter(...).get_by_identifier(...)).
+    def filter(self, *args: Any, **kwargs: Any) -> Self:
+        return super().filter(*args, **kwargs)
+
+    def exclude(self, *args: Any, **kwargs: Any) -> Self:
+        return super().exclude(*args, **kwargs)
+
+    def select_related(self, *fields: Any) -> Self:
+        return super().select_related(*fields)
+
+    def prefetch_related(self, *lookups: Any) -> Self:
+        return super().prefetch_related(*lookups)
+
+    def order_by(self, *fields: Any) -> Self:
+        return super().order_by(*fields)
+
+    def distinct(self, *fields: Any) -> Self:
+        return super().distinct(*fields)
+
+    def all(self) -> Self:
+        return super().all()
+
+    def none(self) -> Self:
+        return super().none()
 
     def get_by_display_id(
         self,

@@ -13,9 +13,7 @@ from django_display_ids.conf import (
 from django_display_ids.encoding import PREFIX_PATTERN
 from django_display_ids.exceptions import (
     DisplayIDLookupError,
-    InvalidIdentifierError,
     ObjectNotFoundError,
-    UnknownPrefixError,
 )
 from django_display_ids.resolver import resolve_object
 from django_display_ids.typing import StrategyName  # noqa: TC001 - used at runtime
@@ -163,8 +161,6 @@ class DisplayIDMixin:
             )
         except ObjectNotFoundError as e:
             raise NotFound(str(e)) from e
-        except (InvalidIdentifierError, UnknownPrefixError) as e:
-            raise ParseError(str(e)) from e
         except DisplayIDLookupError as e:
             raise ParseError(str(e)) from e
 

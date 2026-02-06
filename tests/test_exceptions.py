@@ -1,6 +1,11 @@
 """Tests for exceptions module."""
 
 import pytest
+from django.core.exceptions import (
+    ImproperlyConfigured,
+    MultipleObjectsReturned,
+    ObjectDoesNotExist,
+)
 
 from django_display_ids.exceptions import (
     AmbiguousIdentifierError,
@@ -32,6 +37,15 @@ class TestInvalidIdentifierError:
         """InvalidIdentifierError inherits from DisplayIDLookupError."""
         assert issubclass(InvalidIdentifierError, DisplayIDLookupError)
 
+    def test_inherits_value_error(self):
+        """InvalidIdentifierError inherits from ValueError."""
+        assert issubclass(InvalidIdentifierError, ValueError)
+
+    def test_caught_by_value_error(self):
+        """InvalidIdentifierError can be caught with except ValueError."""
+        with pytest.raises(ValueError):
+            raise InvalidIdentifierError("test-value")
+
     def test_attributes(self):
         """InvalidIdentifierError stores value and message."""
         error = InvalidIdentifierError("test-value", "custom message")
@@ -53,6 +67,15 @@ class TestUnknownPrefixError:
     def test_inherits_lookup_error(self):
         """UnknownPrefixError inherits from DisplayIDLookupError."""
         assert issubclass(UnknownPrefixError, DisplayIDLookupError)
+
+    def test_inherits_value_error(self):
+        """UnknownPrefixError inherits from ValueError."""
+        assert issubclass(UnknownPrefixError, ValueError)
+
+    def test_caught_by_value_error(self):
+        """UnknownPrefixError can be caught with except ValueError."""
+        with pytest.raises(ValueError):
+            raise UnknownPrefixError("inv_abc123", actual="inv", expected="prod")
 
     def test_attributes(self):
         """UnknownPrefixError stores all attributes."""
@@ -84,6 +107,15 @@ class TestMissingPrefixError:
         """MissingPrefixError inherits from DisplayIDLookupError."""
         assert issubclass(MissingPrefixError, DisplayIDLookupError)
 
+    def test_inherits_improperly_configured(self):
+        """MissingPrefixError inherits from ImproperlyConfigured."""
+        assert issubclass(MissingPrefixError, ImproperlyConfigured)
+
+    def test_caught_by_improperly_configured(self):
+        """MissingPrefixError can be caught with except ImproperlyConfigured."""
+        with pytest.raises(ImproperlyConfigured):
+            raise MissingPrefixError(model_name="Invoice")
+
     def test_with_model_name(self):
         """Message includes model name when provided."""
         error = MissingPrefixError(model_name="Invoice")
@@ -104,6 +136,15 @@ class TestObjectNotFoundError:
     def test_inherits_lookup_error(self):
         """ObjectNotFoundError inherits from DisplayIDLookupError."""
         assert issubclass(ObjectNotFoundError, DisplayIDLookupError)
+
+    def test_inherits_object_does_not_exist(self):
+        """ObjectNotFoundError inherits from ObjectDoesNotExist."""
+        assert issubclass(ObjectNotFoundError, ObjectDoesNotExist)
+
+    def test_caught_by_object_does_not_exist(self):
+        """ObjectNotFoundError can be caught with except ObjectDoesNotExist."""
+        with pytest.raises(ObjectDoesNotExist):
+            raise ObjectNotFoundError("inv_abc123", model_name="Invoice")
 
     def test_attributes(self):
         """ObjectNotFoundError stores all attributes."""
@@ -133,6 +174,15 @@ class TestAmbiguousIdentifierError:
     def test_inherits_lookup_error(self):
         """AmbiguousIdentifierError inherits from DisplayIDLookupError."""
         assert issubclass(AmbiguousIdentifierError, DisplayIDLookupError)
+
+    def test_inherits_multiple_objects_returned(self):
+        """AmbiguousIdentifierError inherits from MultipleObjectsReturned."""
+        assert issubclass(AmbiguousIdentifierError, MultipleObjectsReturned)
+
+    def test_caught_by_multiple_objects_returned(self):
+        """AmbiguousIdentifierError can be caught with except MultipleObjectsReturned."""
+        with pytest.raises(MultipleObjectsReturned):
+            raise AmbiguousIdentifierError("my-slug", count=3)
 
     def test_attributes(self):
         """AmbiguousIdentifierError stores all attributes."""
@@ -176,3 +226,35 @@ class TestExceptionHierarchy:
         for exc in exceptions:
             with pytest.raises(DisplayIDLookupError):
                 raise exc
+
+    def test_django_base_classes(self):
+        """Each exception inherits from the expected Django/Python base."""
+        assert issubclass(InvalidIdentifierError, ValueError)
+        assert issubclass(UnknownPrefixError, ValueError)
+        assert issubclass(MissingPrefixError, ImproperlyConfigured)
+        assert issubclass(ObjectNotFoundError, ObjectDoesNotExist)
+        assert issubclass(AmbiguousIdentifierError, MultipleObjectsReturned)
+
+    def test_dual_catch_patterns(self):
+        """Exceptions can be caught by either library or Django base class."""
+        # ValueError catches both invalid identifier and unknown prefix
+        for exc in [
+            InvalidIdentifierError("test"),
+            UnknownPrefixError("test", actual="a"),
+        ]:
+            with pytest.raises(ValueError):
+                raise exc
+            with pytest.raises(DisplayIDLookupError):
+                raise exc
+
+        # ObjectDoesNotExist catches not found
+        with pytest.raises(ObjectDoesNotExist):
+            raise ObjectNotFoundError("test")
+
+        # ImproperlyConfigured catches missing prefix
+        with pytest.raises(ImproperlyConfigured):
+            raise MissingPrefixError()
+
+        # MultipleObjectsReturned catches ambiguous
+        with pytest.raises(MultipleObjectsReturned):
+            raise AmbiguousIdentifierError("test", count=2)

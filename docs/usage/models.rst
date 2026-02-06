@@ -68,11 +68,8 @@ Look up by display ID only:
 
    invoice = Invoice.objects.get_by_display_id("inv_2aUyqjCzEIiEcYMKj7TZtw")
 
-Raises:
-
-- ``InvalidIdentifierError`` — Not a valid display ID format
-- ``UnknownPrefixError`` — Prefix doesn't match the model
-- ``ObjectNotFoundError`` — No matching record
+Raises ``Invoice.DoesNotExist`` if the display ID is invalid, has a wrong prefix,
+or no matching record exists — just like Django's ``get()``.
 
 get_by_identifier
 ~~~~~~~~~~~~~~~~~

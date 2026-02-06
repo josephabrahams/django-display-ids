@@ -8,8 +8,6 @@ from django_display_ids.encoding import encode_display_id
 from django_display_ids.exceptions import (
     InvalidIdentifierError,
     MissingPrefixError,
-    ObjectNotFoundError,
-    UnknownPrefixError,
 )
 
 from .models import Invoice, Order, Product, Tag
@@ -44,25 +42,21 @@ class TestGetByDisplayId:
         assert result == invoice
 
     def test_display_id_not_found(self, invoice):
-        """ObjectNotFoundError raised when display ID doesn't exist."""
+        """Model.DoesNotExist raised when display ID doesn't exist."""
         fake_display_id = encode_display_id("inv", uuid.uuid4())
-        with pytest.raises(ObjectNotFoundError) as exc_info:
+        with pytest.raises(Invoice.DoesNotExist):
             Invoice.objects.get_by_display_id(fake_display_id)
-        assert exc_info.value.model_name == "Invoice"
 
     def test_invalid_format(self, invoice):
-        """InvalidIdentifierError raised for invalid display ID format."""
-        with pytest.raises(InvalidIdentifierError):
+        """Model.DoesNotExist raised for invalid display ID format."""
+        with pytest.raises(Invoice.DoesNotExist):
             Invoice.objects.get_by_display_id("invalid-format")
 
     def test_wrong_prefix(self, invoice):
-        """UnknownPrefixError raised when prefix doesn't match."""
-        # Create a display ID with wrong prefix
+        """Model.DoesNotExist raised when prefix doesn't match."""
         wrong_prefix_id = encode_display_id("prod", invoice.id)
-        with pytest.raises(UnknownPrefixError) as exc_info:
+        with pytest.raises(Invoice.DoesNotExist, match="unknown prefix"):
             Invoice.objects.get_by_display_id(wrong_prefix_id)
-        assert exc_info.value.actual == "prod"
-        assert exc_info.value.expected == "inv"
 
     def test_explicit_prefix(self, invoice):
         """Explicit prefix parameter overrides model prefix."""
@@ -84,8 +78,8 @@ class TestGetByDisplayId:
         assert result == invoice
 
     def test_uuid_object_not_found(self, invoice):
-        """ObjectNotFoundError raised when UUID object doesn't exist."""
-        with pytest.raises(ObjectNotFoundError):
+        """Model.DoesNotExist raised when UUID object doesn't exist."""
+        with pytest.raises(Invoice.DoesNotExist):
             Invoice.objects.get_by_display_id(uuid.uuid4())
 
 
@@ -112,14 +106,14 @@ class TestGetByIdentifier:
         assert result == invoice
 
     def test_not_found(self, invoice):
-        """ObjectNotFoundError raised when identifier doesn't exist."""
+        """Model.DoesNotExist raised when identifier doesn't exist."""
         fake_uuid = uuid.uuid4()
-        with pytest.raises(ObjectNotFoundError):
+        with pytest.raises(Invoice.DoesNotExist):
             Invoice.objects.get_by_identifier(str(fake_uuid))
 
     def test_invalid_identifier(self, invoice):
-        """InvalidIdentifierError raised for invalid identifier."""
-        with pytest.raises(InvalidIdentifierError):
+        """Model.DoesNotExist raised for invalid identifier."""
+        with pytest.raises(Invoice.DoesNotExist):
             Invoice.objects.get_by_identifier(
                 "invalid",
                 strategies=("uuid",),  # Only UUID, won't match
@@ -133,13 +127,12 @@ class TestGetByIdentifier:
         assert result == order
 
     def test_display_id_only_without_prefix_raises_error(self, order):
-        """InvalidIdentifierError when display_id is only strategy and no prefix."""
-        with pytest.raises(InvalidIdentifierError) as exc_info:
+        """Model.DoesNotExist when display_id is only strategy and no prefix."""
+        with pytest.raises(Order.DoesNotExist):
             Order.objects.get_by_identifier(
                 "anything",
                 strategies=("display_id",),
             )
-        assert "No strategies available" in str(exc_info.value)
 
     def test_custom_strategies(self, invoice):
         """Custom strategies are used."""
@@ -167,8 +160,8 @@ class TestGetByIdentifier:
         assert result == invoice
 
     def test_uuid_object_not_found(self, invoice):
-        """ObjectNotFoundError raised when UUID object doesn't exist."""
-        with pytest.raises(ObjectNotFoundError):
+        """Model.DoesNotExist raised when UUID object doesn't exist."""
+        with pytest.raises(Invoice.DoesNotExist):
             Invoice.objects.get_by_identifier(uuid.uuid4())
 
     def test_uuid_object_skips_strategies(self, order):
@@ -192,11 +185,11 @@ class TestQuerySetChaining:
         assert result == invoice1
 
     def test_filter_excludes_object(self, db):
-        """ObjectNotFoundError when object excluded by filter."""
+        """Model.DoesNotExist when object excluded by filter."""
         Invoice.objects.create(name="Invoice 1", slug="invoice-1")
         invoice2 = Invoice.objects.create(name="Invoice 2", slug="invoice-2")
 
-        with pytest.raises(ObjectNotFoundError):
+        with pytest.raises(Invoice.DoesNotExist):
             Invoice.objects.filter(slug="invoice-1").get_by_display_id(
                 invoice2.display_id
             )
@@ -414,10 +407,10 @@ class TestSlugFieldGracefulHandling:
         assert result == tag
 
     def test_get_by_identifier_slug_only_on_model_without_slug_field(self, db):
-        """InvalidIdentifierError when slug is the only strategy and model has no slug field."""
+        """Model.DoesNotExist when slug is the only strategy and model has no slug field."""
         Tag.objects.create(name="Test Tag")
 
-        with pytest.raises(InvalidIdentifierError):
+        with pytest.raises(Tag.DoesNotExist):
             Tag.objects.get_by_identifier(
                 "some-slug",
                 strategies=("slug",),
@@ -480,3 +473,57 @@ class TestSlugFieldGracefulHandling:
 
         result = Tag.objects.get_by_identifier(tag.id)
         assert result == tag
+
+
+@pytest.mark.django_db
+class TestDjangoExceptionContract:
+    """Tests that queryset methods raise Django's standard exceptions."""
+
+    def test_get_by_display_id_raises_does_not_exist(self, invoice):
+        """get_by_display_id raises Model.DoesNotExist like Django's get()."""
+        fake_display_id = encode_display_id("inv", uuid.uuid4())
+        with pytest.raises(Invoice.DoesNotExist):
+            Invoice.objects.get_by_display_id(fake_display_id)
+
+    def test_get_by_identifier_raises_does_not_exist(self, invoice):
+        """get_by_identifier raises Model.DoesNotExist like Django's get()."""
+        with pytest.raises(Invoice.DoesNotExist):
+            Invoice.objects.get_by_identifier(str(uuid.uuid4()))
+
+    def test_get_by_identifier_parse_error_raises_does_not_exist(self, invoice):
+        """Parse errors from get_by_identifier raise Model.DoesNotExist."""
+        with pytest.raises(Invoice.DoesNotExist):
+            Invoice.objects.get_by_identifier(
+                "not-a-uuid",
+                strategies=("uuid",),
+            )
+
+    def test_get_by_display_id_invalid_raises_does_not_exist(self, invoice):
+        """Invalid display ID format raises Model.DoesNotExist."""
+        with pytest.raises(Invoice.DoesNotExist):
+            Invoice.objects.get_by_display_id("not-a-display-id")
+
+    def test_get_by_display_id_wrong_prefix_raises_does_not_exist(self, invoice):
+        """Wrong prefix raises Model.DoesNotExist."""
+        wrong_id = encode_display_id("prod", invoice.id)
+        with pytest.raises(Invoice.DoesNotExist):
+            Invoice.objects.get_by_display_id(wrong_id)
+
+    def test_uuid_not_found_raises_does_not_exist(self, invoice):
+        """UUID object not found raises Model.DoesNotExist."""
+        with pytest.raises(Invoice.DoesNotExist):
+            Invoice.objects.get_by_identifier(uuid.uuid4())
+
+    def test_does_not_exist_is_catchable_by_parent(self, invoice):
+        """Model.DoesNotExist is catchable by ObjectDoesNotExist."""
+        from django.core.exceptions import ObjectDoesNotExist
+
+        with pytest.raises(ObjectDoesNotExist):
+            Invoice.objects.get_by_identifier(str(uuid.uuid4()))
+
+    def test_missing_prefix_still_raises_improperly_configured(self, order):
+        """MissingPrefixError (config error) is NOT converted to DoesNotExist."""
+        from django.core.exceptions import ImproperlyConfigured
+
+        with pytest.raises(ImproperlyConfigured):
+            Order.objects.get_by_display_id(encode_display_id("ord", order.id))

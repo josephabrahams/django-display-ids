@@ -8,12 +8,7 @@ from django.http import Http404
 
 from .conf import NOT_SET, get_setting, get_slug_field, get_uuid_field
 from .encoding import PREFIX_PATTERN
-from .exceptions import (
-    DisplayIDLookupError,
-    InvalidIdentifierError,
-    ObjectNotFoundError,
-    UnknownPrefixError,
-)
+from .exceptions import DisplayIDLookupError
 from .resolver import resolve_object
 from .typing import StrategyName  # noqa: TC001 - used at runtime in type hints
 
@@ -135,9 +130,5 @@ class DisplayIDMixin:
                 slug_field=self._get_slug_field(),
                 queryset=qs,
             )
-        except ObjectNotFoundError as e:
-            raise Http404(str(e)) from e
-        except (InvalidIdentifierError, UnknownPrefixError) as e:
-            raise Http404(str(e)) from e
         except DisplayIDLookupError as e:
             raise Http404(str(e)) from e

@@ -12,11 +12,8 @@ from django.db.models import Q
 from .conf import get_setting
 from .encoding import decode_display_id
 from .exceptions import (
-    AmbiguousIdentifierError,
-    InvalidIdentifierError,
+    DisplayIDLookupError,
     MissingPrefixError,
-    ObjectNotFoundError,
-    UnknownPrefixError,
 )
 from .strategies import parse_identifier
 
@@ -68,22 +65,16 @@ class DisplayIDQuerySet(models.QuerySet[M]):
             The matching model instance.
 
         Raises:
+            Model.DoesNotExist: If no matching object exists, if the display ID
+                format is invalid, or if the prefix doesn't match.
             MissingPrefixError: If no prefix is configured on the model.
-            InvalidIdentifierError: If the display ID format is invalid.
-            UnknownPrefixError: If the prefix doesn't match expected.
-            ObjectNotFoundError: If no matching object exists.
         """
         model = self.model
         uuid_field = self._get_uuid_field()
 
         # UUID objects skip display ID parsing entirely
         if isinstance(value, uuid.UUID):
-            try:
-                return self.get(**{uuid_field: value})
-            except model.DoesNotExist:  # type: ignore[attr-defined]
-                raise ObjectNotFoundError(
-                    str(value), model_name=model.__name__
-                ) from None
+            return self.get(**{uuid_field: value})
 
         # Get model config
         expected_prefix = prefix or self._get_model_prefix()
@@ -92,23 +83,22 @@ class DisplayIDQuerySet(models.QuerySet[M]):
         if expected_prefix is None:
             raise MissingPrefixError(model_name=model.__name__)
 
-        # Decode the display ID
+        # Decode the display ID and validate prefix
         try:
             decoded_prefix, uuid_value = decode_display_id(value)
         except ValueError as e:
-            raise InvalidIdentifierError(value, str(e)) from e
+            raise model.DoesNotExist(  # type: ignore[attr-defined]
+                f"{model.__name__}: invalid display ID: {value!r}"
+            ) from e
 
-        # Validate prefix
         if decoded_prefix != expected_prefix:
-            raise UnknownPrefixError(
-                value, actual=decoded_prefix, expected=expected_prefix
+            raise model.DoesNotExist(  # type: ignore[attr-defined]
+                f"{model.__name__}: unknown prefix {decoded_prefix!r} "
+                f"in {value!r}, expected {expected_prefix!r}"
             )
 
         # Query the database
-        try:
-            return self.get(**{uuid_field: uuid_value})
-        except model.DoesNotExist:  # type: ignore[attr-defined]
-            raise ObjectNotFoundError(value, model_name=model.__name__) from None
+        return self.get(**{uuid_field: uuid_value})
 
     def get_by_identifier(
         self,
@@ -131,22 +121,16 @@ class DisplayIDQuerySet(models.QuerySet[M]):
             The matching model instance.
 
         Raises:
-            InvalidIdentifierError: If no strategy can parse the identifier.
-            UnknownPrefixError: If display ID prefix doesn't match expected.
-            ObjectNotFoundError: If no matching object exists.
-            AmbiguousIdentifierError: If multiple objects match (slug).
+            Model.DoesNotExist: If the identifier cannot be parsed or
+                no matching object exists.
+            Model.MultipleObjectsReturned: If multiple objects match (slug).
         """
         model = self.model
         uuid_field = self._get_uuid_field()
 
         # UUID objects skip strategy parsing entirely
         if isinstance(value, uuid.UUID):
-            try:
-                return self.get(**{uuid_field: value})
-            except model.DoesNotExist:  # type: ignore[attr-defined]
-                raise ObjectNotFoundError(
-                    str(value), model_name=model.__name__
-                ) from None
+            return self.get(**{uuid_field: value})
 
         slug_field = self._get_slug_field()
         expected_prefix = prefix or self._get_model_prefix()
@@ -157,9 +141,14 @@ class DisplayIDQuerySet(models.QuerySet[M]):
             lookup_strategies = tuple(s for s in lookup_strategies if s != "slug")
 
         # Parse the identifier
-        result = parse_identifier(
-            value, lookup_strategies, expected_prefix=expected_prefix
-        )
+        try:
+            result = parse_identifier(
+                value, lookup_strategies, expected_prefix=expected_prefix
+            )
+        except DisplayIDLookupError as e:
+            raise model.DoesNotExist(  # type: ignore[attr-defined]
+                f"{model.__name__}: {e}"
+            ) from e
 
         # Build the lookup
         lookup: dict[str, Any]
@@ -169,13 +158,7 @@ class DisplayIDQuerySet(models.QuerySet[M]):
             lookup = {slug_field: result.slug}
 
         # Execute the query
-        try:
-            return self.get(**lookup)
-        except model.DoesNotExist:  # type: ignore[attr-defined]
-            raise ObjectNotFoundError(str(value), model_name=model.__name__) from None
-        except model.MultipleObjectsReturned:  # type: ignore[attr-defined]
-            count = self.filter(**lookup).count()
-            raise AmbiguousIdentifierError(str(value), count) from None
+        return self.get(**lookup)
 
     def get_by_identifiers(
         self,

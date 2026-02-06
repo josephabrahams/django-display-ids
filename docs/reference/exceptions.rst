@@ -1,7 +1,18 @@
 Exceptions
 ==========
 
-All exceptions inherit from ``DisplayIDLookupError``.
+All exceptions inherit from both ``DisplayIDLookupError`` **and** a standard
+Django/Python exception, so you can catch them with either:
+
+.. code-block:: python
+
+   from django_display_ids import ObjectNotFoundError
+
+   # Catch with library-specific type
+   except ObjectNotFoundError: ...
+
+   # Or catch with Django's built-in type
+   except ObjectDoesNotExist: ...
 
 Exception Hierarchy
 -------------------
@@ -9,11 +20,52 @@ Exception Hierarchy
 .. code-block:: text
 
    DisplayIDLookupError
-   └── InvalidIdentifierError
-   └── UnknownPrefixError
-   └── MissingPrefixError
-   └── ObjectNotFoundError
-   └── AmbiguousIdentifierError
+   ├── InvalidIdentifierError     (+ ValueError)
+   ├── UnknownPrefixError         (+ ValueError)
+   ├── MissingPrefixError         (+ ImproperlyConfigured)
+   ├── ObjectNotFoundError        (+ ObjectDoesNotExist)
+   └── AmbiguousIdentifierError   (+ MultipleObjectsReturned)
+
+Django/Python Base Classes
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Each exception inherits from the Django or Python exception that best matches
+its semantics:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Exception
+     - Django/Python Base
+     - Why
+   * - ``InvalidIdentifierError``
+     - ``ValueError``
+     - Bad input — can't parse the identifier
+   * - ``UnknownPrefixError``
+     - ``ValueError``
+     - Bad input — wrong prefix
+   * - ``MissingPrefixError``
+     - ``ImproperlyConfigured``
+     - Configuration problem — no prefix set
+   * - ``ObjectNotFoundError``
+     - ``ObjectDoesNotExist``
+     - No matching database record
+   * - ``AmbiguousIdentifierError``
+     - ``MultipleObjectsReturned``
+     - Multiple records match
+
+This means existing ``except`` clauses work naturally:
+
+.. code-block:: python
+
+   from django.core.exceptions import ObjectDoesNotExist
+
+   try:
+       invoice = Invoice.objects.get_by_identifier("inv_xxx")
+   except ObjectDoesNotExist:
+       # Catches ObjectNotFoundError from display ID lookups
+       # AND model.DoesNotExist from regular .get() calls
+       ...
 
 Exception Classes
 -----------------
@@ -31,6 +83,8 @@ Raised when the identifier cannot be parsed by any strategy.
        invoice = resolve_object(Invoice, "not-valid-anything", prefix="inv")
    except InvalidIdentifierError:
        # Handle invalid input
+   except ValueError:
+       # Also works — InvalidIdentifierError IS a ValueError
 
 UnknownPrefixError
 ~~~~~~~~~~~~~~~~~~
@@ -67,6 +121,8 @@ Raised when the ``display_id`` strategy is used but no prefix is configured.
        invoice = resolve_object(Invoice, "inv_xxx", strategies=("display_id",))
    except MissingPrefixError:
        # Configure a prefix
+   except ImproperlyConfigured:
+       # Also works
 
 ObjectNotFoundError
 ~~~~~~~~~~~~~~~~~~~
@@ -81,6 +137,8 @@ Raised when no database record matches the resolved identifier.
        invoice = resolve_object(Invoice, "inv_2aUyqjCzEIiEcYMKj7TZtw", prefix="inv")
    except ObjectNotFoundError:
        # Handle not found
+   except ObjectDoesNotExist:
+       # Also works — same as Django's model.DoesNotExist
 
 AmbiguousIdentifierError
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -100,6 +158,26 @@ Raised when multiple records match (typically with slug lookups).
        )
    except AmbiguousIdentifierError:
        # Handle ambiguity
+   except MultipleObjectsReturned:
+       # Also works
+
+QuerySet Methods
+----------------
+
+``DisplayIDQuerySet`` methods (``get_by_display_id``, ``get_by_identifier``)
+raise ``Model.DoesNotExist`` and ``Model.MultipleObjectsReturned``, matching
+Django's ``QuerySet.get()`` contract:
+
+.. code-block:: python
+
+   try:
+       invoice = Invoice.objects.get_by_identifier("inv_xxx")
+   except Invoice.DoesNotExist:
+       # Same as Invoice.objects.get(slug="xxx") — natural Django pattern
+
+The library's typed exceptions (``ObjectNotFoundError``, ``InvalidIdentifierError``,
+etc.) are still raised by lower-level functions like ``resolve_object()`` and
+``parse_identifier()``.
 
 Framework-Specific Handling
 ---------------------------

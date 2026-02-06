@@ -187,6 +187,69 @@ class DisplayIDQuerySet(models.QuerySet[M]):
         # Execute the query
         return self.get(**lookup)
 
+    def resolve_identifier(
+        self,
+        value: str | uuid.UUID,
+        *,
+        strategies: tuple[StrategyName, ...] | None = None,
+        prefix: str | None = None,
+    ) -> uuid.UUID:
+        """Resolve an identifier to a UUID without fetching the object.
+
+        For UUID and display_id identifiers, the UUID is extracted by parsing
+        alone — no database query is needed. Only slug identifiers require a
+        database lookup.
+
+        This is useful for cursor-based pagination where you need the UUID
+        value to build a WHERE clause but don't need the full model instance.
+
+        Args:
+            value: The identifier string (display ID, UUID, or slug),
+                or a UUID instance (returned as-is).
+            strategies: Strategies to try. Defaults to settings.
+            prefix: Expected display ID prefix for validation.
+
+        Returns:
+            The resolved UUID value.
+
+        Raises:
+            Model.DoesNotExist: If the identifier cannot be parsed or
+                no matching object exists (slug lookup).
+            Model.MultipleObjectsReturned: If multiple objects match (slug).
+        """
+        model = self.model
+        uuid_field = self._get_uuid_field()
+
+        # UUID objects are returned as-is
+        if isinstance(value, uuid.UUID):
+            return value
+
+        slug_field = self._get_slug_field()
+        expected_prefix = prefix or self._get_model_prefix()
+        lookup_strategies = strategies or self._get_strategies()
+
+        # Skip slug strategy if the model has no slug field
+        if not self._has_slug_field(slug_field):
+            lookup_strategies = tuple(s for s in lookup_strategies if s != "slug")
+
+        # Parse the identifier
+        try:
+            result = parse_identifier(
+                value, lookup_strategies, expected_prefix=expected_prefix
+            )
+        except DisplayIDLookupError as e:
+            raise model.DoesNotExist(  # type: ignore[attr-defined]
+                f"{model.__name__}: {e}"
+            ) from e
+
+        # UUID and display_id strategies yield a UUID directly — no DB query
+        if result.strategy in ("uuid", "display_id"):
+            return result.uuid  # type: ignore[return-value]
+
+        # Slug strategy requires a DB lookup
+        obj = self.get(**{slug_field: result.slug})
+        return getattr(obj, uuid_field)  # type: ignore[no-any-return]
+
     def get_by_identifiers(
         self,
         values: Sequence[str | uuid.UUID],
@@ -332,6 +395,21 @@ class DisplayIDManager(models.Manager[M]):
         See DisplayIDQuerySet.get_by_identifier for details.
         """
         return self.get_queryset().get_by_identifier(
+            value, strategies=strategies, prefix=prefix
+        )
+
+    def resolve_identifier(
+        self,
+        value: str | uuid.UUID,
+        *,
+        strategies: tuple[StrategyName, ...] | None = None,
+        prefix: str | None = None,
+    ) -> uuid.UUID:
+        """Resolve an identifier to a UUID without fetching the object.
+
+        See DisplayIDQuerySet.resolve_identifier for details.
+        """
+        return self.get_queryset().resolve_identifier(
             value, strategies=strategies, prefix=prefix
         )
 

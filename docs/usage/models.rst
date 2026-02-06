@@ -104,6 +104,40 @@ Parameters:
 ``prefix``
    Expected display ID prefix. Defaults to the model's ``display_id_prefix``.
 
+resolve_identifier
+~~~~~~~~~~~~~~~~~~
+
+Resolve an identifier to a UUID without fetching the full object:
+
+.. code-block:: python
+
+   # Display ID — parsed, no DB query
+   uid = Invoice.objects.resolve_identifier("inv_2aUyqjCzEIiEcYMKj7TZtw")
+
+   # UUID string — parsed, no DB query
+   uid = Invoice.objects.resolve_identifier("550e8400-e29b-41d4-a716-446655440000")
+
+   # Slug — requires a DB query
+   uid = Invoice.objects.resolve_identifier("my-invoice")
+
+This is useful for cursor-based pagination where you need a UUID to build a
+``WHERE`` clause but don't need the model instance. For UUID and display_id
+identifiers, the UUID is extracted by parsing alone — zero database queries.
+
+Raises ``Invoice.DoesNotExist`` if the identifier cannot be parsed or the slug
+doesn't exist.
+
+Parameters:
+
+``value``
+   The identifier to resolve.
+
+``strategies``
+   Tuple of strategies to try. Defaults to ``("display_id", "uuid", "slug")``.
+
+``prefix``
+   Expected display ID prefix. Defaults to the model's ``display_id_prefix``.
+
 get_by_identifiers
 ~~~~~~~~~~~~~~~~~~
 

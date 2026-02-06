@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1 — 2026-02-05
+
+- **`resolve_identifier()` method**: Resolve an identifier (display ID, UUID, or slug) to a `uuid.UUID` value without fetching the full model instance. For UUID and display_id identifiers, the UUID is extracted by parsing alone — zero database queries. Only slug identifiers require a DB lookup. Useful for cursor-based pagination where you need a UUID for a `WHERE` clause but don't need the object.
+
 ## 0.5.0 — 2026-02-05
 
 - **Django-native exception hierarchy**: Exceptions now inherit from both `DisplayIDLookupError` and a standard Django/Python exception, so existing `except` clauses catch them naturally:

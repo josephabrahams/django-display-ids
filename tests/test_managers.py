@@ -388,6 +388,146 @@ class TestGetByIdentifiers:
 
 
 @pytest.mark.django_db
+class TestResolveIdentifier:
+    """Tests for resolve_identifier method."""
+
+    def test_by_uuid_string(self, invoice):
+        """UUID string is resolved without a DB query."""
+        result = Invoice.objects.resolve_identifier(str(invoice.id))
+        assert result == invoice.id
+        assert isinstance(result, uuid.UUID)
+
+    def test_by_display_id(self, invoice):
+        """Display ID is resolved without a DB query."""
+        result = Invoice.objects.resolve_identifier(invoice.display_id)
+        assert result == invoice.id
+
+    def test_by_slug(self, invoice):
+        """Slug is resolved via DB lookup."""
+        result = Invoice.objects.resolve_identifier("test-invoice")
+        assert result == invoice.id
+
+    def test_by_uuid_object(self, invoice):
+        """UUID object is returned as-is."""
+        result = Invoice.objects.resolve_identifier(invoice.id)
+        assert result is invoice.id
+
+    def test_not_found_by_uuid(self, invoice):
+        """Model.DoesNotExist raised when UUID doesn't exist in DB is NOT checked."""
+        # resolve_identifier with UUID/display_id returns the parsed UUID
+        # without hitting the DB — it does NOT verify existence
+        fake_uuid = uuid.uuid4()
+        result = Invoice.objects.resolve_identifier(str(fake_uuid))
+        assert result == fake_uuid
+
+    def test_slug_not_found(self, invoice):
+        """Model.DoesNotExist raised when slug doesn't exist."""
+        with pytest.raises(Invoice.DoesNotExist):
+            Invoice.objects.resolve_identifier(
+                "nonexistent-slug",
+                strategies=("slug",),
+            )
+
+    def test_invalid_identifier(self, invoice):
+        """Model.DoesNotExist raised for unparseable identifier."""
+        with pytest.raises(Invoice.DoesNotExist):
+            Invoice.objects.resolve_identifier(
+                "invalid",
+                strategies=("uuid",),
+            )
+
+    def test_custom_strategies(self, invoice):
+        """Custom strategies are used."""
+        result = Invoice.objects.resolve_identifier(
+            "test-invoice",
+            strategies=("slug",),
+        )
+        assert result == invoice.id
+
+    def test_explicit_prefix(self, invoice):
+        """Explicit prefix parameter is used."""
+        display_id = encode_display_id("custom", invoice.id)
+        result = Invoice.objects.resolve_identifier(
+            display_id,
+            strategies=("display_id",),
+            prefix="custom",
+        )
+        assert result == invoice.id
+
+    def test_custom_uuid_field(self, product):
+        """Works with models using custom uuid_field."""
+        result = Product.objects.resolve_identifier(str(product.uid))
+        assert result == product.uid
+
+    def test_custom_slug_field(self, product):
+        """Slug lookup uses custom slug_field and returns custom uuid_field."""
+        result = Product.objects.resolve_identifier(
+            "test-product",
+            strategies=("slug",),
+        )
+        assert result == product.uid
+
+    def test_filtered_queryset(self, db):
+        """Slug lookup respects queryset filters."""
+        inv1 = Invoice.objects.create(name="Invoice 1", slug="invoice-1")
+        Invoice.objects.create(name="Invoice 2", slug="invoice-2")
+
+        result = Invoice.objects.filter(slug="invoice-1").resolve_identifier(
+            "invoice-1",
+            strategies=("slug",),
+        )
+        assert result == inv1.id
+
+    def test_filtered_queryset_excludes_slug(self, db):
+        """Model.DoesNotExist when slug object excluded by filter."""
+        Invoice.objects.create(name="Invoice 1", slug="invoice-1")
+        Invoice.objects.create(name="Invoice 2", slug="invoice-2")
+
+        with pytest.raises(Invoice.DoesNotExist):
+            Invoice.objects.filter(slug="invoice-1").resolve_identifier(
+                "invoice-2",
+                strategies=("slug",),
+            )
+
+    def test_model_without_slug_field(self, db):
+        """Slug strategy is skipped for models without a slug field."""
+        tag = Tag.objects.create(name="Test Tag")
+
+        result = Tag.objects.resolve_identifier(str(tag.id))
+        assert result == tag.id
+
+    def test_model_without_slug_field_slug_only(self, db):
+        """Model.DoesNotExist when slug is only strategy and model has no slug field."""
+        Tag.objects.create(name="Test Tag")
+
+        with pytest.raises(Tag.DoesNotExist):
+            Tag.objects.resolve_identifier(
+                "some-slug",
+                strategies=("slug",),
+            )
+
+    def test_display_id_no_db_query(self, invoice, django_assert_num_queries):
+        """Display ID resolution requires zero DB queries."""
+        with django_assert_num_queries(0):
+            Invoice.objects.resolve_identifier(invoice.display_id)
+
+    def test_uuid_string_no_db_query(self, invoice, django_assert_num_queries):
+        """UUID string resolution requires zero DB queries."""
+        with django_assert_num_queries(0):
+            Invoice.objects.resolve_identifier(str(invoice.id))
+
+    def test_uuid_object_no_db_query(self, invoice, django_assert_num_queries):
+        """UUID object resolution requires zero DB queries."""
+        with django_assert_num_queries(0):
+            Invoice.objects.resolve_identifier(invoice.id)
+
+    def test_slug_requires_one_db_query(self, invoice, django_assert_num_queries):
+        """Slug resolution requires exactly one DB query."""
+        with django_assert_num_queries(1):
+            Invoice.objects.resolve_identifier("test-invoice")
+
+
+@pytest.mark.django_db
 class TestSlugFieldGracefulHandling:
     """Tests for graceful handling of slug strategy on models without a slug field."""
 

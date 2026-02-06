@@ -13,7 +13,7 @@ class TestGetSetting:
         """Default values are returned when not configured."""
         assert get_setting("UUID_FIELD") == "id"
         assert get_setting("SLUG_FIELD") == "slug"
-        assert get_setting("STRATEGIES") == ("display_id", "uuid")
+        assert get_setting("STRATEGIES") == ("display_id", "uuid", "slug")
 
     def test_unknown_setting_raises_error(self):
         """KeyError raised for unknown setting name."""
@@ -40,7 +40,7 @@ class TestGetSetting:
         """Empty DISPLAY_IDS dict uses defaults."""
         assert get_setting("UUID_FIELD") == "id"
         assert get_setting("SLUG_FIELD") == "slug"
-        assert get_setting("STRATEGIES") == ("display_id", "uuid")
+        assert get_setting("STRATEGIES") == ("display_id", "uuid", "slug")
 
     @override_settings(DISPLAY_IDS={"UUID_FIELD": "custom_id"})
     def test_partial_override(self):
@@ -62,4 +62,4 @@ class TestDefaults:
         """Default values are correct."""
         assert DEFAULTS["UUID_FIELD"] == "id"
         assert DEFAULTS["SLUG_FIELD"] == "slug"
-        assert DEFAULTS["STRATEGIES"] == ("display_id", "uuid")
+        assert DEFAULTS["STRATEGIES"] == ("display_id", "uuid", "slug")

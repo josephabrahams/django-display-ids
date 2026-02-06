@@ -57,7 +57,6 @@ class DisplayIDMixin:
     Example:
         class InvoiceView(DisplayIDMixin, APIView):
             lookup_url_kwarg = "id"
-            lookup_strategies = ("display_id", "uuid")
             display_id_prefix = "inv"
 
             def get(self, request, *args, **kwargs):
@@ -69,7 +68,6 @@ class DisplayIDMixin:
             queryset = Invoice.objects.all()
             serializer_class = InvoiceSerializer
             lookup_url_kwarg = "pk"
-            lookup_strategies = ("display_id", "uuid")
     """
 
     lookup_url_kwarg: str = "pk"

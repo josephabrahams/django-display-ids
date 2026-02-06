@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from django.core.exceptions import FieldDoesNotExist
 from django.db import models
 from django.db.models import Q
 
@@ -151,6 +152,10 @@ class DisplayIDQuerySet(models.QuerySet[M]):
         expected_prefix = prefix or self._get_model_prefix()
         lookup_strategies = strategies or self._get_strategies()
 
+        # Skip slug strategy if the model has no slug field
+        if not self._has_slug_field(slug_field):
+            lookup_strategies = tuple(s for s in lookup_strategies if s != "slug")
+
         # Parse the identifier
         result = parse_identifier(
             value, lookup_strategies, expected_prefix=expected_prefix
@@ -213,6 +218,10 @@ class DisplayIDQuerySet(models.QuerySet[M]):
         expected_prefix = prefix or self._get_model_prefix()
         lookup_strategies = strategies or self._get_strategies()
 
+        # Skip slug strategy if the model has no slug field
+        if not self._has_slug_field(slug_field):
+            lookup_strategies = tuple(s for s in lookup_strategies if s != "slug")
+
         # Collect UUIDs and slugs separately
         uuids: list[Any] = []
         slugs: list[str] = []
@@ -257,6 +266,14 @@ class DisplayIDQuerySet(models.QuerySet[M]):
     def _get_strategies(self) -> tuple[StrategyName, ...]:
         """Get the default strategies."""
         return get_setting("STRATEGIES")  # type: ignore[return-value]
+
+    def _has_slug_field(self, slug_field: str) -> bool:
+        """Check whether the model has the configured slug field."""
+        try:
+            self.model._meta.get_field(slug_field)
+            return True
+        except FieldDoesNotExist:
+            return False
 
     def _get_model_prefix(self) -> str | None:
         """Get the display ID prefix from the model, if defined."""

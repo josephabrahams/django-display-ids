@@ -43,7 +43,6 @@ class DisplayIDMixin:
         class InvoiceDetailView(DisplayIDMixin, DetailView):
             model = Invoice
             lookup_param = "id"
-            lookup_strategies = ("display_id", "uuid")
             display_id_prefix = "inv"
     """
 

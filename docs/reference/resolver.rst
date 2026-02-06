@@ -29,7 +29,7 @@ Parameters
    The identifier string to resolve.
 
 ``strategies``
-   Tuple of strategy names to try, in order. Defaults to ``("display_id", "uuid")``.
+   Tuple of strategy names to try, in order. Defaults to ``("display_id", "uuid", "slug")``.
 
 ``prefix``
    Expected display ID prefix. Required for the ``display_id`` strategy.

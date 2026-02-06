@@ -18,7 +18,6 @@ For ViewSets
        queryset = Invoice.objects.all()
        serializer_class = InvoiceSerializer
        lookup_url_kwarg = "id"
-       lookup_strategies = ("display_id", "uuid")
        display_id_prefix = "inv"
 
 For APIView
@@ -32,7 +31,6 @@ For APIView
 
    class InvoiceView(DisplayIDMixin, APIView):
        lookup_url_kwarg = "id"
-       lookup_strategies = ("display_id", "uuid")
        display_id_prefix = "inv"
 
        def get_queryset(self):
@@ -49,7 +47,7 @@ Configuration Attributes
    The URL parameter name. Defaults to ``"pk"``.
 
 ``lookup_strategies``
-   Tuple of strategies to try. Defaults to ``("display_id", "uuid")``.
+   Tuple of strategies to try. Defaults to ``("display_id", "uuid", "slug")``.
 
 ``display_id_prefix``
    Expected prefix. Falls back to model's ``display_id_prefix``.

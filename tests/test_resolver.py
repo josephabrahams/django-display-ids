@@ -12,7 +12,7 @@ from django_display_ids.exceptions import (
 )
 from django_display_ids.resolver import resolve_object
 
-from .models import Invoice, Order, Product
+from .models import Invoice, Order, Product, Tag
 
 
 @pytest.fixture
@@ -308,3 +308,41 @@ class TestResolveObjectErrors:
             strategies=("slug",),
         )
         assert result.slug == "same-slug"
+
+
+@pytest.mark.django_db
+class TestResolveObjectSlugFieldGraceful:
+    """Tests for graceful handling of slug strategy on models without a slug field."""
+
+    def test_slug_skipped_on_model_without_slug_field(self, db):
+        """Slug strategy is skipped when model has no slug field."""
+        tag = Tag.objects.create(name="Test Tag")
+
+        result = resolve_object(
+            model=Tag,
+            value=str(tag.id),
+            strategies=("display_id", "uuid", "slug"),
+            prefix="tag",
+        )
+        assert result == tag
+
+    def test_slug_only_on_model_without_slug_field(self, db):
+        """InvalidIdentifierError when slug is only strategy and model has no slug field."""
+        Tag.objects.create(name="Test Tag")
+
+        with pytest.raises(InvalidIdentifierError):
+            resolve_object(
+                model=Tag,
+                value="some-slug",
+                strategies=("slug",),
+            )
+
+    def test_slug_still_works_on_model_with_slug_field(self, invoice):
+        """Slug strategy works normally on models with a slug field."""
+        result = resolve_object(
+            model=Invoice,
+            value="test-invoice",
+            strategies=("display_id", "uuid", "slug"),
+            prefix="inv",
+        )
+        assert result == invoice

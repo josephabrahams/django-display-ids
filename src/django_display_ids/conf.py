@@ -5,7 +5,7 @@ Settings can be configured in Django settings under the DISPLAY_IDS namespace:
     DISPLAY_IDS = {
         "UUID_FIELD": "uid",
         "SLUG_FIELD": "slug",
-        "STRATEGIES": ("display_id", "uuid"),
+        "STRATEGIES": ("display_id", "uuid", "slug"),
     }
 """
 
@@ -37,7 +37,7 @@ SLUG_REGEX: str = SlugConverter.regex
 DEFAULTS: dict[str, str | tuple[str, ...]] = {
     "UUID_FIELD": "id",
     "SLUG_FIELD": "slug",
-    "STRATEGIES": ("display_id", "uuid"),
+    "STRATEGIES": ("display_id", "uuid", "slug"),
     "SLUG_REGEX": SLUG_REGEX,
 }
 

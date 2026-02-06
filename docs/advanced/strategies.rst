@@ -40,14 +40,11 @@ performs the database lookup.
 Default Strategies
 ------------------
 
-The default order is ``("display_id", "uuid")``.
+The default order is ``("display_id", "uuid", "slug")``.
 
-The slug strategy is excluded by default because it's a catch-all — any
-non-empty string is a valid slug. Include it explicitly when needed:
-
-.. code-block:: python
-
-   lookup_strategies = ("display_id", "uuid", "slug")
+All three strategies are included by default. The slug strategy is a catch-all
+— any non-empty string is a valid slug — but it's safe to include globally
+because models without a slug field automatically skip the slug strategy.
 
 Strategy Requirements
 ---------------------
@@ -80,9 +77,12 @@ Works with both hyphenated and non-hyphenated formats:
 slug Strategy
 ~~~~~~~~~~~~~
 
-Requires a slug field on the model. Matches any non-empty string.
+Matches any non-empty string and looks up by slug field. Because it matches
+anything, **always put it last** in the strategy list.
 
-Because it matches anything, **always put it last** in the strategy list.
+If the model doesn't have the configured slug field, the slug strategy is
+automatically skipped. This means you can safely include ``"slug"`` in your
+global default strategies without breaking models that don't have a slug field.
 
 Strategy Ordering Best Practices
 --------------------------------
@@ -99,11 +99,11 @@ Recommended orders:
 
 .. code-block:: python
 
-   # Display IDs and UUIDs only (most common)
-   lookup_strategies = ("display_id", "uuid")
-
-   # All formats including slugs
+   # All formats (default)
    lookup_strategies = ("display_id", "uuid", "slug")
+
+   # Display IDs and UUIDs only (no slugs)
+   lookup_strategies = ("display_id", "uuid")
 
    # UUIDs only (no display IDs)
    lookup_strategies = ("uuid",)

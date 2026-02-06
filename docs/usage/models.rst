@@ -87,8 +87,8 @@ Look up by any supported identifier type:
    # By UUID
    invoice = Invoice.objects.get_by_identifier("550e8400-e29b-41d4-a716-446655440000")
 
-   # By slug (if slug strategy is enabled)
-   invoice = Invoice.objects.get_by_identifier("my-invoice", strategies=("display_id", "uuid", "slug"))
+   # By slug (included in default strategies)
+   invoice = Invoice.objects.get_by_identifier("my-invoice")
 
 Works with filtered querysets:
 
@@ -102,7 +102,7 @@ Parameters:
    The identifier to look up.
 
 ``strategies``
-   Tuple of strategies to try. Defaults to ``("display_id", "uuid")``.
+   Tuple of strategies to try. Defaults to ``("display_id", "uuid", "slug")``.
 
 ``prefix``
    Expected display ID prefix. Defaults to the model's ``display_id_prefix``.
@@ -126,12 +126,12 @@ Look up multiple objects by any supported identifier type in a single query:
        "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
    ])
 
-   # Mixed identifier types
+   # Mixed identifier types (slug is included in default strategies)
    invoices = Invoice.objects.get_by_identifiers([
        "inv_2aUyqjCzEIiEcYMKj7TZtw",
        "550e8400-e29b-41d4-a716-446655440000",
        "my-invoice-slug",
-   ], strategies=("display_id", "uuid", "slug"))
+   ])
 
 Returns a queryset, so it can be chained:
 
@@ -145,7 +145,7 @@ Parameters:
    A sequence of identifier strings to look up.
 
 ``strategies``
-   Tuple of strategies to try. Defaults to ``("display_id", "uuid")``.
+   Tuple of strategies to try. Defaults to ``("display_id", "uuid", "slug")``.
 
 ``prefix``
    Expected display ID prefix. Defaults to the model's ``display_id_prefix``.

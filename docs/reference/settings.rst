@@ -13,7 +13,7 @@ Django settings module:
    DISPLAY_IDS = {
        "UUID_FIELD": "id",
        "SLUG_FIELD": "slug",
-       "STRATEGIES": ("display_id", "uuid"),
+       "STRATEGIES": ("display_id", "uuid", "slug"),
        "SLUG_REGEX": r"[-a-zA-Z0-9_]+",
    }
 
@@ -34,7 +34,7 @@ Available Settings
      - ``"slug"``
      - Default slug field name for lookups
    * - ``STRATEGIES``
-     - ``("display_id", "uuid")``
+     - ``("display_id", "uuid", "slug")``
      - Default lookup strategies (in order)
    * - ``SLUG_REGEX``
      - ``[-a-zA-Z0-9_]+``

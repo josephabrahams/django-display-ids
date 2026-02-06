@@ -16,7 +16,6 @@ Add the mixin to any Django class-based view:
    class InvoiceDetailView(DisplayIDMixin, DetailView):
        model = Invoice
        lookup_param = "id"
-       lookup_strategies = ("display_id", "uuid", "slug")
        display_id_prefix = "inv"
 
 Configure your URL:
@@ -53,7 +52,6 @@ The DRF mixin works the same way:
        queryset = Invoice.objects.all()
        serializer_class = InvoiceSerializer
        lookup_url_kwarg = "id"
-       lookup_strategies = ("display_id", "uuid", "slug")
        display_id_prefix = "inv"
 
 Now your views accept:
@@ -66,7 +64,7 @@ What's Happening
 ----------------
 
 1. ``lookup_param`` / ``lookup_url_kwarg`` tells the mixin which URL parameter to read
-2. ``lookup_strategies`` defines which formats to accept, in order
+2. The default ``lookup_strategies`` accepts display IDs, UUIDs, and slugs (in that order)
 3. ``display_id_prefix`` validates that display IDs start with the expected prefix
 
 The mixin decodes the identifier and looks up the object by UUID (or slug).

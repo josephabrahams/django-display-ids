@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from django.core.exceptions import FieldDoesNotExist
 from django.db import models
 
 from .exceptions import AmbiguousIdentifierError, ObjectNotFoundError
@@ -72,6 +73,12 @@ def resolve_object(
             return qs.get(**{uuid_field: value})
         except model.DoesNotExist:  # type: ignore[attr-defined]
             raise ObjectNotFoundError(str(value), model_name=model.__name__) from None
+
+    # Skip slug strategy if the model has no slug field
+    try:
+        model._meta.get_field(slug_field)
+    except FieldDoesNotExist:
+        strategies = tuple(s for s in strategies if s != "slug")
 
     # Parse the identifier to determine type
     result = parse_identifier(value, strategies, expected_prefix=prefix)

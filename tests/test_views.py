@@ -10,7 +10,7 @@ from django.views.generic import DetailView
 from django_display_ids.encoding import encode_display_id
 from django_display_ids.views import DisplayIDMixin
 
-from .models import Invoice, Product
+from .models import Invoice, Product, Tag
 
 
 class InvoiceDetailView(DisplayIDMixin, DetailView):
@@ -30,6 +30,14 @@ class ProductDetailView(DisplayIDMixin, DetailView):
     uuid_field = "uid"
     slug_field = "handle"
     lookup_strategies = ("display_id", "uuid", "slug")
+
+
+class TagDetailView(DisplayIDMixin, DetailView):
+    """Test view for Tag model (no slug field)."""
+
+    model = Tag
+    lookup_param = "id"
+    display_id_prefix = "tag"
 
 
 class NoPrefixView(DisplayIDMixin, DetailView):
@@ -319,4 +327,42 @@ class TestPrefixValidation:
         view.request = rf.get("/")
 
         with pytest.raises(ValueError, match="1-16 lowercase letters"):
+            view.get_object()
+
+
+@pytest.mark.django_db
+class TestSlugFieldGracefulInViews:
+    """Tests for graceful slug handling in views for models without a slug field."""
+
+    def test_uuid_works_on_model_without_slug_field(self, rf, db):
+        """UUID lookup works on models without a slug field."""
+        tag = Tag.objects.create(name="Test Tag")
+
+        view = TagDetailView()
+        view.kwargs = {"id": str(tag.id)}
+        view.request = rf.get("/")
+
+        obj = view.get_object()
+        assert obj == tag
+
+    def test_display_id_works_on_model_without_slug_field(self, rf, db):
+        """Display ID lookup works on models without a slug field."""
+        tag = Tag.objects.create(name="Test Tag")
+
+        view = TagDetailView()
+        view.kwargs = {"id": tag.display_id}
+        view.request = rf.get("/")
+
+        obj = view.get_object()
+        assert obj == tag
+
+    def test_slug_string_raises_404_on_model_without_slug_field(self, rf, db):
+        """Slug string raises 404 on models without a slug field."""
+        Tag.objects.create(name="Test Tag")
+
+        view = TagDetailView()
+        view.kwargs = {"id": "some-slug"}
+        view.request = rf.get("/")
+
+        with pytest.raises(Http404):
             view.get_object()

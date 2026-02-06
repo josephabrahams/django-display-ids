@@ -33,5 +33,5 @@ TEMPLATES = [
 DISPLAY_IDS = {
     "UUID_FIELD": "id",
     "SLUG_FIELD": "slug",
-    "STRATEGIES": ("display_id", "uuid"),
+    "STRATEGIES": ("display_id", "uuid", "slug"),
 }

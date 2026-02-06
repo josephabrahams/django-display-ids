@@ -50,3 +50,17 @@ class Order(models.Model):
 
     class Meta:
         app_label = "tests"
+
+
+class Tag(DisplayIDModel, models.Model):
+    """Test model without a slug field."""
+
+    display_id_prefix = "tag"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    name = models.CharField(max_length=100)
+
+    objects = DisplayIDManager()
+
+    class Meta:
+        app_label = "tests"

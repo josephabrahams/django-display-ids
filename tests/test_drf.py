@@ -113,12 +113,16 @@ class TestDisplayIDMixin:
             view.get_object()
 
     def test_get_object_invalid_identifier(self, rf, invoice):
-        """ParseError raised for invalid identifier."""
+        """NotFound raised for identifier that doesn't match any object.
+
+        With slug in the default strategies, any string is accepted as a slug
+        and results in a database lookup. If nothing matches, NotFound is raised.
+        """
         view = InvoiceAPIView()
         view.kwargs = {"id": "invalid"}
         view.request = rf.get("/")
 
-        with pytest.raises(ParseError):
+        with pytest.raises(NotFound):
             view.get_object()
 
     def test_get_object_wrong_prefix(self, rf, invoice):
@@ -222,14 +226,14 @@ class TestNoPrefixBehavior:
         assert obj == invoice
 
     def test_display_id_skipped(self, rf, invoice):
-        """Display ID is treated as invalid without prefix."""
+        """Display ID is treated as slug without prefix."""
         view = NoPrefixAPIView()
         view.kwargs = {"id": invoice.display_id}
         view.request = rf.get("/")
 
-        # Should raise ParseError because display_id strategy is skipped
-        # and the display ID format doesn't match UUID
-        with pytest.raises(ParseError):
+        # display_id strategy is skipped, UUID doesn't match,
+        # slug catches it but no matching slug exists -> NotFound
+        with pytest.raises(NotFound):
             view.get_object()
 
 
@@ -289,8 +293,8 @@ class TestModelPrefixFallback:
         view.kwargs = {"id": invoice.display_id}
         view.request = rf.get("/")
 
-        # Should raise ParseError because display_id strategy is skipped
-        with pytest.raises(ParseError):
+        # display_id strategy is skipped, slug catches it but no match -> NotFound
+        with pytest.raises(NotFound):
             view.get_object()
 
 

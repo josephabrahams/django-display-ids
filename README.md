@@ -48,7 +48,6 @@ from django_display_ids import DisplayIDMixin
 class InvoiceDetailView(DisplayIDMixin, DetailView):
     model = Invoice
     lookup_param = "id"
-    lookup_strategies = ("display_id", "uuid", "slug")
     display_id_prefix = "inv"
 ```
 
@@ -62,7 +61,6 @@ class InvoiceViewSet(DisplayIDMixin, ModelViewSet):
     queryset = Invoice.objects.all()
     serializer_class = InvoiceSerializer
     lookup_url_kwarg = "id"
-    lookup_strategies = ("display_id", "uuid", "slug")
     display_id_prefix = "inv"
 ```
 

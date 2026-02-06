@@ -16,7 +16,6 @@ Add to any view that uses ``get_object()``:
    class InvoiceDetailView(DisplayIDMixin, DetailView):
        model = Invoice
        lookup_param = "id"
-       lookup_strategies = ("display_id", "uuid", "slug")
        display_id_prefix = "inv"
 
    # Works with any view that uses get_object()
@@ -37,8 +36,8 @@ Configuration Attributes
    The URL parameter name to read. Defaults to ``"pk"``.
 
 ``lookup_strategies``
-   Tuple of strategies to try, in order. Defaults to ``("display_id", "uuid")``
-   from settings.
+   Tuple of strategies to try, in order. Defaults to
+   ``("display_id", "uuid", "slug")`` from settings.
 
 ``display_id_prefix``
    Expected prefix for display IDs. Falls back to the model's

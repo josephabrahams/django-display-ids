@@ -12,7 +12,7 @@ from django_display_ids.exceptions import (
     UnknownPrefixError,
 )
 
-from .models import Invoice, Order, Product
+from .models import Invoice, Order, Product, Tag
 
 
 @pytest.fixture
@@ -392,3 +392,91 @@ class TestGetByIdentifiers:
             ]
         )
         assert set(result) == {inv1, inv2, inv3}
+
+
+@pytest.mark.django_db
+class TestSlugFieldGracefulHandling:
+    """Tests for graceful handling of slug strategy on models without a slug field."""
+
+    def test_get_by_identifier_skips_slug_on_model_without_slug_field(self, db):
+        """Slug strategy is skipped for models without a slug field."""
+        tag = Tag.objects.create(name="Test Tag")
+
+        # UUID lookup still works with default strategies (which include slug)
+        result = Tag.objects.get_by_identifier(str(tag.id))
+        assert result == tag
+
+    def test_get_by_identifier_display_id_on_model_without_slug_field(self, db):
+        """Display ID lookup works on models without a slug field."""
+        tag = Tag.objects.create(name="Test Tag")
+
+        result = Tag.objects.get_by_identifier(tag.display_id)
+        assert result == tag
+
+    def test_get_by_identifier_slug_only_on_model_without_slug_field(self, db):
+        """InvalidIdentifierError when slug is the only strategy and model has no slug field."""
+        Tag.objects.create(name="Test Tag")
+
+        with pytest.raises(InvalidIdentifierError):
+            Tag.objects.get_by_identifier(
+                "some-slug",
+                strategies=("slug",),
+            )
+
+    def test_get_by_identifier_slug_on_model_with_slug_field(self, invoice):
+        """Slug strategy still works on models that have a slug field."""
+        result = Invoice.objects.get_by_identifier("test-invoice")
+        assert result == invoice
+
+    def test_get_by_identifiers_slug_raises_on_model_without_slug_field(self, db):
+        """Slug string raises InvalidIdentifierError on models without a slug field."""
+        tag1 = Tag.objects.create(name="Tag 1")
+
+        # Slug string can't be parsed when slug strategy is stripped
+        with pytest.raises(InvalidIdentifierError):
+            Tag.objects.get_by_identifiers(
+                [
+                    tag1.display_id,
+                    "some-slug",
+                ],
+            )
+
+    def test_get_by_identifiers_without_slugs_on_model_without_slug_field(self, db):
+        """Batch lookup works with non-slug identifiers on models without a slug field."""
+        tag1 = Tag.objects.create(name="Tag 1")
+        tag2 = Tag.objects.create(name="Tag 2")
+
+        result = Tag.objects.get_by_identifiers(
+            [
+                tag1.display_id,
+                str(tag2.id),
+            ],
+        )
+        assert set(result) == {tag1, tag2}
+
+    def test_get_by_identifiers_slug_only_on_model_without_slug_field(self, db):
+        """Batch lookup with only slugs returns empty when model has no slug field."""
+        Tag.objects.create(name="Tag 1")
+
+        with pytest.raises(InvalidIdentifierError):
+            Tag.objects.get_by_identifiers(
+                ["some-slug"],
+                strategies=("slug",),
+            )
+
+    def test_get_by_identifiers_slug_on_model_with_slug_field(self, db):
+        """Batch slug lookup still works on models that have a slug field."""
+        inv1 = Invoice.objects.create(name="Invoice 1", slug="invoice-1")
+        inv2 = Invoice.objects.create(name="Invoice 2", slug="invoice-2")
+
+        result = Invoice.objects.get_by_identifiers(
+            ["invoice-1", "invoice-2"],
+        )
+        assert set(result) == {inv1, inv2}
+
+    def test_uuid_object_works_on_model_without_slug_field(self, db):
+        """UUID object lookup works on models without a slug field."""
+        tag = Tag.objects.create(name="Test Tag")
+
+        result = Tag.objects.get_by_identifier(tag.id)
+        assert result == tag

@@ -46,6 +46,37 @@ Override with:
    class InvoiceAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
        uuid_field = "uid"  # custom UUID field name
 
+Searching Related UUID Fields
+-----------------------------
+
+To search by a related model's display ID or UUID (e.g., find all sessions
+belonging to a user), override ``get_search_results`` and use the
+``_parse_identifier`` static method:
+
+.. code-block:: python
+
+   @admin.register(Session)
+   class SessionAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
+       search_fields = ["name"]
+
+       def get_search_results(self, request, queryset, search_term):
+           queryset, use_distinct = super().get_search_results(
+               request, queryset, search_term
+           )
+           # Search the related user's UUID field too
+           if uuid_val := self._parse_identifier(search_term):
+               queryset |= self.model._default_manager.filter(
+                   user__uid=uuid_val
+               )
+           return queryset, use_distinct
+
+Now searching by ``user_2aUyqjCzEIi...`` or a raw UUID will also match
+sessions belonging to that user.
+
+``_parse_identifier`` is a static method that tries to decode a display ID
+first, then falls back to raw UUID parsing. It returns ``None`` for
+unparseable input and never raises exceptions.
+
 Displaying Display IDs
 ----------------------
 

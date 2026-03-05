@@ -174,3 +174,35 @@ class TestDisplayIDAdminSearchMixin:
 
         assert product in result_qs
         assert result_qs.count() == 1
+
+
+class TestParseIdentifier:
+    """Tests for _parse_identifier static method."""
+
+    def test_parse_display_id(self):
+        """Should parse a display ID and return the UUID."""
+        uid = uuid.uuid4()
+        display_id = encode_display_id("inv", uid)
+        assert DisplayIDAdminSearchMixin._parse_identifier(display_id) == uid
+
+    def test_parse_raw_uuid(self):
+        """Should parse a raw UUID with hyphens."""
+        uid = uuid.uuid4()
+        assert DisplayIDAdminSearchMixin._parse_identifier(str(uid)) == uid
+
+    def test_parse_raw_uuid_no_hyphens(self):
+        """Should parse a raw UUID without hyphens."""
+        uid = uuid.uuid4()
+        assert DisplayIDAdminSearchMixin._parse_identifier(uid.hex) == uid
+
+    def test_parse_plain_text(self):
+        """Should return None for plain text."""
+        assert DisplayIDAdminSearchMixin._parse_identifier("hello world") is None
+
+    def test_parse_invalid_display_id(self):
+        """Should return None for invalid display ID."""
+        assert DisplayIDAdminSearchMixin._parse_identifier("inv_notvalid") is None
+
+    def test_parse_empty_string(self):
+        """Should return None for empty string."""
+        assert DisplayIDAdminSearchMixin._parse_identifier("") is None

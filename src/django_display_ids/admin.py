@@ -50,22 +50,26 @@ class DisplayIDAdminSearchMixin:
         uuid_field: str | None = getattr(self.model, "uuid_field", None)
         return uuid_field or "id"
 
-    def get_search_results(
-        self,
-        request: HttpRequest,
-        queryset: QuerySet[Any],
-        search_term: str,
-    ) -> tuple[QuerySet[Any], bool]:
-        """Extend search to handle display IDs.
+    @staticmethod
+    def _parse_identifier(search_term: str) -> uuid.UUID | None:
+        """Parse a search term as a display ID or raw UUID.
 
-        Tries to decode the search term as a display ID (prefix_base62uuid)
-        if it contains an underscore.
+        Tries to decode as a display ID first (if it contains an underscore),
+        then falls back to raw UUID parsing. Returns ``None`` if the search
+        term is neither.
+
+        Subclasses can use this to search additional UUID fields::
+
+            def get_search_results(self, request, queryset, search_term):
+                queryset, use_distinct = super().get_search_results(
+                    request, queryset, search_term
+                )
+                if uuid_val := self._parse_identifier(search_term):
+                    queryset |= self.model._default_manager.filter(
+                        user__uid=uuid_val
+                    )
+                return queryset, use_distinct
         """
-        queryset, use_distinct = super().get_search_results(  # type: ignore[misc]
-            request, queryset, search_term
-        )
-
-        uuid_field = self._get_uuid_field()
         uuid_val = None
 
         # Try to decode as display_id if it contains an underscore
@@ -78,7 +82,22 @@ class DisplayIDAdminSearchMixin:
             with contextlib.suppress(ValueError):
                 uuid_val = uuid.UUID(search_term)
 
+        return uuid_val
+
+    def get_search_results(
+        self,
+        request: HttpRequest,
+        queryset: QuerySet[Any],
+        search_term: str,
+    ) -> tuple[QuerySet[Any], bool]:
+        """Extend search to handle display IDs and raw UUIDs."""
+        queryset, use_distinct = super().get_search_results(  # type: ignore[misc]
+            request, queryset, search_term
+        )
+
+        uuid_val = self._parse_identifier(search_term)
         if uuid_val is not None:
+            uuid_field = self._get_uuid_field()
             queryset |= self.model._default_manager.filter(**{uuid_field: uuid_val})
 
         return queryset, use_distinct

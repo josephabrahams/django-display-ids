@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.4 — 2026-03-05
+
+- **`_parse_identifier()` static method**: `DisplayIDAdminSearchMixin` now exposes a `_parse_identifier(search_term)` static method that parses a display ID or raw UUID and returns a `uuid.UUID` (or `None`). Subclasses can use this to search related UUID fields without re-implementing the decode logic.
+
 ## 0.5.3 — 2026-03-05
 
 - **Admin raw UUID search**: `DisplayIDAdminSearchMixin` now recognizes raw UUIDs (with or without hyphens) and does an exact match against the UUID field. No need to add the UUID field to `search_fields`.

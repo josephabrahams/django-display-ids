@@ -1,7 +1,7 @@
 Django Admin
 ============
 
-Enable searching by display ID in the Django admin.
+Enable searching by display ID or raw UUID in the Django admin.
 
 DisplayIDAdminSearchMixin
 -------------------------
@@ -14,27 +14,24 @@ DisplayIDAdminSearchMixin
    @admin.register(Invoice)
    class InvoiceAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
        list_display = ["id", "display_id", "name", "created"]
-       search_fields = ["name"]  # display ID search is automatic
+       search_fields = ["name"]  # display ID and UUID search is automatic
 
-Now you can search by display ID in the admin search box:
+Now you can search by display ID or raw UUID in the admin search box:
 
 - ``inv_2aUyqjCzEIiEcYMKj7TZtw`` (display ID)
-
-For raw UUID search, add the UUID field to ``search_fields``:
-
-.. code-block:: python
-
-   search_fields = ["name", "id"]  # "id" enables raw UUID search
+- ``01970b3e-1234-5678-9abc-def012345678`` (UUID with hyphens)
+- ``01970b3e123456789abcdef012345678`` (UUID without hyphens)
 
 How It Works
 ------------
 
 The mixin intercepts search queries and checks if they look like a display ID
-(contain an underscore). If so, it decodes the display ID and filters by the
-UUID field. Otherwise, it falls back to the standard ``search_fields`` behavior.
+(contain an underscore) or a raw UUID. If so, it decodes the display ID or
+parses the UUID and does an exact match against the UUID field. Otherwise, it
+falls back to the standard ``search_fields`` behavior.
 
 This means your existing text-based searches continue to work alongside
-display ID searches.
+display ID and UUID searches.
 
 Configuration
 -------------

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.3 — 2026-03-05
+
+- **Admin raw UUID search**: `DisplayIDAdminSearchMixin` now recognizes raw UUIDs (with or without hyphens) and does an exact match against the UUID field. No need to add the UUID field to `search_fields`.
+
 ## 0.5.2 — 2026-02-05
 
 - **MRO-friendly manager**: `DisplayIDManager` now sets `_queryset_class` instead of overriding `get_queryset()`, allowing custom managers to override `get_queryset()` without being shadowed in multi-inheritance scenarios.

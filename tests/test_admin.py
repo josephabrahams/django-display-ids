@@ -136,8 +136,8 @@ class TestDisplayIDAdminSearchMixin:
         # Should not find invoice2
         assert invoice2 not in result_qs
 
-    def test_raw_uuid_not_handled(self, invoice_admin, request_factory):
-        """Raw UUID search is not handled by mixin (use search_fields instead)."""
+    def test_search_by_raw_uuid(self, invoice_admin, request_factory):
+        """Should find invoice by raw UUID search."""
         invoice = Invoice.objects.create(name="Test Invoice")
         raw_uuid = str(invoice.id)
 
@@ -146,5 +146,31 @@ class TestDisplayIDAdminSearchMixin:
 
         result_qs, _ = invoice_admin.get_search_results(request, queryset, raw_uuid)
 
-        # Raw UUID is not handled by the mixin - users should add "id" to search_fields
-        assert result_qs.count() == 0
+        assert invoice in result_qs
+        assert result_qs.count() == 1
+
+    def test_search_by_raw_uuid_no_hyphens(self, invoice_admin, request_factory):
+        """Should find invoice by raw UUID without hyphens."""
+        invoice = Invoice.objects.create(name="Test Invoice")
+        raw_uuid = invoice.id.hex
+
+        request = request_factory.get("/admin/tests/invoice/", {"q": raw_uuid})
+        queryset = Invoice.objects.all()
+
+        result_qs, _ = invoice_admin.get_search_results(request, queryset, raw_uuid)
+
+        assert invoice in result_qs
+        assert result_qs.count() == 1
+
+    def test_search_by_raw_uuid_custom_field(self, product_admin, request_factory):
+        """Should find product by raw UUID with custom uuid_field."""
+        product = Product.objects.create(name="Test Product")
+        raw_uuid = str(product.uid)
+
+        request = request_factory.get("/admin/tests/product/", {"q": raw_uuid})
+        queryset = Product.objects.all()
+
+        result_qs, _ = product_admin.get_search_results(request, queryset, raw_uuid)
+
+        assert product in result_qs
+        assert result_qs.count() == 1

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import uuid
 from typing import TYPE_CHECKING, Any
 
 from .encoding import decode_display_id
@@ -15,16 +16,14 @@ __all__ = ["DisplayIDAdminSearchMixin"]
 
 
 class DisplayIDAdminSearchMixin:
-    """Mixin to enable searching by display ID in Django admin.
+    """Mixin to enable searching by display ID or raw UUID in Django admin.
 
     Add this mixin to your ModelAdmin to allow searching by display ID
-    (e.g., "inv_2aUyqjCzEIiEcYMKj7TZtw") in the admin search box.
+    (e.g., "inv_2aUyqjCzEIiEcYMKj7TZtw") or raw UUID (with or without
+    hyphens) in the admin search box.
 
-    The mixin decodes the display ID and searches by the UUID field.
-
-    For raw UUID search, add the UUID field to ``search_fields`` instead::
-
-        search_fields = ["name", "id"]  # "id" enables raw UUID search
+    The mixin decodes the display ID or parses the UUID and does an exact
+    match against the UUID field.
 
     Example:
         from django.contrib import admin
@@ -33,7 +32,7 @@ class DisplayIDAdminSearchMixin:
         @admin.register(Invoice)
         class InvoiceAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
             list_display = ["id", "display_id", "name"]
-            search_fields = ["name"]  # display ID search is automatic
+            search_fields = ["name"]  # display ID and UUID search is automatic
 
     Attributes:
         uuid_field: Name of the UUID field to search. Defaults to model's
@@ -66,11 +65,20 @@ class DisplayIDAdminSearchMixin:
             request, queryset, search_term
         )
 
+        uuid_field = self._get_uuid_field()
+        uuid_val = None
+
         # Try to decode as display_id if it contains an underscore
         if "_" in search_term:
-            uuid_field = self._get_uuid_field()
             with contextlib.suppress(ValueError, TypeError):
                 _prefix, uuid_val = decode_display_id(search_term)
-                queryset |= self.model._default_manager.filter(**{uuid_field: uuid_val})
+
+        # Try to parse as a raw UUID
+        if uuid_val is None:
+            with contextlib.suppress(ValueError):
+                uuid_val = uuid.UUID(search_term)
+
+        if uuid_val is not None:
+            queryset |= self.model._default_manager.filter(**{uuid_field: uuid_val})
 
         return queryset, use_distinct

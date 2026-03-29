@@ -117,8 +117,8 @@ Raised when the ``display_id`` strategy is used but no prefix is configured.
    from django_display_ids import MissingPrefixError
 
    try:
-       # No prefix configured
-       invoice = resolve_object(Invoice, "inv_xxx", strategies=("display_id",))
+       # Order has no display_id_prefix, so display_id strategy can't work
+       order = resolve_object(Order, "ord_xxx", strategies=("display_id",))
    except MissingPrefixError:
        # Configure a prefix
    except ImproperlyConfigured:
@@ -151,11 +151,7 @@ Raised when multiple records match (typically with slug lookups).
 
    try:
        # Multiple invoices have the slug "duplicate-name"
-       invoice = resolve_object(
-           Invoice, "duplicate-name",
-           strategies=("slug",),
-           prefix="inv"
-       )
+       invoice = resolve_object(Invoice, "duplicate-name", strategies=("slug",))
    except AmbiguousIdentifierError:
        # Handle ambiguity
    except MultipleObjectsReturned:

@@ -95,8 +95,8 @@ class DisplayIDMixin:
 
         try:
             return resolve_object(  # type: ignore[no-any-return]
-                model=self.model,
-                value=str(value),
+                self.model,
+                str(value),
                 strategies=self._get_strategies(),
                 prefix=self.display_id_prefix,
                 uuid_field=self.uuid_field,

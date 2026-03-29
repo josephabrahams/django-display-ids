@@ -121,8 +121,8 @@ class DisplayIDMixin:
 
         try:
             obj = resolve_object(
-                model=model,
-                value=str(value),
+                model,
+                str(value),
                 strategies=self._get_strategies(),
                 prefix=self.display_id_prefix,
                 uuid_field=self.uuid_field,

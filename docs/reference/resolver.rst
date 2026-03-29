@@ -13,7 +13,7 @@ The central resolver function used by all mixins.
    from django_display_ids import resolve_object
 
    # Auto-detects prefix, uuid_field, slug_field, and strategies from the model
-   invoice = resolve_object(model=Invoice, value="inv_2aUyqjCzEIiEcYMKj7TZtw")
+   invoice = resolve_object(Invoice, "inv_2aUyqjCzEIiEcYMKj7TZtw")
 
 Parameters
 ~~~~~~~~~~

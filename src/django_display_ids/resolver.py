@@ -80,9 +80,9 @@ def _resolve_prefix(model: type[models.Model], override: str | None) -> str | No
 
 
 def resolve_object(
-    *,
     model: type[M],
     value: str | uuid.UUID,
+    *,
     strategies: tuple[StrategyName, ...] = DEFAULT_STRATEGIES,
     prefix: str | None = None,
     uuid_field: str | None = None,

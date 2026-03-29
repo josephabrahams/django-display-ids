@@ -2,8 +2,9 @@
 
 ## 0.6.1 — 2026-03-28
 
-- **`resolve_object()` auto-detects `prefix`**: Completes the auto-detection started in 0.6.0. When `prefix` is not passed (or ``None``), `resolve_object()` reads `model.display_id_prefix` automatically. This means `resolve_object(model=Invoice, value=identifier)` just works — no need to pass prefix, field names, or strategies. To skip the `display_id` strategy, omit it from `strategies` instead of passing `prefix=None`.
+- **`resolve_object()` auto-detects `prefix`**: Completes the auto-detection started in 0.6.0. When `prefix` is not passed (or ``None``), `resolve_object()` reads `model.display_id_prefix` automatically. This means `resolve_object(Invoice, identifier)` just works — no need to pass prefix, field names, or strategies. To skip the `display_id` strategy, omit it from `strategies` instead of passing `prefix=None`.
 - **Removed `_get_display_id_prefix()` from view mixins**: Both `DisplayIDMixin` (Django) and `DisplayIDMixin` (DRF) no longer define this method — prefix resolution is now handled by `resolve_object()`.
+- **`resolve_object()` accepts `model` and `value` as positional args**: `resolve_object(Invoice, identifier)` now works. Optional parameters (`strategies`, `prefix`, `uuid_field`, `slug_field`, `queryset`) remain keyword-only.
 - **Removed `NOT_SET` sentinel from `conf`**: No longer needed now that all parameters use `None` for auto-detection.
 
 ## 0.6.0 — 2026-03-28

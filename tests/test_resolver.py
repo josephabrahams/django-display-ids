@@ -40,8 +40,8 @@ class TestResolveObjectByUuid:
     def test_resolve_by_uuid(self, invoice):
         """Object is resolved by UUID string."""
         result = resolve_object(
-            model=Invoice,
-            value=str(invoice.id),
+            Invoice,
+            str(invoice.id),
             strategies=("uuid",),
         )
         assert result == invoice
@@ -49,8 +49,8 @@ class TestResolveObjectByUuid:
     def test_resolve_by_unhyphenated_uuid(self, invoice):
         """Object is resolved by unhyphenated UUID."""
         result = resolve_object(
-            model=Invoice,
-            value=invoice.id.hex,
+            Invoice,
+            invoice.id.hex,
             strategies=("uuid",),
         )
         assert result == invoice
@@ -60,8 +60,8 @@ class TestResolveObjectByUuid:
         fake_uuid = uuid.uuid4()
         with pytest.raises(ObjectNotFoundError) as exc_info:
             resolve_object(
-                model=Invoice,
-                value=str(fake_uuid),
+                Invoice,
+                str(fake_uuid),
                 strategies=("uuid",),
             )
         assert exc_info.value.model_name == "Invoice"
@@ -69,8 +69,8 @@ class TestResolveObjectByUuid:
     def test_resolve_by_uuid_object(self, invoice):
         """Object is resolved by UUID object directly."""
         result = resolve_object(
-            model=Invoice,
-            value=invoice.id,
+            Invoice,
+            invoice.id,
             strategies=("uuid",),
         )
         assert result == invoice
@@ -79,16 +79,16 @@ class TestResolveObjectByUuid:
         """ObjectNotFoundError raised when UUID object doesn't exist."""
         with pytest.raises(ObjectNotFoundError):
             resolve_object(
-                model=Invoice,
-                value=uuid.uuid4(),
+                Invoice,
+                uuid.uuid4(),
                 strategies=("uuid",),
             )
 
     def test_uuid_object_skips_strategies(self, invoice):
         """UUID object works regardless of strategies configured."""
         result = resolve_object(
-            model=Invoice,
-            value=invoice.id,
+            Invoice,
+            invoice.id,
             strategies=("display_id",),
             prefix="inv",
         )
@@ -103,8 +103,8 @@ class TestResolveObjectByDisplayId:
         """Object is resolved by display ID."""
         display_id = encode_display_id("inv", invoice.id)
         result = resolve_object(
-            model=Invoice,
-            value=display_id,
+            Invoice,
+            display_id,
             strategies=("display_id",),
             prefix="inv",
         )
@@ -115,8 +115,8 @@ class TestResolveObjectByDisplayId:
         fake_display_id = encode_display_id("inv", uuid.uuid4())
         with pytest.raises(ObjectNotFoundError):
             resolve_object(
-                model=Invoice,
-                value=fake_display_id,
+                Invoice,
+                fake_display_id,
                 strategies=("display_id",),
                 prefix="inv",
             )
@@ -126,8 +126,8 @@ class TestResolveObjectByDisplayId:
         display_id = encode_display_id("inv", invoice.id)
         with pytest.raises(UnknownPrefixError) as exc_info:
             resolve_object(
-                model=Invoice,
-                value=display_id,
+                Invoice,
+                display_id,
                 strategies=("display_id",),
                 prefix="prod",  # Wrong prefix
             )
@@ -138,8 +138,8 @@ class TestResolveObjectByDisplayId:
         """prefix auto-detected from model's display_id_prefix attribute."""
         display_id = encode_display_id("inv", invoice.id)
         result = resolve_object(
-            model=Invoice,
-            value=display_id,
+            Invoice,
+            display_id,
             strategies=("display_id",),
         )
         assert result == invoice
@@ -149,8 +149,8 @@ class TestResolveObjectByDisplayId:
         # Order has no display_id_prefix, so display_id strategy is skipped
         # and UUID strategy should still work
         result = resolve_object(
-            model=Order,
-            value=str(order.id),
+            Order,
+            str(order.id),
             strategies=("display_id", "uuid"),
         )
         assert result == order
@@ -160,8 +160,8 @@ class TestResolveObjectByDisplayId:
         display_id = encode_display_id("inv", invoice.id)
         # Pass the correct prefix explicitly
         result = resolve_object(
-            model=Invoice,
-            value=display_id,
+            Invoice,
+            display_id,
             strategies=("display_id",),
             prefix="inv",
         )
@@ -171,8 +171,8 @@ class TestResolveObjectByDisplayId:
         """Passing prefix=None auto-detects from model (same as omitting)."""
         display_id = encode_display_id("inv", invoice.id)
         result = resolve_object(
-            model=Invoice,
-            value=display_id,
+            Invoice,
+            display_id,
             strategies=("display_id",),
             prefix=None,
         )
@@ -186,8 +186,8 @@ class TestResolveObjectBySlug:
     def test_resolve_by_slug(self, invoice):
         """Object is resolved by slug."""
         result = resolve_object(
-            model=Invoice,
-            value="test-invoice",
+            Invoice,
+            "test-invoice",
             strategies=("slug",),
             slug_field="slug",
         )
@@ -197,8 +197,8 @@ class TestResolveObjectBySlug:
         """ObjectNotFoundError raised when slug doesn't exist."""
         with pytest.raises(ObjectNotFoundError):
             resolve_object(
-                model=Invoice,
-                value="nonexistent-slug",
+                Invoice,
+                "nonexistent-slug",
                 strategies=("slug",),
             )
 
@@ -210,8 +210,8 @@ class TestResolveObjectWithMultipleStrategies:
     def test_uuid_matched_first(self, invoice):
         """UUID is matched when first in strategies."""
         result = resolve_object(
-            model=Invoice,
-            value=str(invoice.id),
+            Invoice,
+            str(invoice.id),
             strategies=("uuid", "display_id", "slug"),
             prefix="inv",
         )
@@ -221,8 +221,8 @@ class TestResolveObjectWithMultipleStrategies:
         """Display ID is matched when first in strategies."""
         display_id = encode_display_id("inv", invoice.id)
         result = resolve_object(
-            model=Invoice,
-            value=display_id,
+            Invoice,
+            display_id,
             strategies=("display_id", "uuid", "slug"),
             prefix="inv",
         )
@@ -231,8 +231,8 @@ class TestResolveObjectWithMultipleStrategies:
     def test_fallback_to_slug(self, invoice):
         """Falls back to slug when other strategies don't match."""
         result = resolve_object(
-            model=Invoice,
-            value="test-invoice",
+            Invoice,
+            "test-invoice",
             strategies=("uuid", "display_id", "slug"),
             prefix="inv",
         )
@@ -242,8 +242,8 @@ class TestResolveObjectWithMultipleStrategies:
         """Display ID strategy is skipped when model has no prefix."""
         # Order has no display_id_prefix, so display_id strategy is skipped
         result = resolve_object(
-            model=Order,
-            value=str(order.id),
+            Order,
+            str(order.id),
             strategies=("display_id", "uuid"),
         )
         assert result == order
@@ -256,8 +256,8 @@ class TestResolveObjectWithCustomFields:
     def test_custom_uuid_field(self, product):
         """Object resolved using explicit uuid_field override."""
         result = resolve_object(
-            model=Product,
-            value=str(product.uid),
+            Product,
+            str(product.uid),
             strategies=("uuid",),
             uuid_field="uid",
         )
@@ -266,8 +266,8 @@ class TestResolveObjectWithCustomFields:
     def test_custom_slug_field(self, product):
         """Object resolved using custom slug field name."""
         result = resolve_object(
-            model=Product,
-            value="test-product",
+            Product,
+            "test-product",
             strategies=("slug",),
             slug_field="handle",
         )
@@ -276,8 +276,8 @@ class TestResolveObjectWithCustomFields:
     def test_auto_detect_uuid_field_from_model(self, product):
         """uuid_field auto-detected from model's uuid_field attribute."""
         result = resolve_object(
-            model=Product,
-            value=str(product.uid),
+            Product,
+            str(product.uid),
             strategies=("uuid",),
         )
         assert result == product
@@ -285,8 +285,8 @@ class TestResolveObjectWithCustomFields:
     def test_auto_detect_uuid_field_default(self, invoice):
         """uuid_field defaults to 'id' when model has no uuid_field attribute."""
         result = resolve_object(
-            model=Invoice,
-            value=str(invoice.id),
+            Invoice,
+            str(invoice.id),
             strategies=("uuid",),
         )
         assert result == invoice
@@ -298,8 +298,8 @@ class TestResolveObjectWithCustomFields:
         # Invoice.uuid_field is None, so it should fall through to setting
         with override_settings(DISPLAY_IDS={"UUID_FIELD": "id"}):
             result = resolve_object(
-                model=Invoice,
-                value=str(invoice.id),
+                Invoice,
+                str(invoice.id),
                 strategies=("uuid",),
             )
             assert result == invoice
@@ -307,8 +307,8 @@ class TestResolveObjectWithCustomFields:
     def test_auto_detect_uuid_field_with_uuid_object(self, product):
         """uuid_field auto-detected when value is a UUID object."""
         result = resolve_object(
-            model=Product,
-            value=product.uid,
+            Product,
+            product.uid,
             strategies=("uuid",),
         )
         assert result == product
@@ -317,8 +317,8 @@ class TestResolveObjectWithCustomFields:
         """uuid_field auto-detected for display_id strategy."""
         display_id = encode_display_id("prod", product.uid)
         result = resolve_object(
-            model=Product,
-            value=display_id,
+            Product,
+            display_id,
             strategies=("display_id",),
             prefix="prod",
         )
@@ -329,8 +329,8 @@ class TestResolveObjectWithCustomFields:
         # Pass uuid_field="id" explicitly — should work even if model
         # had a different uuid_field attribute
         result = resolve_object(
-            model=Invoice,
-            value=str(invoice.id),
+            Invoice,
+            str(invoice.id),
             strategies=("uuid",),
             uuid_field="id",
         )
@@ -339,8 +339,8 @@ class TestResolveObjectWithCustomFields:
     def test_auto_detect_slug_field_from_model(self, product):
         """slug_field auto-detected from model's slug_field attribute."""
         result = resolve_object(
-            model=Product,
-            value="test-product",
+            Product,
+            "test-product",
             strategies=("slug",),
         )
         assert result == product
@@ -348,8 +348,8 @@ class TestResolveObjectWithCustomFields:
     def test_auto_detect_slug_field_default(self, invoice):
         """slug_field defaults to 'slug' when model has no slug_field attribute."""
         result = resolve_object(
-            model=Invoice,
-            value="test-invoice",
+            Invoice,
+            "test-invoice",
             strategies=("slug",),
         )
         assert result == invoice
@@ -360,8 +360,8 @@ class TestResolveObjectWithCustomFields:
 
         with override_settings(DISPLAY_IDS={"SLUG_FIELD": "slug"}):
             result = resolve_object(
-                model=Invoice,
-                value="test-invoice",
+                Invoice,
+                "test-invoice",
                 strategies=("slug",),
             )
             assert result == invoice
@@ -369,8 +369,8 @@ class TestResolveObjectWithCustomFields:
     def test_explicit_slug_field_overrides_model(self, product):
         """Explicit slug_field takes precedence over model attribute."""
         result = resolve_object(
-            model=Product,
-            value="test-product",
+            Product,
+            "test-product",
             strategies=("slug",),
             slug_field="handle",
         )
@@ -391,8 +391,8 @@ class TestResolveObjectWithQueryset:
 
         # Should find invoice1
         result = resolve_object(
-            model=Invoice,
-            value=str(invoice1.id),
+            Invoice,
+            str(invoice1.id),
             strategies=("uuid",),
             queryset=qs,
         )
@@ -408,8 +408,8 @@ class TestResolveObjectWithQueryset:
 
         with pytest.raises(ObjectNotFoundError):
             resolve_object(
-                model=Invoice,
-                value=str(invoice2.id),
+                Invoice,
+                str(invoice2.id),
                 strategies=("uuid",),
                 queryset=qs,
             )
@@ -423,8 +423,8 @@ class TestResolveObjectErrors:
         """InvalidIdentifierError raised for invalid identifier."""
         with pytest.raises(InvalidIdentifierError):
             resolve_object(
-                model=Invoice,
-                value="invalid",
+                Invoice,
+                "invalid",
                 strategies=("uuid",),  # Only UUID, won't match
             )
 
@@ -443,8 +443,8 @@ class TestResolveObjectErrors:
         # occurs. Since our test model has unique slugs, we'll just verify
         # the normal case works.
         result = resolve_object(
-            model=Invoice,
-            value="same-slug",
+            Invoice,
+            "same-slug",
             strategies=("slug",),
         )
         assert result.slug == "same-slug"
@@ -459,8 +459,8 @@ class TestResolveObjectSlugFieldGraceful:
         tag = Tag.objects.create(name="Test Tag")
 
         result = resolve_object(
-            model=Tag,
-            value=str(tag.id),
+            Tag,
+            str(tag.id),
             strategies=("display_id", "uuid", "slug"),
             prefix="tag",
         )
@@ -472,16 +472,16 @@ class TestResolveObjectSlugFieldGraceful:
 
         with pytest.raises(InvalidIdentifierError):
             resolve_object(
-                model=Tag,
-                value="some-slug",
+                Tag,
+                "some-slug",
                 strategies=("slug",),
             )
 
     def test_slug_still_works_on_model_with_slug_field(self, invoice):
         """Slug strategy works normally on models with a slug field."""
         result = resolve_object(
-            model=Invoice,
-            value="test-invoice",
+            Invoice,
+            "test-invoice",
             strategies=("display_id", "uuid", "slug"),
             prefix="inv",
         )

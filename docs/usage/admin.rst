@@ -60,12 +60,13 @@ belonging to a user), override ``get_search_results`` and use the
        search_fields = ["name"]
 
        def get_search_results(self, request, queryset, search_term):
+           original_queryset = queryset
            queryset, use_distinct = super().get_search_results(
                request, queryset, search_term
            )
            # Search the related user's UUID field too
            if uuid_val := self._parse_identifier(search_term):
-               queryset |= self.model._default_manager.filter(
+               queryset |= original_queryset.filter(
                    user__uid=uuid_val
                )
            return queryset, use_distinct

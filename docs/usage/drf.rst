@@ -50,7 +50,8 @@ Configuration Attributes
    Tuple of strategies to try. Defaults to ``("display_id", "uuid", "slug")``.
 
 ``display_id_prefix``
-   Expected prefix. Falls back to model's ``display_id_prefix``.
+   Expected prefix. When ``None`` (the default), auto-detected by
+   ``resolve_object`` from the model's ``display_id_prefix`` attribute.
 
 ``uuid_field``
    UUID field name. When ``None`` (the default), auto-detected by

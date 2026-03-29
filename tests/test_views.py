@@ -45,7 +45,7 @@ class NoPrefixView(DisplayIDMixin, DetailView):
 
     model = Invoice
     lookup_param = "id"
-    display_id_prefix = None  # Explicitly disable model's prefix
+    lookup_strategies = ("uuid", "slug")  # No display_id strategy
 
 
 class ModelPrefixFallbackView(DisplayIDMixin, DetailView):
@@ -270,13 +270,13 @@ class TestModelPrefixFallback:
         obj = view.get_object()
         assert obj == invoice
 
-    def test_none_disables_model_prefix(self, rf, invoice):
-        """Setting display_id_prefix = None disables model's prefix."""
+    def test_no_display_id_strategy_skips_prefix(self, rf, invoice):
+        """Omitting display_id from strategies skips prefix matching."""
         view = NoPrefixView()
         view.kwargs = {"id": invoice.display_id}
         view.request = rf.get("/")
 
-        # Should raise 404 because display_id strategy is skipped
+        # Should raise 404 because display_id strategy is not in strategies
         with pytest.raises(Http404):
             view.get_object()
 

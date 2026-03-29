@@ -6,8 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from django.http import Http404
 
-from .conf import NOT_SET, get_setting
-from .encoding import PREFIX_PATTERN
+from .conf import get_setting
 from .exceptions import DisplayIDLookupError
 from .resolver import resolve_object
 from .typing import StrategyName  # noqa: TC001 - used at runtime in type hints
@@ -44,7 +43,7 @@ class DisplayIDMixin:
     model: type[models.Model] | None = None
     lookup_param: str = "pk"
     lookup_strategies: tuple[StrategyName, ...] | None = None
-    display_id_prefix: str | None = NOT_SET
+    display_id_prefix: str | None = None
     uuid_field: str | None = None
     slug_field: str | None = None
 
@@ -52,26 +51,6 @@ class DisplayIDMixin:
         if self.lookup_strategies is not None:
             return self.lookup_strategies
         return get_setting("STRATEGIES")  # type: ignore[return-value]
-
-    def _get_display_id_prefix(self) -> str | None:
-        """Get the display ID prefix.
-
-        Returns the view's display_id_prefix if set (including None to
-        explicitly disable), otherwise falls back to the model's
-        display_id_prefix attribute.
-        """
-        if self.display_id_prefix is not NOT_SET:
-            if self.display_id_prefix is not None and not PREFIX_PATTERN.match(
-                self.display_id_prefix
-            ):
-                raise ValueError(
-                    f"display_id_prefix must be 1-16 lowercase letters, "
-                    f"got: {self.display_id_prefix!r}"
-                )
-            return self.display_id_prefix
-        if self.model is not None:
-            return getattr(self.model, "display_id_prefix", None)
-        return None
 
     # These may be provided by parent classes
     kwargs: dict[str, Any]
@@ -119,7 +98,7 @@ class DisplayIDMixin:
                 model=self.model,
                 value=str(value),
                 strategies=self._get_strategies(),
-                prefix=self._get_display_id_prefix(),
+                prefix=self.display_id_prefix,
                 uuid_field=self.uuid_field,
                 slug_field=self.slug_field,
                 queryset=qs,

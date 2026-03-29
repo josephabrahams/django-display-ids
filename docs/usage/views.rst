@@ -40,8 +40,9 @@ Configuration Attributes
    ``("display_id", "uuid", "slug")`` from settings.
 
 ``display_id_prefix``
-   Expected prefix for display IDs. Falls back to the model's
-   ``display_id_prefix`` if using ``DisplayIDModel``.
+   Expected prefix for display IDs. When ``None`` (the default),
+   auto-detected by ``resolve_object`` from the model's
+   ``display_id_prefix`` attribute.
 
 ``uuid_field``
    The UUID field name on the model. When ``None`` (the default),

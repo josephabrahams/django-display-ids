@@ -134,6 +134,50 @@ class TestResolveObjectByDisplayId:
         assert exc_info.value.actual == "inv"
         assert exc_info.value.expected == "prod"
 
+    def test_auto_detect_prefix_from_model(self, invoice):
+        """prefix auto-detected from model's display_id_prefix attribute."""
+        display_id = encode_display_id("inv", invoice.id)
+        result = resolve_object(
+            model=Invoice,
+            value=display_id,
+            strategies=("display_id",),
+        )
+        assert result == invoice
+
+    def test_auto_detect_prefix_none_for_model_without_prefix(self, order):
+        """prefix defaults to None for models without display_id_prefix."""
+        # Order has no display_id_prefix, so display_id strategy is skipped
+        # and UUID strategy should still work
+        result = resolve_object(
+            model=Order,
+            value=str(order.id),
+            strategies=("display_id", "uuid"),
+        )
+        assert result == order
+
+    def test_explicit_prefix_overrides_model(self, invoice):
+        """Explicit prefix takes precedence over model attribute."""
+        display_id = encode_display_id("inv", invoice.id)
+        # Pass the correct prefix explicitly
+        result = resolve_object(
+            model=Invoice,
+            value=display_id,
+            strategies=("display_id",),
+            prefix="inv",
+        )
+        assert result == invoice
+
+    def test_none_prefix_auto_detects_from_model(self, invoice):
+        """Passing prefix=None auto-detects from model (same as omitting)."""
+        display_id = encode_display_id("inv", invoice.id)
+        result = resolve_object(
+            model=Invoice,
+            value=display_id,
+            strategies=("display_id",),
+            prefix=None,
+        )
+        assert result == invoice
+
 
 @pytest.mark.django_db
 class TestResolveObjectBySlug:
@@ -194,22 +238,15 @@ class TestResolveObjectWithMultipleStrategies:
         )
         assert result == invoice
 
-    def test_display_id_skipped_without_prefix(self, invoice):
-        """Display ID strategy is skipped when no prefix configured."""
-        # The display ID format will be treated as a slug
-        display_id = encode_display_id("inv", invoice.id)
-
-        # Create an invoice with the display ID as its slug
-        invoice_with_slug = Invoice.objects.create(name="Slug Invoice", slug=display_id)
-
+    def test_display_id_skipped_without_prefix(self, order):
+        """Display ID strategy is skipped when model has no prefix."""
+        # Order has no display_id_prefix, so display_id strategy is skipped
         result = resolve_object(
-            model=Invoice,
-            value=display_id,
-            strategies=("display_id", "slug"),
-            prefix=None,  # No prefix, so display_id is skipped
+            model=Order,
+            value=str(order.id),
+            strategies=("display_id", "uuid"),
         )
-        # Should match by slug, not by display_id
-        assert result == invoice_with_slug
+        assert result == order
 
 
 @pytest.mark.django_db

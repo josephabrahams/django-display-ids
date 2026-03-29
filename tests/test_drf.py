@@ -47,7 +47,7 @@ class NoPrefixAPIView(DisplayIDMixin, APIView):
     """Test API view without display_id_prefix."""
 
     lookup_url_kwarg = "id"
-    display_id_prefix = None  # Explicitly disable model's prefix
+    lookup_strategies = ("uuid", "slug")  # No display_id strategy
 
     def get_queryset(self):
         return Invoice.objects.all()
@@ -287,13 +287,13 @@ class TestModelPrefixFallback:
         obj = view.get_object()
         assert obj == invoice
 
-    def test_none_disables_model_prefix(self, rf, invoice):
-        """Setting display_id_prefix = None disables model's prefix."""
+    def test_no_display_id_strategy_skips_prefix(self, rf, invoice):
+        """Omitting display_id from strategies skips prefix matching."""
         view = NoPrefixAPIView()
         view.kwargs = {"id": invoice.display_id}
         view.request = rf.get("/")
 
-        # display_id strategy is skipped, slug catches it but no match -> NotFound
+        # display_id strategy is not in strategies, slug catches it but no match -> NotFound
         with pytest.raises(NotFound):
             view.get_object()
 

@@ -9,6 +9,7 @@ from django.core.exceptions import FieldDoesNotExist
 from django.db import models
 
 from .conf import get_setting
+from .encoding import PREFIX_PATTERN
 from .exceptions import AmbiguousIdentifierError, ObjectNotFoundError
 from .strategies import parse_identifier
 from .typing import DEFAULT_STRATEGIES, StrategyName
@@ -57,6 +58,27 @@ def _resolve_slug_field(model: type[models.Model], override: str | None) -> str:
     return str(get_setting("SLUG_FIELD"))
 
 
+def _resolve_prefix(model: type[models.Model], override: str | None) -> str | None:
+    """Resolve the display ID prefix for a model.
+
+    Resolution order:
+        1. Explicit *override* (if not None).
+        2. ``model.display_id_prefix`` class attribute (set by ``DisplayIDModel``).
+
+    Raises:
+        ValueError: If the resolved prefix is not 1-16 lowercase letters.
+    """
+    if override is not None:
+        prefix: str | None = override
+    else:
+        prefix = getattr(model, "display_id_prefix", None)
+    if prefix is not None and not PREFIX_PATTERN.match(prefix):
+        raise ValueError(
+            f"display_id_prefix must be 1-16 lowercase letters, " f"got: {prefix!r}"
+        )
+    return prefix
+
+
 def resolve_object(
     *,
     model: type[M],
@@ -76,7 +98,8 @@ def resolve_object(
         value: The identifier string (UUID, display ID, or slug),
             or a UUID instance for direct UUID lookup.
         strategies: Tuple of strategy names to try in order.
-        prefix: Expected display ID prefix (for validation).
+        prefix: Expected display ID prefix. When ``None`` (the default),
+            auto-detected from the model's ``display_id_prefix`` attribute.
         uuid_field: Name of the UUID field on the model. When ``None``
             (the default), auto-detected from the model's ``uuid_field``
             attribute, then the ``DISPLAY_IDS["UUID_FIELD"]`` setting,
@@ -97,7 +120,8 @@ def resolve_object(
         AmbiguousIdentifierError: If multiple objects match (slug lookup).
         TypeError: If queryset is not for the specified model.
     """
-    # Resolve field names
+    # Resolve field names and prefix
+    prefix = _resolve_prefix(model, prefix)
     uuid_field = _resolve_uuid_field(model, uuid_field)
     slug_field = _resolve_slug_field(model, slug_field)
 

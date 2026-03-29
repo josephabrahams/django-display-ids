@@ -12,12 +12,8 @@ The central resolver function used by all mixins.
 
    from django_display_ids import resolve_object
 
-   invoice = resolve_object(
-       model=Invoice,
-       value="inv_2aUyqjCzEIiEcYMKj7TZtw",
-       strategies=("display_id", "uuid", "slug"),
-       prefix="inv",
-   )
+   # Auto-detects prefix, uuid_field, slug_field, and strategies from the model
+   invoice = resolve_object(model=Invoice, value="inv_2aUyqjCzEIiEcYMKj7TZtw")
 
 Parameters
 ~~~~~~~~~~
@@ -32,7 +28,9 @@ Parameters
    Tuple of strategy names to try, in order. Defaults to ``("display_id", "uuid", "slug")``.
 
 ``prefix``
-   Expected display ID prefix. Required for the ``display_id`` strategy.
+   Expected display ID prefix. When ``None`` (the default), auto-detected
+   from the model's ``display_id_prefix`` attribute (set by
+   ``DisplayIDModel``).
 
 ``uuid_field``
    Name of the UUID field on the model. When ``None`` (the default),

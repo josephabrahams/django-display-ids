@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 — 2026-03-28
+
+- **`resolve_object()` auto-detects `prefix`**: Completes the auto-detection started in 0.6.0. When `prefix` is not passed (or ``None``), `resolve_object()` reads `model.display_id_prefix` automatically. This means `resolve_object(model=Invoice, value=identifier)` just works — no need to pass prefix, field names, or strategies. To skip the `display_id` strategy, omit it from `strategies` instead of passing `prefix=None`.
+- **Removed `_get_display_id_prefix()` from view mixins**: Both `DisplayIDMixin` (Django) and `DisplayIDMixin` (DRF) no longer define this method — prefix resolution is now handled by `resolve_object()`.
+- **Removed `NOT_SET` sentinel from `conf`**: No longer needed now that all parameters use `None` for auto-detection.
+
 ## 0.6.0 — 2026-03-28
 
 - **`resolve_object()` auto-detects `uuid_field` and `slug_field`**: When either parameter is not explicitly passed, `resolve_object()` now checks the model's class attribute (set by `DisplayIDModel`), then the `DISPLAY_IDS` setting, then falls back to `"id"` / `"slug"`. This matches the resolution order already used by `DisplayIDAdminSearchMixin`, `DisplayIDMixin`, and `DisplayIDManager`. Callers no longer need to manually resolve and pass these for models that declare them.

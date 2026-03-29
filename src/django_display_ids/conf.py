@@ -11,7 +11,7 @@ Settings can be configured in Django settings under the DISPLAY_IDS namespace:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.urls.converters import SlugConverter
@@ -21,13 +21,9 @@ if TYPE_CHECKING:
 
 __all__ = [
     "DEFAULTS",
-    "NOT_SET",
     "SLUG_REGEX",
     "get_setting",
 ]
-
-# Sentinel for distinguishing "not set" from None
-NOT_SET: Any = object()
 
 # Django's default slug regex pattern
 SLUG_REGEX: str = SlugConverter.regex

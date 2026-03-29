@@ -59,9 +59,3 @@ Features
    :caption: Advanced
 
    advanced/index
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Project
-
-   contributing

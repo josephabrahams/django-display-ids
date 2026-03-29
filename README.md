@@ -92,7 +92,7 @@ Full documentation at [django-display-ids.readthedocs.io](https://django-display
 
 ## Contributing
 
-See the [contributing guide](https://django-display-ids.readthedocs.io/en/latest/contributing/).
+See [CONTRIBUTING.md](https://github.com/josephabrahams/django-display-ids/blob/main/CONTRIBUTING.md).
 
 ## Related Projects
 

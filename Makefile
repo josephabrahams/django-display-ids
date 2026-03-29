@@ -1,5 +1,7 @@
 export PYTHONUNBUFFERED = 1
 
+PORT ?= 8000
+
 .PHONY: help test lint docs
 
 help:
@@ -14,4 +16,5 @@ lint:
 	uv run pre-commit run --all-files
 
 docs:
-	uv run sphinx-autobuild docs docs/_build/html
+	rm -rf docs/_build
+	uv run sphinx-autobuild --port $(PORT) docs docs/_build/html

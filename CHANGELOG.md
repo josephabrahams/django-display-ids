@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.5 — 2026-03-28
+
+- **Security fix**: `DisplayIDAdminSearchMixin.get_search_results()` now filters against the incoming queryset instead of `self.model._default_manager`, preventing row leakage when used with tenant-scoped or otherwise filtered admin querysets.
+
 ## 0.5.4 — 2026-03-05
 
 - **`_parse_identifier()` static method**: `DisplayIDAdminSearchMixin` now exposes a `_parse_identifier(search_term)` static method that parses a display ID or raw UUID and returns a `uuid.UUID` (or `None`). Subclasses can use this to search related UUID fields without re-implementing the decode logic.

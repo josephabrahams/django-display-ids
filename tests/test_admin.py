@@ -175,6 +175,42 @@ class TestDisplayIDAdminSearchMixin:
         assert product in result_qs
         assert result_qs.count() == 1
 
+    def test_search_respects_queryset_scoping(self, invoice_admin, request_factory):
+        """UUID search should not return rows excluded from the input queryset.
+
+        Ensures the mixin filters against the passed-in queryset (which may be
+        tenant-scoped) rather than the default manager.
+        """
+        included = Invoice.objects.create(name="Included")
+        excluded = Invoice.objects.create(name="Excluded")
+
+        # Search for the *excluded* invoice's display ID, but pass a queryset
+        # that only contains the *included* invoice — simulating tenant scoping.
+        display_id = encode_display_id("inv", excluded.id)
+        scoped_qs = Invoice.objects.filter(pk=included.pk)
+
+        request = request_factory.get("/admin/tests/invoice/", {"q": display_id})
+        result_qs, _ = invoice_admin.get_search_results(request, scoped_qs, display_id)
+
+        assert excluded not in result_qs
+        assert result_qs.count() == 0
+
+    def test_search_by_raw_uuid_respects_queryset_scoping(
+        self, invoice_admin, request_factory
+    ):
+        """Raw UUID search should not return rows excluded from the input queryset."""
+        included = Invoice.objects.create(name="Included")
+        excluded = Invoice.objects.create(name="Excluded")
+
+        raw_uuid = str(excluded.id)
+        scoped_qs = Invoice.objects.filter(pk=included.pk)
+
+        request = request_factory.get("/admin/tests/invoice/", {"q": raw_uuid})
+        result_qs, _ = invoice_admin.get_search_results(request, scoped_qs, raw_uuid)
+
+        assert excluded not in result_qs
+        assert result_qs.count() == 0
+
 
 class TestParseIdentifier:
     """Tests for _parse_identifier static method."""

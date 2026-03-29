@@ -61,11 +61,12 @@ class DisplayIDAdminSearchMixin:
         Subclasses can use this to search additional UUID fields::
 
             def get_search_results(self, request, queryset, search_term):
+                original_queryset = queryset
                 queryset, use_distinct = super().get_search_results(
                     request, queryset, search_term
                 )
                 if uuid_val := self._parse_identifier(search_term):
-                    queryset |= self.model._default_manager.filter(
+                    queryset |= original_queryset.filter(
                         user__uid=uuid_val
                     )
                 return queryset, use_distinct
@@ -91,6 +92,7 @@ class DisplayIDAdminSearchMixin:
         search_term: str,
     ) -> tuple[QuerySet[Any], bool]:
         """Extend search to handle display IDs and raw UUIDs."""
+        original_queryset = queryset
         queryset, use_distinct = super().get_search_results(  # type: ignore[misc]
             request, queryset, search_term
         )
@@ -98,6 +100,6 @@ class DisplayIDAdminSearchMixin:
         uuid_val = self._parse_identifier(search_term)
         if uuid_val is not None:
             uuid_field = self._get_uuid_field()
-            queryset |= self.model._default_manager.filter(**{uuid_field: uuid_val})
+            queryset |= original_queryset.filter(**{uuid_field: uuid_val})
 
         return queryset, use_distinct

@@ -110,17 +110,17 @@ Attributes:
 MissingPrefixError
 ~~~~~~~~~~~~~~~~~~
 
-Raised when the ``display_id`` strategy is used but no prefix is configured.
+Raised when a display ID operation is attempted on a model without a prefix.
 
 .. code-block:: python
 
    from django_display_ids import MissingPrefixError
 
    try:
-       # Order has no display_id_prefix, so display_id strategy can't work
-       order = resolve_object(Order, "ord_xxx", strategies=("display_id",))
+       # Order has no display_id_prefix
+       order = Order.objects.get_by_display_id("ord_xxx")
    except MissingPrefixError:
-       # Configure a prefix
+       # Configure a prefix on the model
    except ImproperlyConfigured:
        # Also works
 

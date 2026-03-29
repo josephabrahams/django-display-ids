@@ -176,35 +176,34 @@ class TestParseIdentifier:
         assert result.strategy == "slug"
         assert result.slug == "my-product-slug"
 
-    def test_display_id_skipped_without_prefix(self):
-        """display_id strategy is skipped when no prefix is configured."""
+    def test_display_id_without_prefix_accepts_any(self):
+        """display_id strategy accepts any prefix when expected_prefix is None."""
         test_uuid = uuid.uuid4()
         display_id = encode_display_id("inv", test_uuid)
 
-        # Without prefix, display_id should be skipped, fall through to slug
         result = parse_identifier(
             display_id,
             strategies=("display_id", "slug"),
             expected_prefix=None,
         )
 
-        assert result.strategy == "slug"
-        assert result.slug == display_id
+        assert result.strategy == "display_id"
+        assert result.uuid == test_uuid
+        assert result.prefix == "inv"
 
-    def test_display_id_only_without_prefix_raises_error(self):
-        """display_id as only strategy without prefix raises InvalidIdentifierError."""
+    def test_display_id_only_without_prefix_parses_successfully(self):
+        """display_id as only strategy without prefix still parses."""
         test_uuid = uuid.uuid4()
         display_id = encode_display_id("inv", test_uuid)
 
-        with pytest.raises(InvalidIdentifierError) as exc_info:
-            parse_identifier(
-                display_id,
-                strategies=("display_id",),
-                expected_prefix=None,
-            )
+        result = parse_identifier(
+            display_id,
+            strategies=("display_id",),
+            expected_prefix=None,
+        )
 
-        assert "No strategies available" in str(exc_info.value)
-        assert "display_id strategy requires a prefix" in str(exc_info.value)
+        assert result.strategy == "display_id"
+        assert result.uuid == test_uuid
 
     def test_no_match_raises_error(self):
         """No matching strategy raises InvalidIdentifierError."""

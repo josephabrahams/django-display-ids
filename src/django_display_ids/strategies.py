@@ -114,7 +114,7 @@ def parse_identifier(
         value: The identifier string.
         strategies: Tuple of strategy names to try in order.
         expected_prefix: For display_id strategy, the expected prefix.
-            If None, the display_id strategy is skipped.
+            If None, any valid display ID prefix is accepted.
 
     Returns:
         StrategyResult from the first matching strategy.
@@ -123,21 +123,7 @@ def parse_identifier(
         InvalidIdentifierError: If no strategy matches.
         UnknownPrefixError: If display_id prefix doesn't match expected.
     """
-    # Filter out display_id strategy if no prefix is configured.
-    # This prevents cross-model lookups where a display ID for one model
-    # could accidentally match a UUID in another model.
-    effective_strategies = tuple(
-        s for s in strategies if s != "display_id" or expected_prefix is not None
-    )
-
-    if not effective_strategies:
-        raise InvalidIdentifierError(
-            value,
-            f"No strategies available to parse identifier {value!r} "
-            "(display_id strategy requires a prefix)",
-        )
-
-    for strategy in effective_strategies:
+    for strategy in strategies:
         result: StrategyResult | None = None
 
         if strategy == "uuid":
@@ -152,5 +138,5 @@ def parse_identifier(
 
     raise InvalidIdentifierError(
         value,
-        f"Could not parse {value!r} using strategies: {', '.join(effective_strategies)}",
+        f"Could not parse {value!r} using strategies: {', '.join(strategies)}",
     )

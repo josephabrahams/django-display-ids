@@ -143,6 +143,10 @@ def resolve_object(
         except model.DoesNotExist:  # type: ignore[attr-defined]
             raise ObjectNotFoundError(str(value), model_name=model.__name__) from None
 
+    # Skip display_id strategy if the model has no prefix
+    if prefix is None:
+        strategies = tuple(s for s in strategies if s != "display_id")
+
     # Skip slug strategy if the model has no slug field
     try:
         model._meta.get_field(slug_field)

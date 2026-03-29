@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.2 — 2026-03-29
+
+- **`parse_identifier()` accepts display IDs without a prefix**: `expected_prefix=None` now means "accept any valid prefix" instead of "skip display_id strategy." This makes `parse_identifier` usable standalone without requiring a prefix. `resolve_object()` still skips display_id for models without a prefix — that policy moved from the parser to the resolver.
+
 ## 0.6.1 — 2026-03-28
 
 - **`resolve_object()` auto-detects `prefix`**: Completes the auto-detection started in 0.6.0. When `prefix` is not passed (or ``None``), `resolve_object()` reads `model.display_id_prefix` automatically. This means `resolve_object(Invoice, identifier)` just works — no need to pass prefix, field names, or strategies. To skip the `display_id` strategy, omit it from `strategies` instead of passing `prefix=None`.

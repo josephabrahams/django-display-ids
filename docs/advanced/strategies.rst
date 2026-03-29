@@ -52,11 +52,15 @@ Strategy Requirements
 display_id Strategy
 ~~~~~~~~~~~~~~~~~~~
 
-Requires a configured prefix. Without a prefix, the strategy is skipped.
+When a prefix is configured (either explicitly or auto-detected from the model),
+the strategy validates that the display ID matches the expected prefix.
 
 This prevents accidentally matching display IDs from other models. For example,
 if you're looking up an ``Invoice`` with prefix ``inv``, a ``User`` display ID
 like ``usr_xxx`` won't match — the strategy detects the wrong prefix.
+
+In ``resolve_object``, the display_id strategy is automatically skipped for
+models without a ``display_id_prefix``.
 
 .. code-block:: python
 

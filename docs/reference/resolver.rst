@@ -57,7 +57,6 @@ Exceptions
 
 - ``InvalidIdentifierError`` — No strategy could parse the identifier
 - ``UnknownPrefixError`` — Display ID prefix doesn't match expected
-- ``MissingPrefixError`` — ``display_id`` strategy used but no prefix configured
 - ``ObjectNotFoundError`` — No database record matches
 - ``AmbiguousIdentifierError`` — Multiple records match (slug lookup)
 

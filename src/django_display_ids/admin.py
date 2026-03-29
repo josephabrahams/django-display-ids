@@ -7,6 +7,7 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 from .encoding import decode_display_id
+from .resolver import _resolve_uuid_field
 
 if TYPE_CHECKING:
     from django.db.models import Model, QuerySet
@@ -35,8 +36,9 @@ class DisplayIDAdminSearchMixin:
             search_fields = ["name"]  # display ID and UUID search is automatic
 
     Attributes:
-        uuid_field: Name of the UUID field to search. Defaults to model's
-            uuid_field if using DisplayIDModel, otherwise "id".
+        uuid_field: Name of the UUID field to search. When ``None``,
+            auto-detected from the model's ``uuid_field`` attribute, then
+            the ``DISPLAY_IDS["UUID_FIELD"]`` setting, then ``"id"``.
     """
 
     uuid_field: str | None = None
@@ -44,11 +46,7 @@ class DisplayIDAdminSearchMixin:
 
     def _get_uuid_field(self) -> str:
         """Get the UUID field name to search."""
-        if self.uuid_field is not None:
-            return self.uuid_field
-        # Try to get from model's uuid_field attribute
-        uuid_field: str | None = getattr(self.model, "uuid_field", None)
-        return uuid_field or "id"
+        return _resolve_uuid_field(self.model, self.uuid_field)
 
     @staticmethod
     def _parse_identifier(search_term: str) -> uuid.UUID | None:

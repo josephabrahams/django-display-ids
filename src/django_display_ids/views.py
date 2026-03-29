@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from django.http import Http404
 
-from .conf import NOT_SET, get_setting, get_slug_field, get_uuid_field
+from .conf import NOT_SET, get_setting
 from .encoding import PREFIX_PATTERN
 from .exceptions import DisplayIDLookupError
 from .resolver import resolve_object
@@ -47,12 +47,6 @@ class DisplayIDMixin:
     display_id_prefix: str | None = NOT_SET
     uuid_field: str | None = None
     slug_field: str | None = None
-
-    def _get_uuid_field(self) -> str:
-        return get_uuid_field(self.uuid_field)
-
-    def _get_slug_field(self) -> str:
-        return get_slug_field(self.slug_field)
 
     def _get_strategies(self) -> tuple[StrategyName, ...]:
         if self.lookup_strategies is not None:
@@ -126,8 +120,8 @@ class DisplayIDMixin:
                 value=str(value),
                 strategies=self._get_strategies(),
                 prefix=self._get_display_id_prefix(),
-                uuid_field=self._get_uuid_field(),
-                slug_field=self._get_slug_field(),
+                uuid_field=self.uuid_field,
+                slug_field=self.slug_field,
                 queryset=qs,
             )
         except DisplayIDLookupError as e:

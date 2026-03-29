@@ -1,6 +1,6 @@
 [project]
 name = "django-display-ids"
-version = "0.5.5"
+version = "0.6.0"
 description = "Stripe-like prefixed IDs for Django. Works with existing UUIDs — no schema changes."
 readme = "README.md"
 requires-python = ">=3.12"

@@ -53,10 +53,14 @@ Configuration Attributes
    Expected prefix. Falls back to model's ``display_id_prefix``.
 
 ``uuid_field``
-   UUID field name. Defaults to ``"id"``.
+   UUID field name. When ``None`` (the default), auto-detected by
+   ``resolve_object`` from the model's ``uuid_field`` attribute, then
+   the ``DISPLAY_IDS["UUID_FIELD"]`` setting, then ``"id"``.
 
 ``slug_field``
-   Slug field name. Defaults to ``"slug"``.
+   Slug field name. When ``None`` (the default), auto-detected by
+   ``resolve_object`` from the model's ``slug_field`` attribute, then
+   the ``DISPLAY_IDS["SLUG_FIELD"]`` setting, then ``"slug"``.
 
 Error Handling
 ~~~~~~~~~~~~~~

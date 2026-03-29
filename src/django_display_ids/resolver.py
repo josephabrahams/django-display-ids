@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 from django.core.exceptions import FieldDoesNotExist
 from django.db import models
 
+from .conf import get_setting
 from .exceptions import AmbiguousIdentifierError, ObjectNotFoundError
 from .strategies import parse_identifier
 from .typing import DEFAULT_STRATEGIES, StrategyName
@@ -22,14 +23,48 @@ __all__ = [
 M = TypeVar("M", bound=models.Model)
 
 
+def _resolve_uuid_field(model: type[models.Model], override: str | None) -> str:
+    """Resolve the UUID field name for a model.
+
+    Resolution order:
+        1. Explicit *override* (if not None).
+        2. ``model.uuid_field`` class attribute (set by ``DisplayIDModel``).
+        3. ``DISPLAY_IDS["UUID_FIELD"]`` setting.
+        4. ``"id"`` (the default for the setting).
+    """
+    if override is not None:
+        return override
+    model_field: str | None = getattr(model, "uuid_field", None)
+    if model_field is not None:
+        return model_field
+    return str(get_setting("UUID_FIELD"))
+
+
+def _resolve_slug_field(model: type[models.Model], override: str | None) -> str:
+    """Resolve the slug field name for a model.
+
+    Resolution order:
+        1. Explicit *override* (if not None).
+        2. ``model.slug_field`` class attribute (set by ``DisplayIDModel``).
+        3. ``DISPLAY_IDS["SLUG_FIELD"]`` setting.
+        4. ``"slug"`` (the default for the setting).
+    """
+    if override is not None:
+        return override
+    model_field: str | None = getattr(model, "slug_field", None)
+    if model_field is not None:
+        return model_field
+    return str(get_setting("SLUG_FIELD"))
+
+
 def resolve_object(
     *,
     model: type[M],
     value: str | uuid.UUID,
     strategies: tuple[StrategyName, ...] = DEFAULT_STRATEGIES,
     prefix: str | None = None,
-    uuid_field: str = "id",
-    slug_field: str = "slug",
+    uuid_field: str | None = None,
+    slug_field: str | None = None,
     queryset: QuerySet[M] | None = None,
 ) -> M:
     """Resolve an identifier to a model instance.
@@ -42,8 +77,14 @@ def resolve_object(
             or a UUID instance for direct UUID lookup.
         strategies: Tuple of strategy names to try in order.
         prefix: Expected display ID prefix (for validation).
-        uuid_field: Name of the UUID field on the model.
-        slug_field: Name of the slug field on the model.
+        uuid_field: Name of the UUID field on the model. When ``None``
+            (the default), auto-detected from the model's ``uuid_field``
+            attribute, then the ``DISPLAY_IDS["UUID_FIELD"]`` setting,
+            then ``"id"``.
+        slug_field: Name of the slug field on the model. When ``None``
+            (the default), auto-detected from the model's ``slug_field``
+            attribute, then the ``DISPLAY_IDS["SLUG_FIELD"]`` setting,
+            then ``"slug"``.
         queryset: Optional pre-filtered queryset to search within.
 
     Returns:
@@ -56,6 +97,10 @@ def resolve_object(
         AmbiguousIdentifierError: If multiple objects match (slug lookup).
         TypeError: If queryset is not for the specified model.
     """
+    # Resolve field names
+    uuid_field = _resolve_uuid_field(model, uuid_field)
+    slug_field = _resolve_slug_field(model, slug_field)
+
     # Get the base queryset
     if queryset is not None:
         if queryset.model is not model:

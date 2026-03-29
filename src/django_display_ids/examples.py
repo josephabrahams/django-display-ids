@@ -81,8 +81,3 @@ def example_display_id(prefix_or_model: str | type[Model]) -> str:
     ex_uuid = example_uuid(prefix)
     encoded = encode_uuid(ex_uuid)
     return f"{prefix}_{encoded}"
-
-
-# Aliases for backwards compatibility
-example_uuid_for_prefix = example_uuid
-example_display_id_for_prefix = example_display_id

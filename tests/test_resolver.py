@@ -217,7 +217,7 @@ class TestResolveObjectWithCustomFields:
     """Tests for resolving with custom field names."""
 
     def test_custom_uuid_field(self, product):
-        """Object resolved using custom UUID field name."""
+        """Object resolved using explicit uuid_field override."""
         result = resolve_object(
             model=Product,
             value=str(product.uid),
@@ -228,6 +228,109 @@ class TestResolveObjectWithCustomFields:
 
     def test_custom_slug_field(self, product):
         """Object resolved using custom slug field name."""
+        result = resolve_object(
+            model=Product,
+            value="test-product",
+            strategies=("slug",),
+            slug_field="handle",
+        )
+        assert result == product
+
+    def test_auto_detect_uuid_field_from_model(self, product):
+        """uuid_field auto-detected from model's uuid_field attribute."""
+        result = resolve_object(
+            model=Product,
+            value=str(product.uid),
+            strategies=("uuid",),
+        )
+        assert result == product
+
+    def test_auto_detect_uuid_field_default(self, invoice):
+        """uuid_field defaults to 'id' when model has no uuid_field attribute."""
+        result = resolve_object(
+            model=Invoice,
+            value=str(invoice.id),
+            strategies=("uuid",),
+        )
+        assert result == invoice
+
+    def test_auto_detect_uuid_field_from_setting(self, invoice):
+        """uuid_field falls back to DISPLAY_IDS setting."""
+        from django.test import override_settings
+
+        # Invoice.uuid_field is None, so it should fall through to setting
+        with override_settings(DISPLAY_IDS={"UUID_FIELD": "id"}):
+            result = resolve_object(
+                model=Invoice,
+                value=str(invoice.id),
+                strategies=("uuid",),
+            )
+            assert result == invoice
+
+    def test_auto_detect_uuid_field_with_uuid_object(self, product):
+        """uuid_field auto-detected when value is a UUID object."""
+        result = resolve_object(
+            model=Product,
+            value=product.uid,
+            strategies=("uuid",),
+        )
+        assert result == product
+
+    def test_auto_detect_uuid_field_with_display_id(self, product):
+        """uuid_field auto-detected for display_id strategy."""
+        display_id = encode_display_id("prod", product.uid)
+        result = resolve_object(
+            model=Product,
+            value=display_id,
+            strategies=("display_id",),
+            prefix="prod",
+        )
+        assert result == product
+
+    def test_explicit_uuid_field_overrides_model(self, invoice):
+        """Explicit uuid_field takes precedence over model attribute."""
+        # Pass uuid_field="id" explicitly — should work even if model
+        # had a different uuid_field attribute
+        result = resolve_object(
+            model=Invoice,
+            value=str(invoice.id),
+            strategies=("uuid",),
+            uuid_field="id",
+        )
+        assert result == invoice
+
+    def test_auto_detect_slug_field_from_model(self, product):
+        """slug_field auto-detected from model's slug_field attribute."""
+        result = resolve_object(
+            model=Product,
+            value="test-product",
+            strategies=("slug",),
+        )
+        assert result == product
+
+    def test_auto_detect_slug_field_default(self, invoice):
+        """slug_field defaults to 'slug' when model has no slug_field attribute."""
+        result = resolve_object(
+            model=Invoice,
+            value="test-invoice",
+            strategies=("slug",),
+        )
+        assert result == invoice
+
+    def test_auto_detect_slug_field_from_setting(self, invoice):
+        """slug_field falls back to DISPLAY_IDS setting."""
+        from django.test import override_settings
+
+        with override_settings(DISPLAY_IDS={"SLUG_FIELD": "slug"}):
+            result = resolve_object(
+                model=Invoice,
+                value="test-invoice",
+                strategies=("slug",),
+            )
+            assert result == invoice
+
+    def test_explicit_slug_field_overrides_model(self, product):
+        """Explicit slug_field takes precedence over model attribute."""
         result = resolve_object(
             model=Product,
             value="test-product",

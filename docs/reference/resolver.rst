@@ -35,10 +35,16 @@ Parameters
    Expected display ID prefix. Required for the ``display_id`` strategy.
 
 ``uuid_field``
-   Name of the UUID field on the model. Defaults to ``"id"``.
+   Name of the UUID field on the model. When ``None`` (the default),
+   auto-detected from the model's ``uuid_field`` attribute (set by
+   ``DisplayIDModel``), then the ``DISPLAY_IDS["UUID_FIELD"]`` setting,
+   then ``"id"``.
 
 ``slug_field``
-   Name of the slug field on the model. Defaults to ``"slug"``.
+   Name of the slug field on the model. When ``None`` (the default),
+   auto-detected from the model's ``slug_field`` attribute (set by
+   ``DisplayIDModel``), then the ``DISPLAY_IDS["SLUG_FIELD"]`` setting,
+   then ``"slug"``.
 
 ``queryset``
    Optional pre-filtered queryset. If not provided, uses ``model.objects.all()``.

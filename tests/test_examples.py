@@ -7,9 +7,7 @@ import pytest
 from django_display_ids.encoding import ENCODED_UUID_LENGTH, decode_display_id
 from django_display_ids.examples import (
     example_display_id,
-    example_display_id_for_prefix,
     example_uuid,
-    example_uuid_for_prefix,
 )
 
 from .models import Invoice, Order
@@ -111,15 +109,3 @@ class TestExampleDisplayId:
             assert display_id.startswith(f"{prefix}_")
             decoded_prefix, _ = decode_display_id(display_id)
             assert decoded_prefix == prefix
-
-
-class TestAliases:
-    """Tests for backwards-compatibility aliases."""
-
-    def test_example_uuid_for_prefix_is_alias(self):
-        """example_uuid_for_prefix is an alias for example_uuid."""
-        assert example_uuid_for_prefix("inv") == example_uuid("inv")
-
-    def test_example_display_id_for_prefix_is_alias(self):
-        """example_display_id_for_prefix is an alias for example_display_id."""
-        assert example_display_id_for_prefix("inv") == example_display_id("inv")

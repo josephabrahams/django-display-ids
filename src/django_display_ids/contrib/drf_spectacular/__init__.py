@@ -67,7 +67,7 @@ else:
         from drf_spectacular.openapi import AutoSchema
 
     from django_display_ids.encoding import ENCODED_UUID_LENGTH, encode_uuid
-    from django_display_ids.examples import example_uuid_for_prefix
+    from django_display_ids.examples import example_uuid as make_example_uuid
 
     class DisplayIDFieldExtension(OpenApiSerializerFieldExtension):  # type: ignore[no-untyped-call]
         """OpenAPI schema extension for DisplayIDField.
@@ -130,12 +130,12 @@ else:
 
             # Build schema
             if prefix:
-                example_uuid = example_uuid_for_prefix(prefix)
+                example_uuid = make_example_uuid(prefix)
                 example_encoded = encode_uuid(example_uuid)
                 example = f"{prefix}_{example_encoded}"
                 description = f"Human-readable identifier with '{prefix}_' prefix"
             else:
-                example_uuid = example_uuid_for_prefix("type")
+                example_uuid = make_example_uuid("type")
                 example_encoded = encode_uuid(example_uuid)
                 example = f"type_{example_encoded}"
                 description = "Human-readable identifier with type prefix"

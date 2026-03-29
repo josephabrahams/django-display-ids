@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0 — 2026-03-28
+
+- **`resolve_object()` auto-detects `uuid_field` and `slug_field`**: When either parameter is not explicitly passed, `resolve_object()` now checks the model's class attribute (set by `DisplayIDModel`), then the `DISPLAY_IDS` setting, then falls back to `"id"` / `"slug"`. This matches the resolution order already used by `DisplayIDAdminSearchMixin`, `DisplayIDMixin`, and `DisplayIDManager`. Callers no longer need to manually resolve and pass these for models that declare them.
+- **`DisplayIDAdminSearchMixin` respects `DISPLAY_IDS["UUID_FIELD"]` setting**: Previously fell back directly to `"id"`, skipping the global setting.
+- **Removed `_get_uuid_field()` and `_get_slug_field()` from view mixins**: Both `DisplayIDMixin` (Django) and `DisplayIDMixin` (DRF) no longer define these internal methods — field resolution is now handled by `resolve_object()`.
+- **Removed `get_uuid_field()` and `get_slug_field()` from `conf`**: These helpers are superseded by the auto-detection in `resolve_object()`.
+- **Removed `example_uuid_for_prefix` and `example_display_id_for_prefix` aliases**: Use `example_uuid` and `example_display_id` directly — they accept both prefix strings and model classes.
+
 ## 0.5.5 — 2026-03-28
 
 - **Security fix**: `DisplayIDAdminSearchMixin.get_search_results()` now filters against the incoming queryset instead of `self.model._default_manager`, preventing row leakage when used with tenant-scoped or otherwise filtered admin querysets.

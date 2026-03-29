@@ -45,9 +45,7 @@ from .encoding import (
 )
 from .examples import (
     example_display_id,
-    example_display_id_for_prefix,
     example_uuid,
-    example_uuid_for_prefix,
 )
 from .exceptions import (
     AmbiguousIdentifierError,
@@ -109,8 +107,6 @@ __all__ = [  # noqa: RUF022 - keep categorized order for readability
     # Examples (for OpenAPI)
     "example_display_id",
     "example_uuid",
-    "example_display_id_for_prefix",  # alias
-    "example_uuid_for_prefix",  # alias
     # Types
     "StrategyName",
     "DEFAULT_STRATEGIES",

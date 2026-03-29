@@ -24,8 +24,6 @@ __all__ = [
     "NOT_SET",
     "SLUG_REGEX",
     "get_setting",
-    "get_slug_field",
-    "get_uuid_field",
 ]
 
 # Sentinel for distinguishing "not set" from None
@@ -62,31 +60,3 @@ def get_setting(name: str) -> str | tuple[StrategyName, ...]:
     )
     result = user_settings.get(name, DEFAULTS[name])
     return result  # type: ignore[return-value]
-
-
-def get_uuid_field(override: str | None) -> str:
-    """Get the UUID field name, with optional override.
-
-    Args:
-        override: Explicit field name, or None to use settings default.
-
-    Returns:
-        The UUID field name.
-    """
-    if override is not None:
-        return override
-    return str(get_setting("UUID_FIELD"))
-
-
-def get_slug_field(override: str | None) -> str:
-    """Get the slug field name, with optional override.
-
-    Args:
-        override: Explicit field name, or None to use settings default.
-
-    Returns:
-        The slug field name.
-    """
-    if override is not None:
-        return override
-    return str(get_setting("SLUG_FIELD"))

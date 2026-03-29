@@ -36,8 +36,9 @@ display ID and UUID searches.
 Configuration
 -------------
 
-The mixin automatically detects the UUID field from your model's ``uuid_field``
-attribute (if using ``DisplayIDModel``), or defaults to ``id``.
+The mixin automatically detects the UUID field: first from your model's
+``uuid_field`` attribute (if using ``DisplayIDModel``), then from the
+``DISPLAY_IDS["UUID_FIELD"]`` setting, then ``"id"``.
 
 Override with:
 

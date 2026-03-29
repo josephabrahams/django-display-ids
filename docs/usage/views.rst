@@ -44,10 +44,14 @@ Configuration Attributes
    ``display_id_prefix`` if using ``DisplayIDModel``.
 
 ``uuid_field``
-   The UUID field name on the model. Defaults to ``"id"``.
+   The UUID field name on the model. When ``None`` (the default),
+   auto-detected by ``resolve_object`` from the model's ``uuid_field``
+   attribute, then the ``DISPLAY_IDS["UUID_FIELD"]`` setting, then ``"id"``.
 
 ``slug_field``
-   The slug field name for slug lookups. Defaults to ``"slug"``.
+   The slug field name for slug lookups. When ``None`` (the default),
+   auto-detected by ``resolve_object`` from the model's ``slug_field``
+   attribute, then the ``DISPLAY_IDS["SLUG_FIELD"]`` setting, then ``"slug"``.
 
 Inheriting Prefix from Model
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

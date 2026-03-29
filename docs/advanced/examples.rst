@@ -53,14 +53,6 @@ Generate a deterministic display ID from a prefix or model.
    display_id = example_display_id(Invoice)
    # -> same display ID
 
-Aliases
-~~~~~~~
-
-For backward compatibility, these aliases are also available:
-
-- ``example_uuid_for_prefix`` — alias for ``example_uuid``
-- ``example_display_id_for_prefix`` — alias for ``example_display_id``
-
 Usage with drf-spectacular
 --------------------------
 

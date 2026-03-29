@@ -74,7 +74,7 @@ def _resolve_prefix(model: type[models.Model], override: str | None) -> str | No
         prefix = getattr(model, "display_id_prefix", None)
     if prefix is not None and not PREFIX_PATTERN.match(prefix):
         raise ValueError(
-            f"display_id_prefix must be 1-16 lowercase letters, " f"got: {prefix!r}"
+            f"display_id_prefix must be 1-16 lowercase letters, got: {prefix!r}"
         )
     return prefix
 

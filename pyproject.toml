@@ -105,6 +105,7 @@ ignore = [
     "E501",   # line too long (handled by formatter)
     "ARG001", # unused function argument (common in Django)
     "ARG002", # unused method argument (common in Django)
+    "UP047",  # use PEP 695 type params (requires Python 3.12+, TypeVar is clearer)
 ]
 
 [tool.ruff.lint.isort]

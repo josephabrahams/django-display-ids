@@ -9,6 +9,9 @@ DisplayIDMixin
 For ViewSets
 ~~~~~~~~~~~~
 
+When your model extends ``DisplayIDModel``, the prefix is inherited
+automatically:
+
 .. code-block:: python
 
    from rest_framework.viewsets import ModelViewSet
@@ -18,7 +21,6 @@ For ViewSets
        queryset = Invoice.objects.all()
        serializer_class = InvoiceSerializer
        lookup_url_kwarg = "id"
-       display_id_prefix = "inv"
 
 For APIView
 ~~~~~~~~~~~
@@ -31,7 +33,6 @@ For APIView
 
    class InvoiceView(DisplayIDMixin, APIView):
        lookup_url_kwarg = "id"
-       display_id_prefix = "inv"
 
        def get_queryset(self):
            return Invoice.objects.all()

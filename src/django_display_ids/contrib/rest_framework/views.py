@@ -49,7 +49,9 @@ class DisplayIDMixin:
     Example:
         class InvoiceView(DisplayIDMixin, APIView):
             lookup_url_kwarg = "id"
-            display_id_prefix = "inv"
+
+            def get_queryset(self):
+                return Invoice.objects.all()  # prefix inherited from model
 
             def get(self, request, *args, **kwargs):
                 invoice = self.get_object()

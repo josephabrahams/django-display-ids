@@ -1,24 +1,32 @@
 Quick Start
 ===========
 
-This guide shows you how to add display ID support to your views.
-
-Django Views
-------------
-
-Add the mixin to any Django class-based view:
+Add the mixin to your model
+---------------------------
 
 .. code-block:: python
 
-   from django.views.generic import DetailView
-   from django_display_ids import DisplayIDMixin
+   # models.py
+   import uuid
+   from django.db import models
+   from django_display_ids import DisplayIDModel
 
-   class InvoiceDetailView(DisplayIDMixin, DetailView):
-       model = Invoice
-       lookup_param = "id"
+   class Invoice(DisplayIDModel, models.Model):
        display_id_prefix = "inv"
+       uuid_field = "uuid"
+       uuid = models.UUIDField(default=uuid.uuid7, unique=True)
+       slug = models.SlugField(unique=True)
 
-Configure your URL:
+This registers the prefix and adds a ``display_id`` property to your model
+instances.
+
+.. note::
+
+   ``uuid.uuid7`` requires Python 3.14+. For earlier versions, use
+   ``uuid.uuid4``.
+
+Update your URLconf
+-------------------
 
 .. code-block:: python
 
@@ -38,13 +46,20 @@ Configure your URL:
    validate the format at the routing layer, returning 404 for invalid formats.
    See :doc:`reference/converters` for all available converters.
 
-Django REST Framework
----------------------
-
-The DRF mixin works the same way:
+Add the mixin to your view
+---------------------------
 
 .. code-block:: python
 
+   # Django CBV
+   from django.views.generic import DetailView
+   from django_display_ids import DisplayIDMixin
+
+   class InvoiceDetailView(DisplayIDMixin, DetailView):
+       model = Invoice
+       lookup_param = "id"
+
+   # Django REST Framework
    from rest_framework.viewsets import ModelViewSet
    from django_display_ids.contrib.rest_framework import DisplayIDMixin
 
@@ -52,9 +67,8 @@ The DRF mixin works the same way:
        queryset = Invoice.objects.all()
        serializer_class = InvoiceSerializer
        lookup_url_kwarg = "id"
-       display_id_prefix = "inv"
 
-Now your views accept:
+Your views now accept:
 
 - ``inv_2aUyqjCzEIiEcYMKj7TZtw`` (display ID)
 - ``550e8400-e29b-41d4-a716-446655440000`` (UUID)
@@ -63,9 +77,11 @@ Now your views accept:
 What's Happening
 ----------------
 
-1. ``lookup_param`` / ``lookup_url_kwarg`` tells the mixin which URL parameter to read
-2. The default ``lookup_strategies`` accepts display IDs, UUIDs, and slugs (in that order)
-3. ``display_id_prefix`` validates that display IDs start with the expected prefix
+1. ``DisplayIDModel`` registers the prefix on the model
+2. The path converter validates the identifier format in the URL
+3. ``lookup_param`` / ``lookup_url_kwarg`` tells the view mixin which URL parameter to read
+4. The view mixin auto-detects ``display_id_prefix`` from the model
+5. The default ``lookup_strategies`` tries display IDs, UUIDs, and slugs (in that order)
 
 The mixin decodes the identifier and looks up the object by UUID (or slug).
 

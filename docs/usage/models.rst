@@ -16,10 +16,16 @@ Add a ``display_id`` property to your models:
 
    class Invoice(DisplayIDModel, models.Model):
        display_id_prefix = "inv"
-       id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+       uuid_field = "uuid"
+       uuid = models.UUIDField(default=uuid.uuid7, unique=True)
 
    invoice = Invoice.objects.first()
    invoice.display_id  # -> "inv_2aUyqjCzEIiEcYMKj7TZtw"
+
+.. note::
+
+   ``uuid.uuid7`` requires Python 3.14+. For earlier versions, use
+   ``uuid.uuid4``.
 
 Configuration Attributes
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -56,8 +62,9 @@ Add convenient lookup methods to your model:
 
    class Invoice(DisplayIDModel, models.Model):
        display_id_prefix = "inv"
+       uuid_field = "uuid"
        objects = DisplayIDManager()
-       id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+       uuid = models.UUIDField(default=uuid.uuid7, unique=True)
 
 get_by_display_id
 ~~~~~~~~~~~~~~~~~

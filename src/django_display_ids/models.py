@@ -59,20 +59,20 @@ class DisplayIDModel(models.Model):
     Example:
         class Invoice(DisplayIDModel):
             display_id_prefix = "inv"
+            uuid_field = "uuid"
 
-            id = models.UUIDField(primary_key=True, default=uuid.uuid4)
-            # ...
+            uuid = models.UUIDField(default=uuid.uuid7, unique=True)
 
         invoice = Invoice.objects.first()
         invoice.display_id  # -> "inv_2aUyqjCzEIiEcYMKj7TZtw"
 
-    Example with custom field names:
+    Example with custom slug field:
         class Product(DisplayIDModel):
             display_id_prefix = "prod"
-            uuid_field = "uid"
+            uuid_field = "uuid"
             slug_field = "handle"
 
-            uid = models.UUIDField(default=uuid.uuid4, unique=True)
+            uuid = models.UUIDField(default=uuid.uuid7, unique=True)
             handle = models.SlugField(unique=True)
             # ...
     """

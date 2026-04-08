@@ -17,6 +17,7 @@ UUIDv7 (native in Python 3.14+) offers excellent database performance with time-
 Display IDs like `inv_2aUyqjCzEIiEcYMKj7TZtw` are more useful: the prefix identifies the object type at a glance, and they're compact and URL-safe. But storing display IDs in the database is far less efficient than native UUIDs.
 
 Different consumers have different needs:
+
 - **Humans** prefer slugs (`my-invoice`) or display IDs (`inv_xxx`)
 - **APIs and integrations** work well with UUIDs
 
@@ -39,21 +40,51 @@ INSTALLED_APPS = [
 
 ## Quick Start
 
-**Django views:**
+**Add the mixin to your model:**
 
 ```python
+# models.py
+
+import uuid
+from django.db import models
+from django_display_ids import DisplayIDModel
+
+class Invoice(DisplayIDModel, models.Model):
+    display_id_prefix = "inv"
+    uuid_field = "uuid"
+    uuid = models.UUIDField(default=uuid.uuid7, unique=True)
+    slug = models.SlugField(unique=True)
+```
+
+**Update your URLconf:**
+
+```python
+# urls.py
+
+from django.urls import path, register_converter
+from django_display_ids import DisplayIDOrUUIDOrSlugConverter
+
+register_converter(DisplayIDOrUUIDOrSlugConverter, "identifier")
+
+urlpatterns = [
+    path("invoices/<identifier:id>/", InvoiceDetailView.as_view()),
+]
+```
+
+**Add the mixin to your view:**
+
+```python
+# views.py
+
+# Django CBV
 from django.views.generic import DetailView
 from django_display_ids import DisplayIDMixin
 
 class InvoiceDetailView(DisplayIDMixin, DetailView):
     model = Invoice
     lookup_param = "id"
-    display_id_prefix = "inv"
-```
 
-**Django REST Framework:**
-
-```python
+# Django REST Framework
 from rest_framework.viewsets import ModelViewSet
 from django_display_ids.contrib.rest_framework import DisplayIDMixin
 
@@ -61,15 +92,15 @@ class InvoiceViewSet(DisplayIDMixin, ModelViewSet):
     queryset = Invoice.objects.all()
     serializer_class = InvoiceSerializer
     lookup_url_kwarg = "id"
-    display_id_prefix = "inv"
 ```
 
-Now your views accept:
+Your views now accept:
+
 - `inv_2aUyqjCzEIiEcYMKj7TZtw` (display ID)
 - `550e8400-e29b-41d4-a716-446655440000` (UUID)
-- `my-invoice-slug` (slug)
+- `my-invoice` (slug)
 
-**Templates:**
+**Update your templates:**
 
 ```django
 {% load display_ids %}

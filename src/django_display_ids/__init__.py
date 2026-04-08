@@ -16,11 +16,10 @@ Example:
     display_id = encode_display_id("inv", invoice.id)
     # -> "inv_2aUyqjCzEIiEcYMKj7TZtw"
 
-    # Use in Django views
+    # Use in Django views — prefix is inherited from the model
     class InvoiceDetailView(DisplayIDMixin, DetailView):
         model = Invoice
         lookup_param = "id"
-        display_id_prefix = "inv"
 """
 
 from importlib.metadata import version

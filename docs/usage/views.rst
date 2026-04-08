@@ -6,7 +6,8 @@ Integrate display ID lookups with Django's class-based views.
 DisplayIDMixin
 --------------
 
-Add to any view that uses ``get_object()``:
+Add to any view that uses ``get_object()``. When your model extends
+``DisplayIDModel``, the prefix is inherited automatically:
 
 .. code-block:: python
 
@@ -14,20 +15,17 @@ Add to any view that uses ``get_object()``:
    from django_display_ids import DisplayIDMixin
 
    class InvoiceDetailView(DisplayIDMixin, DetailView):
-       model = Invoice
+       model = Invoice  # prefix inherited from Invoice.display_id_prefix
        lookup_param = "id"
-       display_id_prefix = "inv"
 
    # Works with any view that uses get_object()
    class InvoiceUpdateView(DisplayIDMixin, UpdateView):
        model = Invoice
        lookup_param = "id"
-       display_id_prefix = "inv"
 
    class InvoiceDeleteView(DisplayIDMixin, DeleteView):
        model = Invoice
        lookup_param = "id"
-       display_id_prefix = "inv"
 
 Configuration Attributes
 ------------------------
@@ -54,22 +52,17 @@ Configuration Attributes
    auto-detected by ``resolve_object`` from the model's ``slug_field``
    attribute, then the ``DISPLAY_IDS["SLUG_FIELD"]`` setting, then ``"slug"``.
 
-Inheriting Prefix from Model
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Overriding the Prefix
+~~~~~~~~~~~~~~~~~~~~~
 
-If your model uses ``DisplayIDModel``, you can omit ``display_id_prefix``
-on the view:
+You can override the model's prefix on a specific view if needed:
 
 .. code-block:: python
-
-   class Invoice(DisplayIDModel, models.Model):
-       display_id_prefix = "inv"
-       # ...
 
    class InvoiceDetailView(DisplayIDMixin, DetailView):
        model = Invoice
        lookup_param = "id"
-       # display_id_prefix inherited from Invoice
+       display_id_prefix = "custom"  # overrides Invoice.display_id_prefix
 
 URL Configuration
 -----------------

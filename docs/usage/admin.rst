@@ -45,7 +45,7 @@ Override with:
 .. code-block:: python
 
    class InvoiceAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
-       uuid_field = "uid"  # custom UUID field name
+       uuid_field = "uuid"  # custom UUID field name
 
 Searching Related UUID Fields
 -----------------------------

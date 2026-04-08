@@ -35,9 +35,8 @@ class DisplayIDMixin:
 
     Example:
         class InvoiceDetailView(DisplayIDMixin, DetailView):
-            model = Invoice
+            model = Invoice  # prefix inherited from model
             lookup_param = "id"
-            display_id_prefix = "inv"
     """
 
     model: type[models.Model] | None = None

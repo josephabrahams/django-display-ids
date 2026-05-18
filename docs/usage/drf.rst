@@ -98,6 +98,54 @@ explicitly:
 The prefix must be 1-16 lowercase letters. Invalid prefixes raise ``ValueError``
 at initialization.
 
+When to use ``prefix_from``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Sometimes the row being serialized is a *projection* of another model — for
+example a database-view-backed report row that mirrors ``Invoice`` data but is
+not an ``Invoice`` instance and carries no ``display_id_prefix`` of its own. In
+that case, point the field at the source model rather than hardcoding its
+prefix string:
+
+.. code-block:: python
+
+   class InvoiceReportSerializer(serializers.ModelSerializer):
+       # InvoiceReport is a view-backed projection of Invoice.
+       display_id = DisplayIDField(prefix_from=Invoice)
+
+       class Meta:
+           model = InvoiceReport
+           fields = ("display_id", "total", "issued_on")
+
+``prefix_from=Invoice`` reads ``Invoice.display_id_prefix`` dynamically — it is
+equivalent to ``prefix="inv"`` but stays in sync if the model's prefix changes.
+``prefix`` and ``prefix_from`` are mutually exclusive. If ``prefix_from`` points
+at a class with no ``display_id_prefix``, a ``ValueError`` is raised at
+initialization (app startup), not on the first request.
+
+Tolerating a missing prefix
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+By default the field raises ``ValueError`` when no prefix can be resolved for an
+instance. When a single serializer handles heterogeneous rows — only some of
+which carry a prefix — pass ``required=False`` to return ``None`` instead:
+
+.. code-block:: python
+
+   display_id = DisplayIDField(required=False)
+
+Resolution precedence
+~~~~~~~~~~~~~~~~~~~~~~
+
+The field resolves the prefix from (in order):
+
+1. Field's ``prefix=`` argument
+2. Field's ``prefix_from=`` model class
+3. The serialized instance's ``display_id_prefix`` attribute
+
+If none resolve, the field raises ``ValueError`` unless ``required=False`` was
+passed, in which case it returns ``None``.
+
 OpenAPI / drf-spectacular
 -------------------------
 
@@ -106,7 +154,7 @@ proper schema with prefix-specific examples. No configuration needed.
 
 The extension resolves the prefix from (in order):
 
-1. Field's ``prefix=`` argument
+1. Field's ``prefix=`` or ``prefix_from=`` argument
 2. Serializer's ``Meta.model.display_id_prefix``
 3. View's queryset model
 

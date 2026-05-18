@@ -428,6 +428,105 @@ class TestDisplayIDField:
         assert serializer.fields["display_id"].read_only is True
 
 
+# =============================================================================
+# DisplayIDField prefix_from= Tests
+# =============================================================================
+
+
+class AppCatalogReport:
+    """Stand-in for a database-view-backed projection of Product.
+
+    It mirrors Product's uid but is not a Product instance and carries no
+    display_id_prefix of its own.
+    """
+
+    uuid_field = "uid"
+
+    def __init__(self, uid):
+        self.uid = uid
+        self.name = "Report Row"
+
+
+class ProjectionSerializer(serializers.Serializer):
+    """Serializer for a projection that derives its prefix from Product."""
+
+    display_id = DisplayIDField(prefix_from=Product)
+    name = serializers.CharField()
+
+
+@pytest.mark.django_db
+class TestDisplayIDFieldPrefixFrom:
+    """Tests for the prefix_from= kwarg on DisplayIDField."""
+
+    def test_resolves_prefix_from_referenced_model(self, product):
+        report = AppCatalogReport(uid=product.uid)
+        serializer = ProjectionSerializer(report)
+        data = serializer.data
+
+        # Prefix is read from Product, whose display_id_prefix is "prod".
+        assert data["display_id"].startswith("prod_")
+
+    def test_computes_encoded_id_against_uuid_field(self, product):
+        from django_display_ids.encoding import decode_display_id
+
+        report = AppCatalogReport(uid=product.uid)
+        serializer = ProjectionSerializer(report)
+        data = serializer.data
+
+        prefix, decoded_uuid = decode_display_id(data["display_id"])
+        assert prefix == "prod"
+        assert decoded_uuid == product.uid
+
+    def test_prefix_and_prefix_from_together_raises(self):
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            DisplayIDField(prefix="item", prefix_from=Product)
+
+    def test_prefix_from_without_display_id_prefix_raises_at_init(self):
+        with pytest.raises(ValueError, match="has no display_id_prefix"):
+            DisplayIDField(prefix_from=Order)
+
+    def test_prefix_from_wins_over_instance_prefix(self, invoice):
+        # invoice is a real Invoice with display_id_prefix == "inv", but the
+        # field points at Product ("prod") — prefix_from must win.
+        from django_display_ids.encoding import decode_display_id
+
+        serializer = ProjectionSerializer(invoice)
+        data = serializer.data
+
+        prefix, decoded_uuid = decode_display_id(data["display_id"])
+        assert prefix == "prod"
+        assert decoded_uuid == invoice.id
+
+
+# =============================================================================
+# DisplayIDField required=False Tests
+# =============================================================================
+
+
+class OptionalOrderSerializer(serializers.Serializer):
+    """Serializer for a model without a prefix, tolerating the missing prefix."""
+
+    display_id = DisplayIDField(required=False)
+    name = serializers.CharField()
+
+
+@pytest.mark.django_db
+class TestDisplayIDFieldRequiredFalse:
+    """Tests for the required=False kwarg on DisplayIDField."""
+
+    def test_returns_none_when_no_prefix(self, order):
+        serializer = OptionalOrderSerializer(order)
+        assert serializer.data["display_id"] is None
+
+    def test_still_resolves_prefix_when_available(self, invoice):
+        class OptionalInvoiceSerializer(serializers.Serializer):
+            display_id = DisplayIDField(required=False)
+            name = serializers.CharField()
+
+        serializer = OptionalInvoiceSerializer(invoice)
+        assert serializer.data["display_id"] == invoice.display_id
+
+
 class InvoiceModelSerializer(serializers.ModelSerializer):
     """Test ModelSerializer with DisplayIDField - has Meta.model for schema generation."""
 

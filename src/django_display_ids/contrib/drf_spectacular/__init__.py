@@ -106,8 +106,8 @@ else:
             self, auto_schema: AutoSchema, direction: str
         ) -> dict[str, Any]:
             """Generate OpenAPI schema for DisplayIDField."""
-            # Get prefix from field override or try to get from model
-            prefix = self.target._prefix_override
+            # Get prefix from field override / prefix_from, or try the model
+            prefix = self.target._computed_prefix
 
             if prefix is None:
                 parent = self.target.parent

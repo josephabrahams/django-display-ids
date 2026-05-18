@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0 — 2026-05-18
+
+- **`DisplayIDField` gains a `prefix_from=` kwarg**: Derives the prefix from a referenced model class (`DisplayIDField(prefix_from=App)`) instead of restating the string. Use it when the serialized row is a projection of another model (e.g. a database-view-backed report row) that mirrors that model's data but carries no `display_id_prefix` of its own. `prefix` and `prefix_from` are mutually exclusive, and `prefix_from` is validated at initialization — pointing it at a class with no `display_id_prefix` raises `ValueError` at app startup, not on the first request.
+- **`DisplayIDField` honors `required=False`**: When no prefix can be resolved for an instance, the field returns `None` instead of raising. Use this for serializers that handle heterogeneous rows, only some of which carry a prefix. The default remains `required=True` (raise) so misconfiguration still fails loudly.
+
 ## 0.6.2 — 2026-03-29
 
 - **`parse_identifier()` accepts display IDs without a prefix**: `expected_prefix=None` now means "accept any valid prefix" instead of "skip display_id strategy." This makes `parse_identifier` usable standalone without requiring a prefix. `resolve_object()` still skips display_id for models without a prefix — that policy moved from the parser to the resolver.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1 — 2026-07-30
+
+- **`DisplayIDAdminSearchMixin` strips surrounding whitespace**: `_parse_identifier()` now strips leading and trailing whitespace before parsing, so a display ID pasted from a terminal, email, or log line still matches. Previously a padded display ID failed to decode and the admin search silently returned no results; raw UUIDs were unaffected because `uuid.UUID()` already tolerates whitespace. Interior whitespace is untouched, so Django's multi-word `search_fields` behavior is unchanged.
+
 ## 0.7.0 — 2026-05-18
 
 - **`DisplayIDField` gains a `prefix_from=` kwarg**: Derives the prefix from a referenced model class (`DisplayIDField(prefix_from=App)`) instead of restating the string. Use it when the serialized row is a projection of another model (e.g. a database-view-backed report row) that mirrors that model's data but carries no `display_id_prefix` of its own. `prefix` and `prefix_from` are mutually exclusive, and `prefix_from` is validated at initialization — pointing it at a class with no `display_id_prefix` raises `ValueError` at app startup, not on the first request.

@@ -52,9 +52,10 @@ class DisplayIDAdminSearchMixin:
     def _parse_identifier(search_term: str) -> uuid.UUID | None:
         """Parse a search term as a display ID or raw UUID.
 
-        Tries to decode as a display ID first (if it contains an underscore),
-        then falls back to raw UUID parsing. Returns ``None`` if the search
-        term is neither.
+        Leading and trailing whitespace is stripped, so identifiers pasted
+        from a terminal or email still match. Tries to decode as a display ID
+        first (if it contains an underscore), then falls back to raw UUID
+        parsing. Returns ``None`` if the search term is neither.
 
         Subclasses can use this to search additional UUID fields::
 
@@ -69,6 +70,7 @@ class DisplayIDAdminSearchMixin:
                     )
                 return queryset, use_distinct
         """
+        search_term = search_term.strip()
         uuid_val = None
 
         # Try to decode as display_id if it contains an underscore

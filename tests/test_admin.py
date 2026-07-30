@@ -67,6 +67,34 @@ class TestDisplayIDAdminSearchMixin:
         assert invoice in result_qs
         assert result_qs.count() == 1
 
+    def test_search_by_display_id_with_whitespace(self, invoice_admin, request_factory):
+        """Should find invoice when the pasted display ID has stray whitespace."""
+        invoice = Invoice.objects.create(name="Test Invoice")
+        padded = f"  {encode_display_id('inv', invoice.id)}\n"
+
+        request = request_factory.get("/admin/tests/invoice/", {"q": padded})
+        queryset = Invoice.objects.all()
+
+        result_qs, _ = invoice_admin.get_search_results(request, queryset, padded)
+
+        assert invoice in result_qs
+        assert result_qs.count() == 1
+
+    def test_search_by_multi_word_name(self, invoice_admin, request_factory):
+        """Interior whitespace must still split into per-word text search."""
+        invoice = Invoice.objects.create(name="Unique Name Here")
+        Invoice.objects.create(name="Unique Other")
+
+        request = request_factory.get("/admin/tests/invoice/", {"q": "Unique Here"})
+        queryset = Invoice.objects.all()
+
+        result_qs, _ = invoice_admin.get_search_results(
+            request, queryset, "Unique Here"
+        )
+
+        assert invoice in result_qs
+        assert result_qs.count() == 1
+
     def test_search_by_name(self, invoice_admin, request_factory):
         """Should still support regular search fields."""
         invoice = Invoice.objects.create(name="Unique Name Here")
@@ -242,3 +270,24 @@ class TestParseIdentifier:
     def test_parse_empty_string(self):
         """Should return None for empty string."""
         assert DisplayIDAdminSearchMixin._parse_identifier("") is None
+
+    def test_parse_display_id_with_surrounding_whitespace(self):
+        """Should strip whitespace around a pasted display ID."""
+        uid = uuid.uuid4()
+        display_id = encode_display_id("inv", uid)
+        assert DisplayIDAdminSearchMixin._parse_identifier(f"  {display_id}\n") == uid
+
+    def test_parse_raw_uuid_with_surrounding_whitespace(self):
+        """Should strip whitespace around a pasted raw UUID."""
+        uid = uuid.uuid4()
+        assert DisplayIDAdminSearchMixin._parse_identifier(f"  {uid}\n") == uid
+
+    def test_parse_whitespace_only(self):
+        """Should return None for a whitespace-only search term."""
+        assert DisplayIDAdminSearchMixin._parse_identifier("   ") is None
+
+    def test_parse_display_id_with_interior_whitespace(self):
+        """Should not match a display ID broken up by interior whitespace."""
+        uid = uuid.uuid4()
+        display_id = encode_display_id("inv", uid)
+        assert DisplayIDAdminSearchMixin._parse_identifier(f"inv_ {display_id}") is None

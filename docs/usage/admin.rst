@@ -30,6 +30,11 @@ The mixin intercepts search queries and checks if they look like a display ID
 parses the UUID and does an exact match against the UUID field. Otherwise, it
 falls back to the standard ``search_fields`` behavior.
 
+Leading and trailing whitespace is stripped before parsing, so an identifier
+pasted from a terminal, an email, or a log line still matches. Whitespace
+*inside* the search term is left alone, so Django's usual multi-word
+``search_fields`` behavior is unaffected.
+
 This means your existing text-based searches continue to work alongside
 display ID and UUID searches.
 
@@ -75,9 +80,9 @@ belonging to a user), override ``get_search_results`` and use the
 Now searching by ``user_2aUyqjCzEIi...`` or a raw UUID will also match
 sessions belonging to that user.
 
-``_parse_identifier`` is a static method that tries to decode a display ID
-first, then falls back to raw UUID parsing. It returns ``None`` for
-unparseable input and never raises exceptions.
+``_parse_identifier`` is a static method that strips surrounding whitespace,
+tries to decode a display ID first, then falls back to raw UUID parsing. It
+returns ``None`` for unparseable input and never raises exceptions.
 
 Displaying Display IDs
 ----------------------

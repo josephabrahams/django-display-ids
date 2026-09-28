@@ -27,7 +27,8 @@ django-display-ids provides several integration points:
 
 **Django REST Framework**
    Use :class:`DisplayIDMixin` (from ``contrib.rest_framework``) for ViewSets and APIViews.
-   Use :class:`DisplayIDField` in serializers to include display IDs in responses.
+   Use :class:`DisplayIDField` in serializers to include display IDs in responses,
+   and :class:`DisplayIDRelatedField` to accept them for related objects.
 
 **Django Admin**
    Add :class:`DisplayIDAdminSearchMixin` to search by display ID, UUID, or slug.

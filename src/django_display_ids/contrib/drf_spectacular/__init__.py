@@ -75,8 +75,27 @@ else:
     if TYPE_CHECKING:
         from drf_spectacular.openapi import AutoSchema
 
-    from django_display_ids.encoding import DISPLAY_ID_REGEX
+    from drf_spectacular.plumbing import follow_field_source
+    from rest_framework.serializers import ManyRelatedField
+
+    from django_display_ids.encoding import DISPLAY_ID_REGEX, ENCODED_UUID_REGEX
     from django_display_ids.examples import example_display_id
+
+    def _display_id_schema(prefix: str | None, description: str) -> dict[str, Any]:
+        """String schema for a display ID with *prefix*, or any prefix if None."""
+        if prefix is None:
+            return {
+                "type": "string",
+                "description": description,
+                "example": example_display_id("type"),
+                "pattern": f"^{DISPLAY_ID_REGEX}$",
+            }
+        return {
+            "type": "string",
+            "description": description,
+            "example": example_display_id(prefix),
+            "pattern": f"^{prefix}_{ENCODED_UUID_REGEX}$",
+        }
 
     class DisplayIDFieldExtension(OpenApiSerializerFieldExtension):  # type: ignore[no-untyped-call]
         """OpenAPI schema extension for DisplayIDField.
@@ -132,18 +151,70 @@ else:
                 if model is not None:
                     prefix = getattr(model, "display_id_prefix", None)
 
-            # Build schema
             if prefix:
-                example = example_display_id(prefix)
                 description = f"Human-readable identifier with '{prefix}_' prefix"
             else:
-                example = example_display_id("type")
                 description = "Human-readable identifier with type prefix"
+            return {**_display_id_schema(prefix or None, description), "readOnly": True}
 
-            return {
-                "type": "string",
-                "description": description,
-                "example": example,
-                "pattern": f"^{DISPLAY_ID_REGEX}$",
-                "readOnly": True,
-            }
+    class DisplayIDRelatedFieldExtension(OpenApiSerializerFieldExtension):  # type: ignore[no-untyped-call]
+        """OpenAPI schema extension for DisplayIDRelatedField.
+
+        Responses show a display ID. Requests list the identifier formats the
+        field accepts, which depend on its lookup strategies. ``many=True``
+        fields become arrays of this schema through drf-spectacular's own
+        handling of ``ManyRelatedField``.
+        """
+
+        target_class = (
+            "django_display_ids.contrib.rest_framework.serializers."
+            "DisplayIDRelatedField"
+        )
+        match_subclasses = True
+
+        def _related_model(self) -> Any:
+            field = self.target
+            if field.queryset is not None:
+                return field.queryset.model
+            # Read-only fields have no queryset. Find the model from the
+            # serializer the same way drf-spectacular does for its own related
+            # fields, including many=True and dotted sources.
+            parent, source = field.parent, field.source
+            if isinstance(parent, ManyRelatedField):
+                parent, source = parent.parent, parent.source
+            model = getattr(getattr(parent, "Meta", None), "model", None)
+            if model is None:
+                return None
+            # For a relation this returns the target model's primary key field
+            target = follow_field_source(  # type: ignore[no-untyped-call]
+                model, source.split("."), emit_warnings=False
+            )
+            return getattr(target, "model", None)
+
+        def map_serializer_field(
+            self, auto_schema: AutoSchema, direction: str
+        ) -> dict[str, Any]:
+            """Generate OpenAPI schema for DisplayIDRelatedField."""
+            model = self._related_model()
+            if model is None:
+                return {"type": "string", "example": example_display_id("type")}
+
+            lookup = self.target._lookup_for(model)
+            prefix = lookup.require_prefix()
+            if direction == "response":
+                return _display_id_schema(
+                    prefix, f"Display ID of the related {model.__name__}"
+                )
+            schema = _display_id_schema(
+                prefix,
+                id_param_description(
+                    prefix,
+                    with_uuid="uuid" in lookup.strategies,
+                    with_slug="slug" in lookup.strategies,
+                ),
+            )
+            # Keep the pattern only when display IDs are the only accepted form;
+            # otherwise it would reject valid UUIDs and slugs.
+            if lookup.strategies != ("display_id",):
+                del schema["pattern"]
+            return schema

@@ -64,3 +64,18 @@ class Tag(DisplayIDModel, models.Model):
 
     class Meta:
         app_label = "tests"
+
+
+class LineItem(models.Model):
+    """Test model with relations to display ID models.
+
+    invoice points at a model whose UUID is the primary key; products at one
+    whose UUID is a separate field.
+    """
+
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, null=True)
+    products = models.ManyToManyField(Product, blank=True)
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        app_label = "tests"

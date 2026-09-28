@@ -9,7 +9,7 @@ from django.core.exceptions import FieldDoesNotExist, ImproperlyConfigured
 from django.db import models
 
 from .conf import get_setting
-from .encoding import PREFIX_PATTERN
+from .encoding import PREFIX_PATTERN, encode_display_id
 from .exceptions import (
     AmbiguousIdentifierError,
     MissingPrefixError,
@@ -93,6 +93,7 @@ class _Lookup:
     reject the same identifiers.
     """
 
+    model_name: str
     prefix: str | None
     uuid_field: str
     slug_field: str
@@ -144,7 +145,11 @@ class _Lookup:
                 f"Cannot lookup by slug: {model.__name__} has no {slug_field!r} field"
             )
         return cls(
-            prefix, _resolve_uuid_field(model, uuid_field), slug_field, strategies
+            model.__name__,
+            prefix,
+            _resolve_uuid_field(model, uuid_field),
+            slug_field,
+            strategies,
         )
 
     def build(self, value: str | uuid.UUID) -> dict[str, Any]:
@@ -161,6 +166,24 @@ class _Lookup:
         if result.strategy == "slug":
             return {self.slug_field: result.slug}
         return {self.uuid_field: result.uuid}
+
+    def require_prefix(self) -> str:
+        """Return the prefix, or raise if the model can't have display IDs.
+
+        Raises:
+            MissingPrefixError: If there is no prefix.
+        """
+        if self.prefix is None:
+            raise MissingPrefixError(model_name=self.model_name)
+        return self.prefix
+
+    def encode(self, uuid_value: uuid.UUID | str) -> str:
+        """Turn a UUID into this model's display ID, the reverse of ``build()``.
+
+        Raises:
+            MissingPrefixError: If there is no prefix.
+        """
+        return encode_display_id(self.require_prefix(), uuid_value)
 
 
 class _LookupOptions:

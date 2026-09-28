@@ -2,21 +2,28 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import TYPE_CHECKING, Any
 
+from django.core.exceptions import ObjectDoesNotExist
+from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
+from rest_framework.relations import PKOnlyObject
 
 from django_display_ids.conf import get_setting
 from django_display_ids.encoding import PREFIX_PATTERN, encode_display_id
+from django_display_ids.exceptions import DisplayIDLookupError
+from django_display_ids.resolver import _Lookup, _LookupOptions
 
 if TYPE_CHECKING:
     from django.db import models
 
+    from django_display_ids.typing import StrategyName
+
 __all__ = [
     "DisplayIDField",
+    "DisplayIDRelatedField",
 ]
-
-_MISSING = object()
 
 
 class DisplayIDField(serializers.SerializerMethodField):
@@ -182,3 +189,88 @@ class DisplayIDField(serializers.SerializerMethodField):
             f"Cannot generate display_id: {obj.__class__.__name__} "
             f"has no display_id property."
         )
+
+
+class DisplayIDRelatedField(_LookupOptions, serializers.RelatedField):  # type: ignore[type-arg]
+    """Writable related field that uses display IDs.
+
+    Responses show the related object's display ID. Requests accept a display
+    ID, a UUID, or a slug, parsed with the same rules as the view mixins, so
+    a client can send back exactly what it read.
+
+    Example:
+        class OrderSerializer(serializers.ModelSerializer):
+            customer = DisplayIDRelatedField(queryset=Customer.objects.all())
+            tags = DisplayIDRelatedField(queryset=Tag.objects.all(), many=True)
+
+        # Output: {"customer": "cust_2aUyqjCzEIiEcYMKj7TZtw", "tags": [...]}
+        # Input accepts "cust_2aUy...", "550e8400-...", or a slug
+
+    The related model needs a ``display_id_prefix``, or pass
+    ``display_id_prefix=``. The other options work like the view mixins':
+    ``lookup_strategies``, ``uuid_field`` and ``slug_field`` default to the
+    related model's attributes, then the ``DISPLAY_IDS`` settings.
+    """
+
+    default_error_messages = {  # noqa: RUF012 - same as DRF's own fields
+        "does_not_exist": _('Object with identifier "{value}" does not exist.'),
+        "incorrect_type": _(
+            "Incorrect type. Expected an identifier string, received {data_type}."
+        ),
+    }
+
+    def __init__(
+        self,
+        *,
+        lookup_strategies: tuple[StrategyName, ...] | None = None,
+        display_id_prefix: str | None = None,
+        uuid_field: str | None = None,
+        slug_field: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        self.lookup_strategies = lookup_strategies
+        self.display_id_prefix = display_id_prefix
+        self.uuid_field = uuid_field
+        self.slug_field = slug_field
+        super().__init__(**kwargs)
+        # Resolved once per model. DRF re-runs __init__ when it copies fields
+        # for each serializer instance, so this never outlives a settings change.
+        self._lookups: dict[type[models.Model], _Lookup] = {}
+        # Fail at startup, not on the first request, when the related model
+        # can't have display IDs.
+        if self.queryset is not None:
+            self._lookup_for(self.queryset.model).require_prefix()
+
+    def _lookup_for(self, model: type[models.Model]) -> _Lookup:
+        if model not in self._lookups:
+            self._lookups[model] = self._get_lookup(model)
+        return self._lookups[model]
+
+    def use_pk_only_optimization(self) -> bool:
+        # Like PrimaryKeyRelatedField: when the UUID field is the primary key,
+        # the display ID can be built from the foreign key column alone, so
+        # serializing doesn't load each related object.
+        if self.queryset is None:
+            return False
+        model = self.queryset.model
+        return model._meta.pk.name == self._lookup_for(model).uuid_field  # type: ignore[no-any-return]
+
+    def to_internal_value(self, data: Any) -> Any:
+        queryset = self.get_queryset()
+        # Outside the try: a misconfigured lookup is an error, not bad input
+        lookup = self._lookup_for(queryset.model)
+        if not isinstance(data, str | uuid.UUID):
+            self.fail("incorrect_type", data_type=type(data).__name__)
+        try:
+            return queryset.get(**lookup.build(data))
+        except (DisplayIDLookupError, ObjectDoesNotExist):
+            # Unparseable input and wrong prefixes read as "not found",
+            # the same as the view mixins
+            self.fail("does_not_exist", value=data)
+
+    def to_representation(self, value: Any) -> str:
+        if isinstance(value, PKOnlyObject):
+            # Only used when there's a queryset; see use_pk_only_optimization
+            return self._lookup_for(self.queryset.model).encode(value.pk)  # type: ignore[union-attr]
+        lookup = self._lookup_for(type(value))
+        return lookup.encode(getattr(value, lookup.uuid_field))

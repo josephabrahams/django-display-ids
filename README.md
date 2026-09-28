@@ -112,7 +112,7 @@ Your views now accept:
 ## Features
 
 - **Multiple identifier formats**: display ID (`prefix_base62uuid`), UUID (any version), slug
-- **Framework support**: Django CBVs and Django REST Framework
+- **Framework support**: Django CBVs and Django REST Framework, including a related field that accepts display IDs in requests
 - **Template filter**: Encode UUIDs as display IDs in templates
 - **Zero model changes required**: Works with any existing UUID field
 - **OpenAPI integration**: Automatic schema generation with drf-spectacular

@@ -150,6 +150,45 @@ The field resolves the prefix from (in order):
 If none resolve, the field raises ``ValueError`` unless ``required=False`` was
 passed, in which case it returns ``None``.
 
+DisplayIDRelatedField
+---------------------
+
+``DisplayIDField`` only outputs a display ID. To accept one back, for example
+to set a foreign key, use ``DisplayIDRelatedField``. It works like DRF's
+``PrimaryKeyRelatedField``, but speaks display IDs:
+
+.. code-block:: python
+
+   from django_display_ids.contrib.rest_framework import DisplayIDRelatedField
+
+   class OrderSerializer(serializers.ModelSerializer):
+       customer = DisplayIDRelatedField(queryset=Customer.objects.all())
+       tags = DisplayIDRelatedField(queryset=Tag.objects.all(), many=True)
+
+       class Meta:
+           model = Order
+           fields = ("customer", "tags")
+
+   # Output: {"customer": "cust_2aUyqjCzEIiEcYMKj7TZtw", "tags": ["tag_..."]}
+
+Responses show the related object's display ID. Requests accept a display ID,
+a UUID, or a slug, parsed with the same rules as the view mixins, so a client
+can send back exactly what it read. An identifier that doesn't match, can't be
+parsed, or has another model's prefix fails validation with
+``does_not_exist``.
+
+The related model needs a ``display_id_prefix``. Otherwise the field raises
+``MissingPrefixError`` when the serializer is defined, unless you pass
+``display_id_prefix=``. The field also takes ``lookup_strategies``,
+``uuid_field`` and ``slug_field``, with the same defaults as the view mixins.
+
+When the related model's UUID is its primary key, the display ID is built from
+the foreign key column, so serializing a list doesn't query each related
+object. ``PrimaryKeyRelatedField`` does the same. When the UUID is a separate
+field, each related object is loaded, as with ``SlugRelatedField``, so use
+``select_related()`` (or ``prefetch_related()`` for ``many=True``) in the
+view's queryset.
+
 OpenAPI / drf-spectacular
 -------------------------
 
@@ -161,6 +200,14 @@ The extension resolves the prefix from (in order):
 1. Field's ``prefix=`` or ``prefix_from=`` argument
 2. Serializer's ``Meta.model.display_id_prefix``
 3. View's queryset model
+
+``DisplayIDRelatedField`` gets a schema too. In responses it's a display ID
+with the related model's prefix. In requests the description lists the
+formats the field accepts, such as "Identifier: display_id (cust_xxx), UUID,
+or slug". If the field only accepts display IDs
+(``lookup_strategies=("display_id",)``), the request schema also includes the
+display ID pattern with that prefix, so clients can check the format before
+sending. With ``many=True`` it's an array of these.
 
 Path Parameter Descriptions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

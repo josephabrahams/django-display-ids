@@ -22,6 +22,8 @@ Check these before upgrading.
 
 ### Other changes
 
+- **New `DisplayIDRelatedField`** for DRF serializers. It outputs a related object's display ID and accepts a display ID, UUID or slug in requests, using the same lookup rules as the view mixins, so API clients can send back what they read. It supports `many=True`, takes the view mixins' lookup options, skips the per-row query when the UUID is the primary key (like `PrimaryKeyRelatedField`), and has a drf-spectacular schema.
+- The drf-spectacular schema for `DisplayIDField` uses a pattern with the field's prefix (`^inv_...`) when the prefix is known, instead of accepting any prefix.
 - **`<display_id_or_uuid:>` and `<identifier:>` accept UUIDs with or without hyphens, in any case.** Before, `<display_id_or_uuid:>` only matched lowercase with hyphens and returned 404 for the rest. The pattern is built from Django's `UUIDConverter.regex`.
 - `parse_identifier()` strips surrounding whitespace, so padded identifiers work everywhere, not just in admin.
 - The strategy parsers handle `uuid.UUID` objects on purpose. `parse_identifier()` and `parse_uuid()` return them as UUID results, and `parse_display_id()` and `parse_slug()` return `None`. Before, `parse_uuid()` returned `None` for a UUID object and `parse_slug()` treated it as a slug.

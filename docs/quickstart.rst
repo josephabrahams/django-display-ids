@@ -15,7 +15,7 @@ Quick Start
    class Invoice(DisplayIDModel):
        display_id_prefix = "inv"
 
-       id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+       id = models.UUIDField(primary_key=True, default=uuid.uuid7)
        slug = models.SlugField(unique=True)
 
        objects = DisplayIDManager()

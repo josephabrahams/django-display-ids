@@ -69,12 +69,12 @@ A writable related field, like ``PrimaryKeyRelatedField`` but with display IDs:
 
    from django_display_ids.contrib.rest_framework import DisplayIDRelatedField
 
-   class OrderSerializer(serializers.ModelSerializer):
+   class InvoiceSerializer(serializers.ModelSerializer):
        customer = DisplayIDRelatedField(queryset=Customer.objects.all())
        tags = DisplayIDRelatedField(queryset=Tag.objects.all(), many=True)
 
        class Meta:
-           model = Order
+           model = Invoice
            fields = ("customer", "tags")
 
    # {"customer": "cust_2aUyqjCzEIiEcYMKj7TZtw", "tags": ["tag_..."]}

@@ -37,24 +37,23 @@ class DisplayIDField(serializers.SerializerMethodField):
     field raises ValueError unless ``required=False`` is passed.
 
     Example:
-        class UserSerializer(serializers.Serializer):
-            id = serializers.UUIDField(source="uid", read_only=True)
+        class InvoiceSerializer(serializers.ModelSerializer):
             display_id = DisplayIDField()
 
-        # Output: {"id": "...", "display_id": "user_2aUyqjCzEIiEcYMKj7TZtw"}
+        # Output: {"id": "...", "display_id": "inv_2aUyqjCzEIiEcYMKj7TZtw"}
 
     Example with custom prefix (overrides model's prefix):
-        class UserSerializer(serializers.Serializer):
-            display_id = DisplayIDField(prefix="usr")
+        class InvoiceSerializer(serializers.ModelSerializer):
+            display_id = DisplayIDField(prefix="bill")
 
     Example deriving the prefix from a referenced model class. Use this when
     the serialized row is a *projection* of another model (e.g. a
     database-view-backed report row) that mirrors that model's data but is
     not an instance of it and carries no ``display_id_prefix`` of its own:
 
-        class AppCatalogReportSerializer(serializers.ModelSerializer):
-            # AppCatalogReport is a view-backed projection of App.
-            display_id = DisplayIDField(prefix_from=App)
+        class InvoiceReportSerializer(serializers.ModelSerializer):
+            # InvoiceReport is a view-backed projection of Invoice.
+            display_id = DisplayIDField(prefix_from=Invoice)
 
     Example tolerating instances without a prefix (returns None instead of
     raising). Use this when a single serializer handles heterogeneous rows,
@@ -199,7 +198,7 @@ class DisplayIDRelatedField(_LookupOptions, serializers.RelatedField):  # type: 
     a client can send back exactly what it read.
 
     Example:
-        class OrderSerializer(serializers.ModelSerializer):
+        class InvoiceSerializer(serializers.ModelSerializer):
             customer = DisplayIDRelatedField(queryset=Customer.objects.all())
             tags = DisplayIDRelatedField(queryset=Tag.objects.all(), many=True)
 

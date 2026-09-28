@@ -33,14 +33,14 @@ def id_param_description(
     Example:
         With the default strategies, ("display_id", "uuid", "slug"):
 
-        >>> id_param_description("app")
-        'Identifier: display_id (app_xxx), UUID, or slug'
+        >>> id_param_description("inv")
+        'Identifier: display_id (inv_xxx), UUID, or slug'
 
-        >>> id_param_description("user", with_slug=False)
-        'Identifier: display_id (user_xxx) or UUID'
+        >>> id_param_description("inv", with_slug=False)
+        'Identifier: display_id (inv_xxx) or UUID'
 
-        >>> id_param_description("user", with_uuid=False, with_slug=False)
-        'Identifier: display_id (user_xxx)'
+        >>> id_param_description("inv", with_uuid=False, with_slug=False)
+        'Identifier: display_id (inv_xxx)'
     """
     strategies = get_setting("STRATEGIES")
     if with_uuid is None:

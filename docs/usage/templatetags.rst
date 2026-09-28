@@ -14,7 +14,7 @@ prefix. It needs ``"django_display_ids"`` in ``INSTALLED_APPS``:
 
    {% load display_ids %}
 
-   <a href="/customers/{{ order.customer_id|display_id:"cust" }}/">Customer</a>
+   <a href="/customers/{{ invoice.customer_id|display_id:"cust" }}/">Customer</a>
 
 The value can be a ``uuid.UUID`` or a UUID string in any form Python's
 ``uuid.UUID()`` accepts. ``None`` renders as an empty string. Anything else,

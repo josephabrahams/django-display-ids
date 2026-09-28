@@ -10,7 +10,7 @@ of the UUID fields you already have. No new fields and no migrations.
 
    class Invoice(DisplayIDModel):
        display_id_prefix = "inv"
-       id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+       id = models.UUIDField(primary_key=True, default=uuid.uuid7)
        slug = models.SlugField(unique=True)
 
    invoice.display_id  # "inv_2aUyqjCzEIiEcYMKj7TZtw"
@@ -36,13 +36,25 @@ does: ``inv_`` is an invoice, ``cust_`` is a customer. The 22 characters after
 the prefix are the same UUID in base62, so it stays short and URL-safe and
 converts back without a database lookup.
 
+Storing display IDs would mean a string column and index for every model. A
+native UUID column is smaller and faster to index, especially time-ordered
+UUIDv7. So the database keeps the UUID, and display IDs only exist at the
+edges: in URLs, API responses and logs.
+
 People reading URLs and support tickets like display IDs and slugs. Other
 systems often already store your UUIDs. This library accepts all three and
 turns each into the same query, so you don't have to pick one.
 
-It works with Django's class-based views, Django REST Framework (views,
-serializer fields and drf-spectacular schemas), the admin search box and
-templates.
+What's covered
+--------------
+
+- :doc:`usage/models`: the ``display_id`` property, and manager methods for
+  looking up one or many objects
+- :doc:`usage/views`: a mixin for class-based views, plus URL converters
+- :doc:`usage/drf`: a view mixin, serializer fields that show and accept
+  display IDs, and drf-spectacular schemas
+- :doc:`usage/admin`: search the admin by display ID, UUID or slug
+- :doc:`usage/templatetags`: a filter to show any UUID as a display ID
 
 .. toctree::
    :maxdepth: 2

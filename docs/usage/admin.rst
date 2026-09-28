@@ -36,13 +36,13 @@ The mixin takes the same ``lookup_strategies``, ``display_id_prefix``,
 Searching related objects
 -------------------------
 
-To also find, say, sessions by their user's display ID, override
+To also find invoices by their customer's display ID, override
 ``get_search_results`` and use ``_parse_identifier``:
 
 .. code-block:: python
 
-   @admin.register(Session)
-   class SessionAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
+   @admin.register(Invoice)
+   class InvoiceAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
        search_fields = ["name"]
 
        def get_search_results(self, request, queryset, search_term):
@@ -50,8 +50,8 @@ To also find, say, sessions by their user's display ID, override
            queryset, use_distinct = super().get_search_results(
                request, queryset, search_term
            )
-           if uuid_val := self._parse_identifier(search_term, model=User):
-               queryset |= original_queryset.filter(user__uid=uuid_val)
+           if uuid_val := self._parse_identifier(search_term, model=Customer):
+               queryset |= original_queryset.filter(customer_id=uuid_val)
            return queryset, use_distinct
 
 ``_parse_identifier`` returns the UUID for a display ID or UUID, and ``None``

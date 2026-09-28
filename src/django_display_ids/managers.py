@@ -38,7 +38,7 @@ class DisplayIDQuerySet(models.QuerySet[M]):
         invoice = Invoice.objects.get_by_identifier("inv_2aUyqjCzEIiEcYMKj7TZtw")
 
         # Works with filtered querysets
-        invoice = Invoice.objects.filter(active=True).get_by_identifier("inv_xxx")
+        invoice = Invoice.objects.filter(paid=True).get_by_identifier(value)
 
         # Get by display ID only (stricter)
         invoice = Invoice.objects.get_by_display_id("inv_2aUyqjCzEIiEcYMKj7TZtw")

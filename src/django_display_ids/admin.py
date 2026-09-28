@@ -70,8 +70,8 @@ class DisplayIDAdminSearchMixin(_LookupOptions):
                 queryset, use_distinct = super().get_search_results(
                     request, queryset, search_term
                 )
-                if uuid_val := self._parse_identifier(search_term, model=User):
-                    queryset |= original_queryset.filter(user__uid=uuid_val)
+                if uuid_val := self._parse_identifier(search_term, model=Customer):
+                    queryset |= original_queryset.filter(customer_id=uuid_val)
                 return queryset, use_distinct
         """
         try:

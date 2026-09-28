@@ -15,7 +15,7 @@ from django_display_ids import DisplayIDMixin, DisplayIDModel
 
 class Invoice(DisplayIDModel):
     display_id_prefix = "inv"
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid7)
     slug = models.SlugField(unique=True)
 
 invoice.display_id  # "inv_2aUyqjCzEIiEcYMKj7TZtw"
@@ -27,6 +27,43 @@ class InvoiceDetailView(DisplayIDMixin, DetailView):
 The view now finds the invoice from the display ID, the UUID (`550e8400-e29b-41d4-a716-446655440000`, in any case, with or without hyphens) or the slug. Each one becomes a plain query on the UUID or slug column.
 
 A UUID in a URL or log doesn't say what it points to; a display ID does. The part after the prefix is the same UUID in base62, so it converts back without a database lookup.
+
+## Django REST Framework
+
+```python
+from django_display_ids.contrib.rest_framework import (
+    DisplayIDField,
+    DisplayIDMixin,
+    DisplayIDRelatedField,
+)
+
+class InvoiceSerializer(serializers.ModelSerializer):
+    display_id = DisplayIDField()  # "inv_..."
+    customer = DisplayIDRelatedField(queryset=Customer.objects.all())
+
+    class Meta:
+        model = Invoice
+        fields = ("display_id", "customer", "total")
+
+class InvoiceViewSet(DisplayIDMixin, ModelViewSet):
+    queryset = Invoice.objects.all()
+    serializer_class = InvoiceSerializer
+```
+
+The viewset finds invoices by display ID, UUID or slug. `customer` shows up as `"cust_..."` in responses and accepts the same in requests, so clients can send back what they read. With drf-spectacular, both fields get OpenAPI schemas.
+
+## Admin
+
+```python
+from django_display_ids import DisplayIDAdminSearchMixin
+
+@admin.register(Invoice)
+class InvoiceAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
+    list_display = ["display_id", "name"]
+    search_fields = ["name"]
+```
+
+The admin search box finds invoices by display ID, UUID or slug, alongside the usual search.
 
 ## Installation
 

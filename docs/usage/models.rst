@@ -16,12 +16,17 @@ Subclass ``DisplayIDModel`` and set a prefix:
    class Invoice(DisplayIDModel):
        display_id_prefix = "inv"
 
-       id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+       id = models.UUIDField(primary_key=True, default=uuid.uuid7)
        slug = models.SlugField(unique=True)
 
        objects = DisplayIDManager()
 
    invoice.display_id  # "inv_2aUyqjCzEIiEcYMKj7TZtw"
+
+``uuid.uuid7`` needs Python 3.14+. Its UUIDs start with a timestamp, so new
+rows go at the end of the index instead of all over it, as random ``uuid4``
+values do. On Python 3.12 or 3.13, ``from uuid6 import uuid7`` from the
+`uuid6 <https://pypi.org/project/uuid6/>`_ package works the same way.
 
 ``display_id`` is ``None`` while the UUID field is empty, and on models that
 don't set a prefix.

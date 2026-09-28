@@ -1,5 +1,7 @@
 """Tests for DisplayIDRelatedField."""
 
+import uuid
+
 import pytest
 from rest_framework import serializers
 
@@ -77,9 +79,20 @@ class TestOutput:
 
 @pytest.mark.django_db
 class TestInput:
-    def test_no_match_is_does_not_exist(self, invoice):
-        """Every kind of no-match uses DRF's does_not_exist error code."""
-        s = LineItemSerializer(data={"name": "x", "invoice": "not-a-real-slug"})
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "not-a-real-slug",  # parses as a slug, no row
+            encode_display_id("prod", uuid.uuid4()),  # wrong prefix, fails parsing
+            encode_display_id("inv", uuid.uuid4()),  # valid display ID, no row
+            str(uuid.uuid4()),  # valid UUID, no row
+        ],
+        ids=["unknown_slug", "wrong_prefix", "unknown_display_id", "unknown_uuid"],
+    )
+    def test_no_match_is_does_not_exist(self, invoice, value):
+        """Every kind of no-match uses DRF's does_not_exist error code, whether
+        it fails while parsing or at the database query."""
+        s = LineItemSerializer(data={"name": "x", "invoice": value})
         assert not s.is_valid()
         assert s.errors["invoice"][0].code == "does_not_exist"
 

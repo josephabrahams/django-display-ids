@@ -1,12 +1,18 @@
-"""Tests for Django REST Framework view mixins and serializer fields."""
+"""Tests for the DRF view mixin and DisplayIDField.
+
+Which identifier forms are accepted or rejected, and how each option (prefix,
+strategies, fields) overrides the model, is covered for every entry
+point in test_consistency.py. These tests cover DRF-specific behavior.
+"""
 
 import uuid
 
 import pytest
 from django.core.exceptions import MultipleObjectsReturned
 from django.http import Http404
-from rest_framework import serializers
+from rest_framework import permissions, serializers
 from rest_framework.generics import GenericAPIView
+from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory
 from rest_framework.views import APIView
 
@@ -18,147 +24,36 @@ from django_display_ids.encoding import encode_display_id
 
 from .models import Invoice, Order, Product
 
-# Skip all tests if DRF is not installed
-pytest.importorskip("rest_framework")
-
 
 class InvoiceAPIView(DisplayIDMixin, APIView):
-    """Test API view for Invoice model."""
-
     lookup_url_kwarg = "id"
-    display_id_prefix = "inv"
 
     def get_queryset(self):
         return Invoice.objects.all()
 
-
-class ProductAPIView(DisplayIDMixin, APIView):
-    """Test API view for Product model with custom fields."""
-
-    lookup_url_kwarg = "id"
-    display_id_prefix = "prod"
-    uuid_field = "uid"
-    slug_field = "handle"
-    lookup_strategies = ("display_id", "uuid", "slug")
-
-    def get_queryset(self):
-        return Product.objects.all()
-
-
-class NoPrefixAPIView(DisplayIDMixin, APIView):
-    """Test API view without display_id_prefix."""
-
-    lookup_url_kwarg = "id"
-    lookup_strategies = ("uuid", "slug")  # No display_id strategy
-
-    def get_queryset(self):
-        return Invoice.objects.all()
-
-
-class ModelPrefixFallbackAPIView(DisplayIDMixin, APIView):
-    """Test API view that inherits prefix from model."""
-
-    lookup_url_kwarg = "id"
-    # display_id_prefix not set - should fall back to model's "inv"
-
-    def get_queryset(self):
-        return Invoice.objects.all()
+    def get(self, request, *args, **kwargs):
+        return Response({"name": self.get_object().name})
 
 
 @pytest.fixture
 def rf():
-    """API request factory."""
     return APIRequestFactory()
 
 
-@pytest.fixture
-def invoice(db):
-    """Create a test invoice."""
-    return Invoice.objects.create(name="Test Invoice", slug="test-invoice")
-
-
-@pytest.fixture
-def product(db):
-    """Create a test product."""
-    return Product.objects.create(name="Test Product", handle="test-product")
+def get_object(view_class, value, rf, kwarg="id"):
+    view = view_class()
+    view.kwargs = {kwarg: value}
+    view.request = rf.get("/")
+    view.format_kwarg = None
+    return view.get_object()
 
 
 @pytest.mark.django_db
-class TestDisplayIDMixin:
-    """Tests for DisplayIDMixin."""
-
-    def test_get_object_by_uuid(self, rf, invoice):
-        """get_object works with UUID."""
-        view = InvoiceAPIView()
-        view.kwargs = {"id": str(invoice.id)}
-        view.request = rf.get("/")
-
-        obj = view.get_object()
-        assert obj == invoice
-
-    def test_get_object_by_display_id(self, rf, invoice):
-        """get_object works with display ID."""
-        view = InvoiceAPIView()
-        view.kwargs = {"id": invoice.display_id}
-        view.request = rf.get("/")
-
-        obj = view.get_object()
-        assert obj == invoice
-
-    def test_get_object_not_found(self, rf, invoice):
-        """Http404 raised when object not found."""
-        view = InvoiceAPIView()
-        view.kwargs = {"id": str(uuid.uuid4())}
-        view.request = rf.get("/")
-
-        with pytest.raises(Http404):
-            view.get_object()
-
-    def test_get_object_invalid_identifier(self, rf, invoice):
-        """Http404 raised for identifier that doesn't match any object.
-
-        With slug in the default strategies, any string is accepted as a slug
-        and results in a database lookup. If nothing matches, Http404 is raised.
-        """
-        view = InvoiceAPIView()
-        view.kwargs = {"id": "invalid"}
-        view.request = rf.get("/")
-
-        with pytest.raises(Http404):
-            view.get_object()
-
-    def test_get_object_wrong_prefix(self, rf, invoice):
-        """Http404 raised for wrong prefix, like DRF's own get_object()."""
-        view = InvoiceAPIView()
-        # Use prod prefix instead of inv
-        wrong_display_id = encode_display_id("prod", invoice.id)
-        view.kwargs = {"id": wrong_display_id}
-        view.request = rf.get("/")
-
-        with pytest.raises(Http404):
-            view.get_object()
-
-    def test_get_object_unparseable(self, rf, invoice):
-        """Http404 raised when no strategy can parse the identifier."""
-
-        class NoSlugView(InvoiceAPIView):
-            lookup_strategies = ("display_id", "uuid")
-
-        view = NoSlugView()
-        view.kwargs = {"id": "not-an-id"}
-        view.request = rf.get("/")
-
-        with pytest.raises(Http404):
-            view.get_object()
-
-    def test_missing_lookup_url_kwarg(self, rf, invoice):
+class TestGetObject:
+    def test_missing_url_kwarg(self, rf, invoice):
         """A missing URL kwarg fails an assertion, like DRF's get_object()."""
-        view = InvoiceAPIView()
-        view.kwargs = {}  # Missing 'id'
-        view.request = rf.get("/")
-
         with pytest.raises(AssertionError, match="URL keyword argument named 'id'"):
-            view.get_object()
+            get_object(InvoiceAPIView, invoice.display_id, rf, kwarg="pk")
 
     def test_ambiguous_slug_raises(self, rf):
         """Duplicate slugs raise MultipleObjectsReturned, like DRF."""
@@ -166,19 +61,15 @@ class TestDisplayIDMixin:
         Order.objects.create(name="dup")
         Order.objects.create(name="dup")
 
-        class OrderView(DisplayIDMixin, APIView):
+        class View(DisplayIDMixin, APIView):
             lookup_url_kwarg = "id"
             slug_field = "name"
 
             def get_queryset(self):
                 return Order.objects.all()
 
-        view = OrderView()
-        view.kwargs = {"id": "dup"}
-        view.request = rf.get("/")
-
         with pytest.raises(MultipleObjectsReturned):
-            view.get_object()
+            get_object(View, "dup", rf)
 
     def test_filter_backends_applied(self, rf, invoice):
         """filter_queryset() runs before the lookup, like DRF's get_object()."""
@@ -188,308 +79,86 @@ class TestDisplayIDMixin:
             def filter_queryset(self, request, queryset, view):
                 return queryset.filter(pk=invoice.pk)
 
-        class FilteredView(DisplayIDMixin, GenericAPIView):
+        class View(DisplayIDMixin, GenericAPIView):
             lookup_url_kwarg = "id"
             queryset = Invoice.objects.all()
             filter_backends = (OnlyFirstBackend,)
 
-        view = FilteredView()
-        view.kwargs = {"id": other.display_id}
-        view.request = rf.get("/")
-        view.format_kwarg = None
-
         with pytest.raises(Http404):
-            view.get_object()
+            get_object(View, other.display_id, rf)
+        assert get_object(View, invoice.display_id, rf) == invoice
 
-        view.kwargs = {"id": invoice.display_id}
-        assert view.get_object() == invoice
+    def test_get_queryset_is_respected(self, rf):
+        visible = Invoice.objects.create(name="Visible", slug="visible")
+        hidden = Invoice.objects.create(name="Hidden", slug="hidden")
 
-
-@pytest.mark.django_db
-class TestCustomFieldConfiguration:
-    """Tests for custom field configuration."""
-
-    def test_custom_uuid_field(self, rf, product):
-        """View uses custom uuid_field."""
-        view = ProductAPIView()
-        view.kwargs = {"id": str(product.uid)}
-        view.request = rf.get("/")
-
-        obj = view.get_object()
-        assert obj == product
-
-    def test_custom_slug_field(self, rf, product):
-        """View uses custom slug_field."""
-        view = ProductAPIView()
-        view.kwargs = {"id": "test-product"}
-        view.request = rf.get("/")
-
-        obj = view.get_object()
-        assert obj == product
-
-
-@pytest.mark.django_db
-class TestQuerysetFiltering:
-    """Tests for queryset filtering."""
-
-    def test_get_queryset_filtering(self, rf, db):
-        """Custom get_queryset is respected."""
-        invoice1 = Invoice.objects.create(name="Invoice 1", slug="invoice-1")
-        Invoice.objects.create(name="Invoice 2", slug="invoice-2")
-
-        class FilteredInvoiceView(DisplayIDMixin, APIView):
-            lookup_url_kwarg = "id"
-            display_id_prefix = "inv"
-
+        class View(InvoiceAPIView):
             def get_queryset(self):
-                return Invoice.objects.filter(slug="invoice-1")
+                return Invoice.objects.filter(slug="visible")
 
-        view = FilteredInvoiceView()
-        view.kwargs = {"id": str(invoice1.id)}
-        view.request = rf.get("/")
-
-        obj = view.get_object()
-        assert obj == invoice1
-
-    def test_filtered_queryset_excludes_object(self, rf, db):
-        """Http404 when object excluded by queryset filter."""
-        Invoice.objects.create(name="Invoice 1", slug="invoice-1")
-        invoice2 = Invoice.objects.create(name="Invoice 2", slug="invoice-2")
-
-        class FilteredInvoiceView(DisplayIDMixin, APIView):
-            lookup_url_kwarg = "id"
-            display_id_prefix = "inv"
-
-            def get_queryset(self):
-                return Invoice.objects.filter(slug="invoice-1")
-
-        view = FilteredInvoiceView()
-        view.kwargs = {"id": str(invoice2.id)}
-        view.request = rf.get("/")
-
+        assert get_object(View, visible.display_id, rf) == visible
         with pytest.raises(Http404):
-            view.get_object()
+            get_object(View, hidden.display_id, rf)
+
+    def test_without_get_queryset(self, rf):
+        class View(DisplayIDMixin):
+            lookup_url_kwarg = "id"
+            request = None
+
+        with pytest.raises(NotImplementedError, match="must override 'get_queryset"):
+            get_object(View, "x", rf)
 
 
 @pytest.mark.django_db
-class TestNoPrefixBehavior:
-    """Tests for views without display_id_prefix."""
+class TestResponses:
+    """Through DRF's request handling."""
 
-    def test_uuid_still_works(self, rf, invoice):
-        """UUID lookup still works without prefix."""
-        view = NoPrefixAPIView()
-        view.kwargs = {"id": str(invoice.id)}
-        view.request = rf.get("/")
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "not-an-id",
+            encode_display_id("prod", uuid.uuid4()),
+            str(uuid.uuid4()),
+        ],
+    )
+    def test_404_response(self, rf, value):
+        response = InvoiceAPIView.as_view()(rf.get("/"), id=value)
+        assert response.status_code == 404
 
-        obj = view.get_object()
-        assert obj == invoice
+    def test_200_response(self, rf, invoice):
+        response = InvoiceAPIView.as_view()(rf.get("/"), id=invoice.display_id)
+        assert response.status_code == 200
+        assert response.data == {"name": "Test Invoice"}
 
-    def test_display_id_skipped(self, rf, invoice):
-        """Display ID is treated as slug without prefix."""
-        view = NoPrefixAPIView()
-        view.kwargs = {"id": invoice.display_id}
-        view.request = rf.get("/")
+    def test_object_permissions_are_checked(self, rf, invoice):
+        """DRF's permission classes see the object; a denial is a 403."""
 
-        # display_id strategy is skipped, UUID doesn't match,
-        # slug catches it but no matching slug exists -> Http404
-        with pytest.raises(Http404):
-            view.get_object()
+        class DenyAll(permissions.BasePermission):
+            def has_object_permission(self, request, view, obj):
+                return False
 
+        class View(InvoiceAPIView):
+            permission_classes = (DenyAll,)
 
-@pytest.mark.django_db
-class TestObjectPermissions:
-    """Tests for object-level permissions."""
-
-    def test_check_object_permissions_called(self, rf, invoice):
-        """check_object_permissions is called on retrieved object."""
-        permissions_checked = []
-
-        class PermissionCheckView(DisplayIDMixin, APIView):
-            lookup_url_kwarg = "id"
-            display_id_prefix = "inv"
-
-            def get_queryset(self):
-                return Invoice.objects.all()
-
-            def check_object_permissions(self, request, obj):
-                permissions_checked.append(obj)
-
-        view = PermissionCheckView()
-        view.kwargs = {"id": str(invoice.id)}
-        view.request = rf.get("/")
-
-        obj = view.get_object()
-        assert obj == invoice
-        assert permissions_checked == [invoice]
-
-
-@pytest.mark.django_db
-class TestModelPrefixFallback:
-    """Tests for automatic prefix inheritance from model."""
-
-    def test_inherits_prefix_from_model(self, rf, invoice):
-        """View without display_id_prefix uses model's prefix."""
-        view = ModelPrefixFallbackAPIView()
-        view.kwargs = {"id": invoice.display_id}
-        view.request = rf.get("/")
-
-        obj = view.get_object()
-        assert obj == invoice
-
-    def test_view_prefix_overrides_model(self, rf, invoice):
-        """View's explicit prefix takes precedence over model's."""
-        # InvoiceAPIView has display_id_prefix = "inv" explicitly set
-        view = InvoiceAPIView()
-        view.kwargs = {"id": invoice.display_id}
-        view.request = rf.get("/")
-
-        obj = view.get_object()
-        assert obj == invoice
-
-    def test_no_display_id_strategy_skips_prefix(self, rf, invoice):
-        """Omitting display_id from strategies skips prefix matching."""
-        view = NoPrefixAPIView()
-        view.kwargs = {"id": invoice.display_id}
-        view.request = rf.get("/")
-
-        # display_id strategy is not in strategies, slug catches it but no match -> Http404
-        with pytest.raises(Http404):
-            view.get_object()
-
-
-class TestPrefixValidation:
-    """Tests for prefix validation on views."""
-
-    def test_empty_string_raises_error(self, rf):
-        """Empty string prefix raises ValueError."""
-
-        class EmptyPrefixView(DisplayIDMixin, APIView):
-            lookup_url_kwarg = "id"
-            display_id_prefix = ""
-
-            def get_queryset(self):
-                return Invoice.objects.all()
-
-        view = EmptyPrefixView()
-        view.kwargs = {"id": "test"}
-        view.request = rf.get("/")
-
-        with pytest.raises(ValueError, match="1-16 lowercase letters"):
-            view.get_object()
-
-    def test_invalid_prefix_raises_error(self, rf):
-        """Invalid prefix format raises ValueError."""
-
-        class InvalidPrefixView(DisplayIDMixin, APIView):
-            lookup_url_kwarg = "id"
-            display_id_prefix = "Invalid123"
-
-            def get_queryset(self):
-                return Invoice.objects.all()
-
-        view = InvalidPrefixView()
-        view.kwargs = {"id": "test"}
-        view.request = rf.get("/")
-
-        with pytest.raises(ValueError, match="1-16 lowercase letters"):
-            view.get_object()
-
-    def test_too_long_prefix_raises_error(self, rf):
-        """Prefix longer than 16 chars raises ValueError."""
-
-        class LongPrefixView(DisplayIDMixin, APIView):
-            lookup_url_kwarg = "id"
-            display_id_prefix = "waytoolongprefix123"
-
-            def get_queryset(self):
-                return Invoice.objects.all()
-
-        view = LongPrefixView()
-        view.kwargs = {"id": "test"}
-        view.request = rf.get("/")
-
-        with pytest.raises(ValueError, match="1-16 lowercase letters"):
-            view.get_object()
+        response = View.as_view()(rf.get("/"), id=invoice.display_id)
+        assert response.status_code == 403
 
 
 # =============================================================================
-# DisplayIDField Tests
+# DisplayIDField
 # =============================================================================
 
 
-class InvoiceSerializer(serializers.Serializer):
-    """Test serializer with DisplayIDField."""
+class PlainSerializer(serializers.Serializer):
+    """No Meta.model, so the prefix comes from each instance."""
 
-    id = serializers.UUIDField(read_only=True)
     display_id = DisplayIDField()
     name = serializers.CharField()
 
 
-class ProductSerializer(serializers.Serializer):
-    """Test serializer with custom prefix override."""
-
-    id = serializers.UUIDField(source="uid", read_only=True)
-    display_id = DisplayIDField(prefix="item")  # Override model's "prod" prefix
+class PlainOptionalSerializer(serializers.Serializer):
+    display_id = DisplayIDField(required=False)
     name = serializers.CharField()
-
-
-class OrderSerializer(serializers.Serializer):
-    """Test serializer for model without display_id_prefix."""
-
-    id = serializers.UUIDField(read_only=True)
-    display_id = DisplayIDField()
-    name = serializers.CharField()
-
-
-@pytest.fixture
-def order(db):
-    """Create a test order (no display_id_prefix)."""
-    return Order.objects.create(name="Test Order", slug="test-order")
-
-
-@pytest.mark.django_db
-class TestDisplayIDField:
-    """Tests for DisplayIDField serializer field."""
-
-    def test_returns_display_id_from_model(self, invoice):
-        serializer = InvoiceSerializer(invoice)
-        data = serializer.data
-
-        assert data["display_id"] == invoice.display_id
-        assert data["display_id"].startswith("inv_")
-
-    def test_raises_error_for_model_without_prefix(self, order):
-        serializer = OrderSerializer(order)
-
-        with pytest.raises(ValueError, match="requires a prefix"):
-            _ = serializer.data
-
-    def test_prefix_override(self, product):
-        serializer = ProductSerializer(product)
-        data = serializer.data
-
-        # Should use "item" prefix from field, not "prod" from model
-        assert data["display_id"].startswith("item_")
-
-        # Verify the display_id decodes to the correct UUID
-        # Product uses uuid_field = "uid", so the field should read from that
-        from django_display_ids.encoding import decode_display_id
-
-        prefix, decoded_uuid = decode_display_id(data["display_id"])
-        assert prefix == "item"
-        assert decoded_uuid == product.uid
-
-    def test_field_is_read_only(self, invoice):
-        serializer = InvoiceSerializer(
-            invoice, data={"display_id": "should_be_ignored", "name": "New Name"}
-        )
-        # Field should be read-only, input ignored
-        assert serializer.fields["display_id"].read_only is True
-
-
-# =============================================================================
-# DisplayIDField prefix_from= Tests
-# =============================================================================
 
 
 class AppCatalogReport:
@@ -507,88 +176,64 @@ class AppCatalogReport:
 
 
 class ProjectionSerializer(serializers.Serializer):
-    """Serializer for a projection that derives its prefix from Product."""
-
     display_id = DisplayIDField(prefix_from=Product)
     name = serializers.CharField()
 
 
 @pytest.mark.django_db
+class TestDisplayIDField:
+    def test_uses_instance_prefix(self, invoice):
+        assert PlainSerializer(invoice).data["display_id"] == invoice.display_id
+
+    def test_is_read_only(self):
+        assert DisplayIDField().read_only is True
+
+    def test_model_without_prefix_raises(self, order):
+        with pytest.raises(ValueError, match="requires a prefix"):
+            _ = PlainSerializer(order).data
+
+    def test_prefix_override_uses_model_uuid_field(self, product):
+        """prefix= replaces "prod"; the UUID still comes from Product.uid."""
+
+        class Serializer(serializers.Serializer):
+            display_id = DisplayIDField(prefix="item")
+
+        data = Serializer(product).data
+        assert data["display_id"] == encode_display_id("item", product.uid)
+
+    def test_required_false(self, order, invoice):
+        """Returns None instead of raising when there's no prefix."""
+        assert PlainOptionalSerializer(order).data["display_id"] is None
+        assert PlainOptionalSerializer(invoice).data["display_id"] == invoice.display_id
+
+
+@pytest.mark.django_db
 class TestDisplayIDFieldPrefixFrom:
-    """Tests for the prefix_from= kwarg on DisplayIDField."""
+    def test_projection_uses_referenced_model_prefix(self, product):
+        """The projection has no prefix of its own; Product's "prod" is used."""
+        data = ProjectionSerializer(AppCatalogReport(uid=product.uid)).data
+        assert data["display_id"] == encode_display_id("prod", product.uid)
 
-    def test_resolves_prefix_from_referenced_model(self, product):
-        report = AppCatalogReport(uid=product.uid)
-        serializer = ProjectionSerializer(report)
-        data = serializer.data
-
-        # Prefix is read from Product, whose display_id_prefix is "prod".
-        assert data["display_id"].startswith("prod_")
-
-    def test_computes_encoded_id_against_uuid_field(self, product):
-        from django_display_ids.encoding import decode_display_id
-
-        report = AppCatalogReport(uid=product.uid)
-        serializer = ProjectionSerializer(report)
-        data = serializer.data
-
-        prefix, decoded_uuid = decode_display_id(data["display_id"])
-        assert prefix == "prod"
-        assert decoded_uuid == product.uid
+    def test_wins_over_instance_prefix(self, invoice):
+        """invoice has its own "inv" prefix, but prefix_from=Product wins."""
+        data = ProjectionSerializer(invoice).data
+        assert data["display_id"] == encode_display_id("prod", invoice.id)
 
     def test_prefix_and_prefix_from_together_raises(self):
         with pytest.raises(ValueError, match="mutually exclusive"):
             DisplayIDField(prefix="item", prefix_from=Product)
 
-    def test_prefix_from_without_display_id_prefix_raises_at_init(self):
+    def test_model_without_prefix_raises_at_init(self):
         with pytest.raises(ValueError, match="has no display_id_prefix"):
             DisplayIDField(prefix_from=Order)
 
-    def test_prefix_from_wins_over_instance_prefix(self, invoice):
-        # invoice is a real Invoice with display_id_prefix == "inv", but the
-        # field points at Product ("prod") — prefix_from must win.
-        from django_display_ids.encoding import decode_display_id
-
-        serializer = ProjectionSerializer(invoice)
-        data = serializer.data
-
-        prefix, decoded_uuid = decode_display_id(data["display_id"])
-        assert prefix == "prod"
-        assert decoded_uuid == invoice.id
-
 
 # =============================================================================
-# DisplayIDField required=False Tests
+# drf-spectacular schema for DisplayIDField
 # =============================================================================
-
-
-class OptionalOrderSerializer(serializers.Serializer):
-    """Serializer for a model without a prefix, tolerating the missing prefix."""
-
-    display_id = DisplayIDField(required=False)
-    name = serializers.CharField()
-
-
-@pytest.mark.django_db
-class TestDisplayIDFieldRequiredFalse:
-    """Tests for the required=False kwarg on DisplayIDField."""
-
-    def test_returns_none_when_no_prefix(self, order):
-        serializer = OptionalOrderSerializer(order)
-        assert serializer.data["display_id"] is None
-
-    def test_still_resolves_prefix_when_available(self, invoice):
-        class OptionalInvoiceSerializer(serializers.Serializer):
-            display_id = DisplayIDField(required=False)
-            name = serializers.CharField()
-
-        serializer = OptionalInvoiceSerializer(invoice)
-        assert serializer.data["display_id"] == invoice.display_id
 
 
 class InvoiceModelSerializer(serializers.ModelSerializer):
-    """Test ModelSerializer with DisplayIDField - has Meta.model for schema generation."""
-
     display_id = DisplayIDField()
 
     class Meta:
@@ -598,70 +243,57 @@ class InvoiceModelSerializer(serializers.ModelSerializer):
 
 @pytest.mark.django_db
 class TestDisplayIDFieldSchema:
-    """Tests for DisplayIDField OpenAPI schema generation via drf-spectacular extension."""
-
-    def test_extension_generates_schema_with_model_prefix(self, invoice):
-        """Extension generates proper schema when serializer has Meta.model."""
+    @pytest.fixture(autouse=True)
+    def _spectacular(self):
         pytest.importorskip("drf_spectacular")
+
+    def _schema(self, field, view=None):
         from django_display_ids.contrib.drf_spectacular import DisplayIDFieldExtension
 
-        serializer = InvoiceModelSerializer(invoice)
-        field = serializer.fields["display_id"]
+        auto_schema = type("AutoSchema", (), {"view": view})() if view else None
+        return DisplayIDFieldExtension(target=field).map_serializer_field(
+            auto_schema, "response"
+        )
 
-        # Create extension instance targeting our field
-        ext = DisplayIDFieldExtension(target=field)
-        schema = ext.map_serializer_field(None, "response")
-
-        assert schema["type"] == "string"
-        assert "pattern" in schema
-        # Model has display_id_prefix = "inv"
+    def test_uses_serializer_model_prefix(self):
+        schema = self._schema(InvoiceModelSerializer().fields["display_id"])
         assert schema["example"].startswith("inv_")
+        assert schema["pattern"] == r"^inv_[0-9A-Za-z]{22}$"
+        assert schema["readOnly"] is True
 
-    def test_extension_generates_schema_with_prefix_override(self, product):
-        """Extension uses field's prefix override."""
-        pytest.importorskip("drf_spectacular")
-        from django_display_ids.contrib.drf_spectacular import DisplayIDFieldExtension
+    def test_uses_prefix_override(self):
+        class Serializer(serializers.Serializer):
+            display_id = DisplayIDField(prefix="item")
 
-        serializer = ProductSerializer(product)
-        field = serializer.fields["display_id"]
+        assert self._schema(Serializer().fields["display_id"])["example"].startswith(
+            "item_"
+        )
 
-        ext = DisplayIDFieldExtension(target=field)
-        schema = ext.map_serializer_field(None, "response")
+    def test_uses_prefix_from(self):
+        field = ProjectionSerializer().fields["display_id"]
+        assert self._schema(field)["example"].startswith("prod_")
 
-        # Field has prefix="item" override
-        assert schema["example"].startswith("item_")
+    def test_generic_without_model(self):
+        schema = self._schema(PlainSerializer().fields["display_id"])
+        assert schema["example"].startswith("type_")
+        assert schema["pattern"] == r"^[a-z]{1,16}_[0-9A-Za-z]{22}$"
 
-    def test_extension_generates_generic_schema_without_prefix(self):
-        """Extension generates generic schema when no prefix available."""
-        pytest.importorskip("drf_spectacular")
-        from django_display_ids.contrib.drf_spectacular import DisplayIDFieldExtension
+    def test_falls_back_to_view_queryset(self):
+        """A plain serializer on a view gets the prefix from the view's model."""
+        field = PlainSerializer().fields["display_id"]
 
-        field = DisplayIDField()
-        # Simulate binding without a parent that has Meta.model
-        field._prefix_override = None
-        field.parent = None
+        class ViewWithGetQueryset:
+            def get_queryset(self):
+                return Invoice.objects.all()
 
-        ext = DisplayIDFieldExtension(target=field)
-        schema = ext.map_serializer_field(None, "response")
+        class ViewWithQuerysetAttr:
+            queryset = Invoice.objects.all()
 
-        assert schema["type"] == "string"
-        assert "type_" in schema["example"]  # Generic example
+            def get_queryset(self):
+                raise RuntimeError("needs a request")
 
-    def test_plain_serializer_gets_generic_schema(self, invoice):
-        """Plain Serializer without Meta.model gets generic schema."""
-        pytest.importorskip("drf_spectacular")
-        from django_display_ids.contrib.drf_spectacular import DisplayIDFieldExtension
-
-        # InvoiceSerializer is a plain Serializer, not ModelSerializer
-        serializer = InvoiceSerializer(invoice)
-        field = serializer.fields["display_id"]
-
-        ext = DisplayIDFieldExtension(target=field)
-        schema = ext.map_serializer_field(None, "response")
-
-        # No Meta.model, so generic schema
-        assert schema["type"] == "string"
-        assert "type_" in schema["example"]
+        assert self._schema(field, ViewWithGetQueryset())["example"].startswith("inv_")
+        assert self._schema(field, ViewWithQuerysetAttr())["example"].startswith("inv_")
 
     def test_serializer_prefix_attribute_is_ignored(self):
         """The schema only uses prefix sources the field reads at runtime.
@@ -670,103 +302,34 @@ class TestDisplayIDFieldSchema:
         the schema mustn't either, or the docs would show inv_... while the
         API raises or outputs something else.
         """
-        pytest.importorskip("drf_spectacular")
-        from django_display_ids.contrib.drf_spectacular import DisplayIDFieldExtension
 
-        class PrefixAttrSerializer(serializers.Serializer):
+        class Serializer(serializers.Serializer):
             display_id_prefix = "inv"
             display_id = DisplayIDField()
 
-        field = PrefixAttrSerializer().fields["display_id"]
-        schema = DisplayIDFieldExtension(target=field).map_serializer_field(
-            None, "response"
+        assert self._schema(Serializer().fields["display_id"])["example"].startswith(
+            "type_"
         )
-        assert schema["example"].startswith("type_")
 
 
-# =============================================================================
-# ID Parameter Description Tests
-# =============================================================================
+@pytest.mark.parametrize(
+    ("kwargs", "expected"),
+    [
+        ({}, "Identifier: display_id (user_xxx), UUID, or slug"),
+        ({"with_slug": False}, "Identifier: display_id (user_xxx) or UUID"),
+        ({"with_uuid": False}, "Identifier: display_id (user_xxx) or slug"),
+        ({"with_uuid": False, "with_slug": False}, "Identifier: display_id (user_xxx)"),
+    ],
+)
+def test_id_param_description(kwargs, expected):
+    from django_display_ids.contrib.drf_spectacular import id_param_description
+
+    assert id_param_description("user", **kwargs) == expected
 
 
-class TestIdParamDescription:
-    """Tests for id_param_description function."""
+def test_id_param_description_follows_setting(settings):
+    """Without with_uuid/with_slug, the STRATEGIES setting decides."""
+    from django_display_ids.contrib.drf_spectacular import id_param_description
 
-    def test_function_default_follows_strategies(self):
-        """By default the description lists what the default strategies accept."""
-        from django_display_ids.contrib.drf_spectacular import id_param_description
-
-        result = id_param_description("user")
-        assert result == "Identifier: display_id (user_xxx), UUID, or slug"
-
-    def test_function_default_follows_setting(self, settings):
-        from django_display_ids.contrib.drf_spectacular import id_param_description
-
-        settings.DISPLAY_IDS = {"STRATEGIES": ("display_id", "uuid")}
-        result = id_param_description("user")
-        assert result == "Identifier: display_id (user_xxx) or UUID"
-
-    def test_function_without_slug(self):
-        from django_display_ids.contrib.drf_spectacular import id_param_description
-
-        result = id_param_description("user", with_slug=False)
-        assert result == "Identifier: display_id (user_xxx) or UUID"
-
-    def test_function_without_uuid(self):
-        from django_display_ids.contrib.drf_spectacular import id_param_description
-
-        result = id_param_description("user", with_uuid=False)
-        assert result == "Identifier: display_id (user_xxx) or slug"
-
-        result = id_param_description("user", with_uuid=False, with_slug=False)
-        assert result == "Identifier: display_id (user_xxx)"
-
-    def test_function_with_slug(self):
-        from django_display_ids.contrib.drf_spectacular import id_param_description
-
-        result = id_param_description("app", with_slug=True)
-        assert result == "Identifier: display_id (app_xxx), UUID, or slug"
-
-    def test_function_without_uuid_with_slug(self):
-        from django_display_ids.contrib.drf_spectacular import id_param_description
-
-        result = id_param_description("app", with_uuid=False, with_slug=True)
-        assert result == "Identifier: display_id (app_xxx) or slug"
-
-    def test_various_prefixes(self):
-        from django_display_ids.contrib.drf_spectacular import id_param_description
-
-        assert "inv_xxx" in id_param_description("inv")
-        assert "product_xxx" in id_param_description("product")
-        assert "a_xxx" in id_param_description("a")
-
-
-@pytest.mark.django_db
-class TestResponses:
-    """Through DRF's request handling, bad identifiers become 404 responses."""
-
-    class View(InvoiceAPIView):
-        def get(self, request, *args, **kwargs):
-            from rest_framework.response import Response
-
-            return Response({"name": self.get_object().name})
-
-    @pytest.mark.parametrize(
-        "value",
-        [
-            "not-an-id",
-            encode_display_id("prod", uuid.uuid4()),
-            str(uuid.uuid4()),
-        ],
-    )
-    def test_404_response(self, value):
-        request = APIRequestFactory().get("/")
-        response = self.View.as_view()(request, id=value)
-        assert response.status_code == 404
-
-    def test_200_response(self):
-        invoice = Invoice.objects.create(name="Found")
-        request = APIRequestFactory().get("/")
-        response = self.View.as_view()(request, id=invoice.display_id)
-        assert response.status_code == 200
-        assert response.data == {"name": "Found"}
+    settings.DISPLAY_IDS = {"STRATEGIES": ("display_id", "uuid")}
+    assert id_param_description("user") == "Identifier: display_id (user_xxx) or UUID"

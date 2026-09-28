@@ -1,7 +1,5 @@
 """Tests for DisplayIDRelatedField."""
 
-import uuid
-
 import pytest
 from rest_framework import serializers
 
@@ -10,8 +8,6 @@ from django_display_ids.encoding import encode_display_id
 from django_display_ids.exceptions import MissingPrefixError
 
 from .models import Invoice, LineItem, Order, Product
-
-pytest.importorskip("rest_framework")
 
 
 class LineItemSerializer(serializers.ModelSerializer):
@@ -36,16 +32,6 @@ class ReadOnlyLineItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = LineItem
         fields = ("invoice", "products")
-
-
-@pytest.fixture
-def invoice(db):
-    return Invoice.objects.create(name="Invoice", slug="march-invoice")
-
-
-@pytest.fixture
-def product(db):
-    return Product.objects.create(name="Product", handle="widget")
 
 
 @pytest.mark.django_db
@@ -91,34 +77,9 @@ class TestOutput:
 
 @pytest.mark.django_db
 class TestInput:
-    @pytest.mark.parametrize(
-        "form",
-        ["display_id", "uuid", "uuid_upper", "uuid_hex", "slug", "padded"],
-    )
-    def test_accepts_every_identifier_form(self, invoice, form):
-        value = {
-            "display_id": invoice.display_id,
-            "uuid": str(invoice.id),
-            "uuid_upper": str(invoice.id).upper(),
-            "uuid_hex": invoice.id.hex,
-            "slug": "march-invoice",
-            "padded": f" {invoice.display_id} ",
-        }[form]
-        s = LineItemSerializer(data={"name": "x", "invoice": value})
-        assert s.is_valid(), s.errors
-        assert s.validated_data["invoice"] == invoice
-
-    @pytest.mark.parametrize(
-        "value",
-        [
-            "not-a-real-slug",
-            str(uuid.uuid4()),
-            encode_display_id("prod", uuid.uuid4()),  # wrong prefix
-        ],
-    )
-    def test_rejects_as_does_not_exist(self, invoice, value):
-        """Unknown, unparseable and wrong-prefix IDs all read as not found."""
-        s = LineItemSerializer(data={"name": "x", "invoice": value})
+    def test_no_match_is_does_not_exist(self, invoice):
+        """Every kind of no-match uses DRF's does_not_exist error code."""
+        s = LineItemSerializer(data={"name": "x", "invoice": "not-a-real-slug"})
         assert not s.is_valid()
         assert s.errors["invoice"][0].code == "does_not_exist"
 
@@ -127,6 +88,20 @@ class TestInput:
         s = LineItemSerializer(data={"name": "x", "invoice": value})
         assert not s.is_valid()
         assert s.errors["invoice"][0].code == "incorrect_type"
+
+    def test_duplicate_slug_raises(self):
+        """Like DRF's SlugRelatedField: duplicate slugs are a data problem, so
+        they raise instead of becoming a validation error blaming the client."""
+        from django.core.exceptions import MultipleObjectsReturned
+
+        # name isn't unique, so use it as the slug field to get duplicates
+        Order.objects.create(name="dup")
+        Order.objects.create(name="dup")
+        field = DisplayIDRelatedField(
+            queryset=Order.objects.all(), display_id_prefix="ord", slug_field="name"
+        )
+        with pytest.raises(MultipleObjectsReturned):
+            field.to_internal_value("dup")
 
     def test_many(self, product):
         other = Product.objects.create(name="Other", handle="gadget")
@@ -151,14 +126,6 @@ class TestInput:
 
 @pytest.mark.django_db
 class TestOptions:
-    def test_lookup_strategies(self, invoice):
-        field = DisplayIDRelatedField(
-            queryset=Invoice.objects.all(), lookup_strategies=("display_id",)
-        )
-        assert field.to_internal_value(invoice.display_id) == invoice
-        with pytest.raises(serializers.ValidationError):
-            field.to_internal_value(str(invoice.id))
-
     @pytest.mark.parametrize(
         ("model", "prefix"),
         [(Invoice, "bill"), (Order, "ord")],  # Order has no prefix of its own

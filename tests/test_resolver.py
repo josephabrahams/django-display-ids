@@ -1,536 +1,119 @@
-"""Tests for resolver module."""
+"""Tests for resolve_object() and the shared lookup behind every entry point.
+
+Which identifier forms are accepted or rejected, and how each option
+overrides the model, is covered for every entry point in
+test_consistency.py. These tests cover the resolver's own error types,
+UUID objects, settings and querysets.
+"""
 
 import uuid
 
 import pytest
-from django.core.exceptions import ImproperlyConfigured
 
 from django_display_ids.encoding import encode_display_id
 from django_display_ids.exceptions import (
+    AmbiguousIdentifierError,
     InvalidIdentifierError,
+    MissingPrefixError,
     ObjectNotFoundError,
     UnknownPrefixError,
 )
-from django_display_ids.resolver import resolve_object
+from django_display_ids.resolver import _Lookup, resolve_object
 
-from .models import Invoice, Order, Product, Tag
+from .models import Invoice, Order, Product
 
-
-@pytest.fixture
-def invoice(db):
-    """Create a test invoice."""
-    return Invoice.objects.create(name="Test Invoice", slug="test-invoice")
+pytestmark = pytest.mark.django_db
 
 
-@pytest.fixture
-def product(db):
-    """Create a test product."""
-    return Product.objects.create(name="Test Product", handle="test-product")
+class TestErrors:
+    """resolve_object() raises the library's typed errors."""
 
-
-@pytest.fixture
-def order(db):
-    """Create a test order (no display ID prefix)."""
-    return Order.objects.create(name="Test Order", slug="test-order")
-
-
-@pytest.mark.django_db
-class TestResolveObjectByUuid:
-    """Tests for resolving objects by UUID."""
-
-    def test_resolve_by_uuid(self, invoice):
-        """Object is resolved by UUID string."""
-        result = resolve_object(
-            Invoice,
-            str(invoice.id),
-            strategies=("uuid",),
-        )
-        assert result == invoice
-
-    def test_resolve_by_unhyphenated_uuid(self, invoice):
-        """Object is resolved by unhyphenated UUID."""
-        result = resolve_object(
-            Invoice,
-            invoice.id.hex,
-            strategies=("uuid",),
-        )
-        assert result == invoice
-
-    def test_uuid_not_found(self, invoice):
-        """ObjectNotFoundError raised when UUID doesn't exist."""
-        fake_uuid = uuid.uuid4()
+    def test_not_found(self, invoice):
         with pytest.raises(ObjectNotFoundError) as exc_info:
-            resolve_object(
-                Invoice,
-                str(fake_uuid),
-                strategies=("uuid",),
-            )
+            resolve_object(Invoice, str(uuid.uuid4()))
         assert exc_info.value.model_name == "Invoice"
 
-    def test_resolve_by_uuid_object(self, invoice):
-        """Object is resolved by UUID object directly."""
-        result = resolve_object(
-            Invoice,
-            invoice.id,
-            strategies=("uuid",),
-        )
-        assert result == invoice
+    def test_unparseable(self, invoice):
+        with pytest.raises(InvalidIdentifierError):
+            resolve_object(Invoice, "invalid", strategies=("uuid",))
 
-    def test_uuid_object_not_found(self, invoice):
-        """ObjectNotFoundError raised when UUID object doesn't exist."""
-        with pytest.raises(ObjectNotFoundError):
-            resolve_object(
-                Invoice,
-                uuid.uuid4(),
-                strategies=("uuid",),
-            )
-
-    def test_uuid_object_skips_strategies(self, invoice):
-        """UUID object works regardless of strategies configured."""
-        result = resolve_object(
-            Invoice,
-            invoice.id,
-            strategies=("display_id",),
-            prefix="inv",
-        )
-        assert result == invoice
-
-
-@pytest.mark.django_db
-class TestResolveObjectByDisplayId:
-    """Tests for resolving objects by display ID."""
-
-    def test_resolve_by_display_id(self, invoice):
-        """Object is resolved by display ID."""
-        display_id = encode_display_id("inv", invoice.id)
-        result = resolve_object(
-            Invoice,
-            display_id,
-            strategies=("display_id",),
-            prefix="inv",
-        )
-        assert result == invoice
-
-    def test_display_id_not_found(self, invoice):
-        """ObjectNotFoundError raised when display ID doesn't exist."""
-        fake_display_id = encode_display_id("inv", uuid.uuid4())
-        with pytest.raises(ObjectNotFoundError):
-            resolve_object(
-                Invoice,
-                fake_display_id,
-                strategies=("display_id",),
-                prefix="inv",
-            )
-
-    def test_wrong_prefix_raises_error(self, invoice):
-        """UnknownPrefixError raised when prefix doesn't match."""
-        display_id = encode_display_id("inv", invoice.id)
+    def test_wrong_prefix(self, invoice):
         with pytest.raises(UnknownPrefixError) as exc_info:
-            resolve_object(
-                Invoice,
-                display_id,
-                strategies=("display_id",),
-                prefix="prod",  # Wrong prefix
-            )
-        assert exc_info.value.actual == "inv"
-        assert exc_info.value.expected == "prod"
+            resolve_object(Invoice, invoice.display_id, prefix="prod")
+        assert (exc_info.value.actual, exc_info.value.expected) == ("inv", "prod")
 
-    def test_auto_detect_prefix_from_model(self, invoice):
-        """prefix auto-detected from model's display_id_prefix attribute."""
-        display_id = encode_display_id("inv", invoice.id)
-        result = resolve_object(
-            Invoice,
-            display_id,
-            strategies=("display_id",),
-        )
-        assert result == invoice
+    def test_ambiguous_slug(self):
+        # name isn't unique, so use it as the slug field to get duplicates
+        Order.objects.create(name="dup")
+        Order.objects.create(name="dup")
+        with pytest.raises(AmbiguousIdentifierError) as exc_info:
+            resolve_object(Order, "dup", strategies=("slug",), slug_field="name")
+        assert exc_info.value.count == 2
 
-    def test_auto_detect_prefix_none_for_model_without_prefix(self, order):
-        """prefix defaults to None for models without display_id_prefix."""
-        # Order has no display_id_prefix, so display_id strategy is skipped
-        # and UUID strategy should still work
-        result = resolve_object(
-            Order,
-            str(order.id),
-            strategies=("display_id", "uuid"),
-        )
-        assert result == order
+    def test_queryset_for_another_model(self, invoice):
+        with pytest.raises(TypeError, match="queryset must be for Invoice"):
+            resolve_object(Invoice, invoice.display_id, queryset=Order.objects.all())
 
-    def test_explicit_prefix_overrides_model(self, invoice):
-        """Explicit prefix takes precedence over model attribute."""
-        display_id = encode_display_id("inv", invoice.id)
-        # Pass the correct prefix explicitly
-        result = resolve_object(
-            Invoice,
-            display_id,
-            strategies=("display_id",),
-            prefix="inv",
-        )
-        assert result == invoice
-
-    def test_none_prefix_auto_detects_from_model(self, invoice):
-        """Passing prefix=None auto-detects from model (same as omitting)."""
-        display_id = encode_display_id("inv", invoice.id)
-        result = resolve_object(
-            Invoice,
-            display_id,
-            strategies=("display_id",),
-            prefix=None,
-        )
-        assert result == invoice
-
-
-@pytest.mark.django_db
-class TestResolveObjectBySlug:
-    """Tests for resolving objects by slug."""
-
-    def test_resolve_by_slug(self, invoice):
-        """Object is resolved by slug."""
-        result = resolve_object(
-            Invoice,
-            "test-invoice",
-            strategies=("slug",),
-            slug_field="slug",
-        )
-        assert result == invoice
-
-    def test_slug_not_found(self):
-        """ObjectNotFoundError raised when slug doesn't exist."""
-        with pytest.raises(ObjectNotFoundError):
-            resolve_object(
-                Invoice,
-                "nonexistent-slug",
-                strategies=("slug",),
-            )
-
-
-@pytest.mark.django_db
-class TestResolveObjectWithMultipleStrategies:
-    """Tests for resolving with multiple strategies."""
-
-    def test_uuid_matched_first(self, invoice):
-        """UUID is matched when first in strategies."""
-        result = resolve_object(
-            Invoice,
-            str(invoice.id),
-            strategies=("uuid", "display_id", "slug"),
-            prefix="inv",
-        )
-        assert result == invoice
-
-    def test_display_id_matched_first(self, invoice):
-        """Display ID is matched when first in strategies."""
-        display_id = encode_display_id("inv", invoice.id)
-        result = resolve_object(
-            Invoice,
-            display_id,
-            strategies=("display_id", "uuid", "slug"),
-            prefix="inv",
-        )
-        assert result == invoice
-
-    def test_fallback_to_slug(self, invoice):
-        """Falls back to slug when other strategies don't match."""
-        result = resolve_object(
-            Invoice,
-            "test-invoice",
-            strategies=("uuid", "display_id", "slug"),
-            prefix="inv",
-        )
-        assert result == invoice
-
-    def test_display_id_skipped_without_prefix(self, order):
-        """Display ID strategy is skipped when model has no prefix."""
-        # Order has no display_id_prefix, so display_id strategy is skipped
-        result = resolve_object(
-            Order,
-            str(order.id),
-            strategies=("display_id", "uuid"),
-        )
-        assert result == order
-
-
-@pytest.mark.django_db
-class TestResolveObjectWithCustomFields:
-    """Tests for resolving with custom field names."""
-
-    def test_custom_uuid_field(self, product):
-        """Object resolved using explicit uuid_field override."""
-        result = resolve_object(
-            Product,
-            str(product.uid),
-            strategies=("uuid",),
-            uuid_field="uid",
-        )
-        assert result == product
-
-    def test_custom_slug_field(self, product):
-        """Object resolved using custom slug field name."""
-        result = resolve_object(
-            Product,
-            "test-product",
-            strategies=("slug",),
-            slug_field="handle",
-        )
-        assert result == product
-
-    def test_auto_detect_uuid_field_from_model(self, product):
-        """uuid_field auto-detected from model's uuid_field attribute."""
-        result = resolve_object(
-            Product,
-            str(product.uid),
-            strategies=("uuid",),
-        )
-        assert result == product
-
-    def test_auto_detect_uuid_field_default(self, invoice):
-        """uuid_field defaults to 'id' when model has no uuid_field attribute."""
-        result = resolve_object(
-            Invoice,
-            str(invoice.id),
-            strategies=("uuid",),
-        )
-        assert result == invoice
-
-    def test_auto_detect_uuid_field_from_setting(self, invoice):
-        """uuid_field falls back to DISPLAY_IDS setting."""
-        from django.test import override_settings
-
-        # Invoice.uuid_field is None, so it should fall through to setting
-        with override_settings(DISPLAY_IDS={"UUID_FIELD": "id"}):
-            result = resolve_object(
-                Invoice,
-                str(invoice.id),
-                strategies=("uuid",),
-            )
-            assert result == invoice
-
-    def test_auto_detect_uuid_field_with_uuid_object(self, product):
-        """uuid_field auto-detected when value is a UUID object."""
-        result = resolve_object(
-            Product,
-            product.uid,
-            strategies=("uuid",),
-        )
-        assert result == product
-
-    def test_auto_detect_uuid_field_with_display_id(self, product):
-        """uuid_field auto-detected for display_id strategy."""
-        display_id = encode_display_id("prod", product.uid)
-        result = resolve_object(
-            Product,
-            display_id,
-            strategies=("display_id",),
-            prefix="prod",
-        )
-        assert result == product
-
-    def test_explicit_uuid_field_overrides_model(self, invoice):
-        """Explicit uuid_field takes precedence over model attribute."""
-        # Pass uuid_field="id" explicitly — should work even if model
-        # had a different uuid_field attribute
-        result = resolve_object(
-            Invoice,
-            str(invoice.id),
-            strategies=("uuid",),
-            uuid_field="id",
-        )
-        assert result == invoice
-
-    def test_auto_detect_slug_field_from_model(self, product):
-        """slug_field auto-detected from model's slug_field attribute."""
-        result = resolve_object(
-            Product,
-            "test-product",
-            strategies=("slug",),
-        )
-        assert result == product
-
-    def test_auto_detect_slug_field_default(self, invoice):
-        """slug_field defaults to 'slug' when model has no slug_field attribute."""
-        result = resolve_object(
-            Invoice,
-            "test-invoice",
-            strategies=("slug",),
-        )
-        assert result == invoice
-
-    def test_auto_detect_slug_field_from_setting(self, invoice):
-        """slug_field falls back to DISPLAY_IDS setting."""
-        from django.test import override_settings
-
-        with override_settings(DISPLAY_IDS={"SLUG_FIELD": "slug"}):
-            result = resolve_object(
-                Invoice,
-                "test-invoice",
-                strategies=("slug",),
-            )
-            assert result == invoice
-
-    def test_explicit_slug_field_overrides_model(self, product):
-        """Explicit slug_field takes precedence over model attribute."""
-        result = resolve_object(
-            Product,
-            "test-product",
-            strategies=("slug",),
-            slug_field="handle",
-        )
-        assert result == product
-
-
-@pytest.mark.django_db
-class TestResolveObjectWithQueryset:
-    """Tests for resolving with custom queryset."""
-
-    def test_queryset_filtering(self, db):
-        """Custom queryset is respected."""
-        invoice1 = Invoice.objects.create(name="Invoice 1", slug="invoice-1")
-        Invoice.objects.create(name="Invoice 2", slug="invoice-2")
-
-        # Create a filtered queryset
-        qs = Invoice.objects.filter(slug="invoice-1")
-
-        # Should find invoice1
-        result = resolve_object(
-            Invoice,
-            str(invoice1.id),
-            strategies=("uuid",),
-            queryset=qs,
-        )
-        assert result == invoice1
-
-    def test_queryset_excludes_object(self, db):
-        """ObjectNotFoundError when object excluded by queryset."""
-        Invoice.objects.create(name="Invoice 1", slug="invoice-1")
-        invoice2 = Invoice.objects.create(name="Invoice 2", slug="invoice-2")
-
-        # Create a queryset that excludes invoice2
-        qs = Invoice.objects.filter(slug="invoice-1")
-
-        with pytest.raises(ObjectNotFoundError):
-            resolve_object(
-                Invoice,
-                str(invoice2.id),
-                strategies=("uuid",),
-                queryset=qs,
-            )
-
-
-@pytest.mark.django_db
-class TestResolveObjectErrors:
-    """Tests for error handling."""
-
-    def test_invalid_identifier(self, invoice):
-        """InvalidIdentifierError raised for invalid identifier."""
-        with pytest.raises(InvalidIdentifierError):
-            resolve_object(
-                Invoice,
-                "invalid",
-                strategies=("uuid",),  # Only UUID, won't match
-            )
-
-    def test_ambiguous_slug(self, db):
-        """AmbiguousIdentifierError raised when multiple objects match."""
-        # Create invoices with same slug (in a world without unique constraint)
-        # For testing, we'll use a mock scenario
-        # Since slug is unique=True in our test model, we'll test with a
-        # model that allows duplicates by using filter + count logic
-
-        # Create two invoices
-        Invoice.objects.create(name="Invoice 1", slug="same-slug")
-        Invoice.objects.create(name="Invoice 2", slug=None)
-
-        # The AmbiguousIdentifierError would be raised if MultipleObjectsReturned
-        # occurs. Since our test model has unique slugs, we'll just verify
-        # the normal case works.
-        result = resolve_object(
-            Invoice,
-            "same-slug",
-            strategies=("slug",),
-        )
-        assert result.slug == "same-slug"
-
-
-@pytest.mark.django_db
-class TestResolveObjectSlugFieldGraceful:
-    """Tests for graceful handling of slug strategy on models without a slug field."""
-
-    def test_slug_skipped_on_model_without_slug_field(self, db):
-        """Slug strategy is skipped when model has no slug field."""
-        tag = Tag.objects.create(name="Test Tag")
-
-        result = resolve_object(
-            Tag,
-            str(tag.id),
-            strategies=("display_id", "uuid", "slug"),
-            prefix="tag",
-        )
-        assert result == tag
-
-    def test_slug_only_on_model_without_slug_field(self, db):
-        """Slug-only lookups on a model without a slug field are a config error."""
-        Tag.objects.create(name="Test Tag")
-
-        with pytest.raises(ImproperlyConfigured, match="no 'slug' field"):
-            resolve_object(
-                Tag,
-                "some-slug",
-                strategies=("slug",),
-            )
-
-    def test_slug_still_works_on_model_with_slug_field(self, invoice):
-        """Slug strategy works normally on models with a slug field."""
-        result = resolve_object(
-            Invoice,
-            "test-invoice",
-            strategies=("display_id", "uuid", "slug"),
-            prefix="inv",
-        )
-        assert result == invoice
-
-
-@pytest.mark.django_db
-class TestResolveObjectStrategiesSetting:
-    """resolve_object() reads DISPLAY_IDS["STRATEGIES"] when strategies isn't passed."""
-
-    def test_uses_setting(self, settings):
-        from django_display_ids import InvalidIdentifierError
-
-        invoice = Invoice.objects.create(name="x")
-        settings.DISPLAY_IDS = {"STRATEGIES": ("display_id",)}
-
-        assert resolve_object(Invoice, invoice.display_id) == invoice
-        with pytest.raises(InvalidIdentifierError):
-            resolve_object(Invoice, str(invoice.id))
-
-
-@pytest.mark.django_db
-class TestLookupThatCanNeverMatch:
-    """A configuration that leaves no usable strategy raises instead of 404ing."""
-
-    def test_display_id_only_on_model_without_prefix(self):
-        from django_display_ids.exceptions import MissingPrefixError
-
+    def test_neither_display_id_nor_slug_usable(self):
+        """With nothing left to try, the missing prefix is reported."""
         with pytest.raises(MissingPrefixError):
-            resolve_object(Order, "anything", strategies=("display_id",))
+            resolve_object(
+                Order, "x", strategies=("display_id", "slug"), slug_field="missing"
+            )
 
-    def test_views_raise_instead_of_404(self, rf):
-        from django.views.generic import DetailView
 
-        from django_display_ids.views import DisplayIDMixin
+class TestUUIDObjects:
+    def test_found(self, invoice, product):
+        assert resolve_object(Invoice, invoice.id) == invoice
+        assert resolve_object(Product, product.uid) == product  # uid, not pk
 
-        class View(DisplayIDMixin, DetailView):
-            model = Order
-            lookup_strategies = ("display_id",)
+    def test_not_found(self, invoice):
+        with pytest.raises(ObjectNotFoundError):
+            resolve_object(Invoice, uuid.uuid4())
 
-        view = View()
-        view.kwargs = {"pk": "anything"}
-        view.request = rf.get("/")
-        with pytest.raises(ImproperlyConfigured):
-            view.get_object()
+    def test_skip_strategies(self, invoice):
+        """A UUID object is already parsed, so strategies don't apply."""
+        assert resolve_object(Invoice, invoice.id, strategies=("slug",)) == invoice
 
-    def test_some_strategies_left_is_fine(self):
-        """Dropping only some strategies still leaves a working lookup."""
-        order = Order.objects.create(name="x")
-        result = resolve_object(Order, str(order.id), strategies=("display_id", "uuid"))
-        assert result == order
+
+class TestSettings:
+    def test_uuid_field(self, invoice, settings):
+        """Invoice sets no uuid_field, so UUID_FIELD is used.
+
+        Pointing it at the slug column makes the lookup miss, which shows the
+        setting was read.
+        """
+        settings.DISPLAY_IDS = {"UUID_FIELD": "slug"}
+        with pytest.raises(ObjectNotFoundError):
+            resolve_object(Invoice, str(invoice.id), strategies=("uuid",))
+
+    def test_slug_field(self, invoice, settings):
+        settings.DISPLAY_IDS = {"SLUG_FIELD": "name"}
+        assert resolve_object(Invoice, "Test Invoice", strategies=("slug",)) == invoice
+
+
+def test_queryset(invoice):
+    other = Invoice.objects.create(name="Other", slug="other")
+    queryset = Invoice.objects.filter(slug="test-invoice")
+    assert resolve_object(Invoice, invoice.display_id, queryset=queryset) == invoice
+    with pytest.raises(ObjectNotFoundError):
+        resolve_object(Invoice, other.display_id, queryset=queryset)
+
+
+class TestLookup:
+    """The shared lookup object every entry point uses."""
+
+    def test_build_and_encode_round_trip(self):
+        lookup = _Lookup.for_model(Product)
+        value = uuid.uuid4()
+        display_id = lookup.encode(value)
+        assert display_id == encode_display_id("prod", value)
+        assert lookup.build(display_id) == {"uid": value}
+
+    def test_require_prefix(self):
+        assert _Lookup.for_model(Invoice).require_prefix() == "inv"
+        lookup = _Lookup.for_model(Order, strategies=("uuid",))
+        with pytest.raises(MissingPrefixError, match="Order"):
+            lookup.require_prefix()
+        with pytest.raises(MissingPrefixError):
+            lookup.encode(uuid.uuid4())

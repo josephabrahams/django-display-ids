@@ -175,7 +175,9 @@ Responses show the related object's display ID. Requests accept a display ID,
 a UUID, or a slug, parsed with the same rules as the view mixins, so a client
 can send back exactly what it read. An identifier that doesn't match, can't be
 parsed, or has another model's prefix fails validation with
-``does_not_exist``.
+``does_not_exist``. A slug that matches more than one row raises
+``MultipleObjectsReturned``, as with DRF's ``SlugRelatedField``, so keep slug
+fields unique.
 
 The related model needs a ``display_id_prefix``. Otherwise the field raises
 ``MissingPrefixError`` when the serializer is defined, unless you pass

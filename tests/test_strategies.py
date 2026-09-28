@@ -18,23 +18,23 @@ from django_display_ids.strategies import (
 class TestParseUuid:
     """Tests for parse_uuid function."""
 
-    def test_valid_hyphenated_uuid(self):
-        """Standard hyphenated UUID is parsed."""
+    @pytest.mark.parametrize(
+        "form",
+        [
+            str,
+            lambda u: str(u).upper(),
+            lambda u: u.hex,
+            lambda u: f"{{{u}}}",
+            lambda u: u.urn,
+        ],
+        ids=["hyphenated", "uppercase", "hex", "braces", "urn"],
+    )
+    def test_valid_forms(self, form):
+        """Any form uuid.UUID() accepts is parsed."""
         test_uuid = uuid.uuid4()
-        result = parse_uuid(str(test_uuid))
-
-        assert result is not None
-        assert result.strategy == "uuid"
-        assert result.uuid == test_uuid
-
-    def test_valid_unhyphenated_uuid(self):
-        """Unhyphenated UUID is parsed."""
-        test_uuid = uuid.uuid4()
-        result = parse_uuid(test_uuid.hex)
-
-        assert result is not None
-        assert result.strategy == "uuid"
-        assert result.uuid == test_uuid
+        assert parse_uuid(form(test_uuid)) == StrategyResult(
+            strategy="uuid", uuid=test_uuid
+        )
 
     def test_invalid_string(self):
         """Invalid string returns None."""
@@ -245,12 +245,11 @@ class TestParseIdentifier:
         )
         assert result.strategy == "uuid"
 
-    def test_default_strategies(self):
-        """Default strategies work correctly."""
+    def test_display_id_then_uuid(self):
+        """Each form is picked up by its own strategy."""
         test_uuid = uuid.uuid4()
         display_id = encode_display_id("inv", test_uuid)
 
-        # display_id, uuid are default
         result = parse_identifier(
             display_id,
             strategies=("display_id", "uuid"),
@@ -277,9 +276,9 @@ class TestStrategyResult:
             result.strategy = "slug"
 
     def test_slots(self):
-        """StrategyResult uses slots."""
+        """StrategyResult uses slots, so instances have no __dict__."""
         result = StrategyResult(strategy="uuid")
-        assert hasattr(result, "__slots__")
+        assert not hasattr(result, "__dict__")
 
     def test_defaults(self):
         """Optional fields default to None."""
@@ -317,3 +316,23 @@ class TestUUIDObjects:
         assert parse_uuid(value) is None
         assert parse_display_id(value) is None
         assert parse_slug(value) is None
+
+
+class TestParseIdentifierEdgeCases:
+    def test_strips_whitespace(self):
+        test_uuid = uuid.uuid4()
+        display_id = encode_display_id("inv", test_uuid)
+        result = parse_identifier(
+            f"  {display_id}\n", ("display_id",), expected_prefix="inv"
+        )
+        assert result.uuid == test_uuid
+
+    def test_wrong_prefix_raises_even_with_slug_after(self):
+        """A display ID with the wrong prefix isn't quietly treated as a slug."""
+        display_id = encode_display_id("prod", uuid.uuid4())
+        with pytest.raises(UnknownPrefixError):
+            parse_identifier(display_id, ("display_id", "slug"), expected_prefix="inv")
+
+    def test_no_strategies(self):
+        with pytest.raises(InvalidIdentifierError):
+            parse_identifier("anything", ())

@@ -16,21 +16,21 @@ Add to any view that uses ``get_object()``. When your model extends
 
    class InvoiceDetailView(DisplayIDMixin, DetailView):
        model = Invoice  # prefix inherited from Invoice.display_id_prefix
-       lookup_param = "id"
+       lookup_url_kwarg = "id"
 
    # Works with any view that uses get_object()
    class InvoiceUpdateView(DisplayIDMixin, UpdateView):
        model = Invoice
-       lookup_param = "id"
+       lookup_url_kwarg = "id"
 
    class InvoiceDeleteView(DisplayIDMixin, DeleteView):
        model = Invoice
-       lookup_param = "id"
+       lookup_url_kwarg = "id"
 
 Configuration Attributes
 ------------------------
 
-``lookup_param``
+``lookup_url_kwarg``
    The URL parameter name to read. Defaults to ``"pk"``.
 
 ``lookup_strategies``
@@ -61,7 +61,7 @@ You can override the model's prefix on a specific view if needed:
 
    class InvoiceDetailView(DisplayIDMixin, DetailView):
        model = Invoice
-       lookup_param = "id"
+       lookup_url_kwarg = "id"
        display_id_prefix = "custom"  # overrides Invoice.display_id_prefix
 
 URL Configuration
@@ -129,10 +129,8 @@ See :doc:`/reference/converters` for full details and custom slug patterns.
 Error Handling
 --------------
 
-When lookup fails, the mixin raises ``Http404``:
+An unparseable identifier, a wrong prefix, or no match all raise ``Http404``.
 
-- Invalid identifier format → 404
-- Wrong prefix → 404
-- Object not found → 404
-
-This matches Django's standard behavior for ``get_object_or_404()``.
+As with Django's own ``get_object()``, a slug that matches more than one row
+raises ``MultipleObjectsReturned``, and a missing URL parameter raises
+``AttributeError``.

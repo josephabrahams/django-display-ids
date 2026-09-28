@@ -3,10 +3,10 @@
 import uuid
 
 import pytest
+from django.core.exceptions import ImproperlyConfigured
 
 from django_display_ids.encoding import encode_display_id
 from django_display_ids.exceptions import (
-    InvalidIdentifierError,
     MissingPrefixError,
 )
 
@@ -55,7 +55,7 @@ class TestGetByDisplayId:
     def test_wrong_prefix(self, invoice):
         """Model.DoesNotExist raised when prefix doesn't match."""
         wrong_prefix_id = encode_display_id("prod", invoice.id)
-        with pytest.raises(Invoice.DoesNotExist, match="unknown prefix"):
+        with pytest.raises(Invoice.DoesNotExist, match=r"(?i)unknown prefix"):
             Invoice.objects.get_by_display_id(wrong_prefix_id)
 
     def test_explicit_prefix(self, invoice):
@@ -127,8 +127,8 @@ class TestGetByIdentifier:
         assert result == order
 
     def test_display_id_only_without_prefix_raises_error(self, order):
-        """Model.DoesNotExist when display_id is only strategy and no prefix."""
-        with pytest.raises(Order.DoesNotExist):
+        """A lookup that can never match is a config error, not DoesNotExist."""
+        with pytest.raises(MissingPrefixError):
             Order.objects.get_by_identifier(
                 "anything",
                 strategies=("display_id",),
@@ -307,15 +307,34 @@ class TestGetByIdentifiers:
         )
         assert list(result) == [inv1]
 
-    def test_invalid_identifier_raises_error(self, db):
-        """InvalidIdentifierError raised for unparseable identifier."""
-        Invoice.objects.create(name="Invoice 1", slug="invoice-1")
+    def test_invalid_identifier_is_left_out(self, db):
+        """Unparseable identifiers are left out, like missing ones."""
+        invoice = Invoice.objects.create(name="Invoice 1", slug="invoice-1")
 
-        with pytest.raises(InvalidIdentifierError):
-            Invoice.objects.get_by_identifiers(
-                ["invalid-not-a-uuid"],
-                strategies=("uuid",),
-            )
+        result = Invoice.objects.get_by_identifiers(
+            ["invalid-not-a-uuid", str(invoice.id)],
+            strategies=("uuid",),
+        )
+        assert list(result) == [invoice]
+
+    def test_wrong_prefix_is_left_out(self, db):
+        """Display IDs with the wrong prefix are left out, like missing ones."""
+        invoice = Invoice.objects.create(name="Invoice 1")
+
+        result = Invoice.objects.get_by_identifiers(
+            [encode_display_id("prod", invoice.id), invoice.display_id]
+        )
+        assert list(result) == [invoice]
+
+    def test_all_invalid_returns_empty(self, db):
+        """If nothing parses, the result is empty, not every row."""
+        Invoice.objects.create(name="Invoice 1")
+
+        result = Invoice.objects.get_by_identifiers(
+            ["nope", encode_display_id("prod", uuid.uuid4())],
+            strategies=("display_id", "uuid"),
+        )
+        assert list(result) == []
 
     def test_works_with_filtered_queryset(self, db):
         """Batch lookup respects queryset filters."""
@@ -497,10 +516,10 @@ class TestResolveIdentifier:
         assert result == tag.id
 
     def test_model_without_slug_field_slug_only(self, db):
-        """Model.DoesNotExist when slug is only strategy and model has no slug field."""
+        """Slug-only lookups on a model without a slug field are a config error."""
         Tag.objects.create(name="Test Tag")
 
-        with pytest.raises(Tag.DoesNotExist):
+        with pytest.raises(ImproperlyConfigured, match="no 'slug' field"):
             Tag.objects.resolve_identifier(
                 "some-slug",
                 strategies=("slug",),
@@ -547,10 +566,10 @@ class TestSlugFieldGracefulHandling:
         assert result == tag
 
     def test_get_by_identifier_slug_only_on_model_without_slug_field(self, db):
-        """Model.DoesNotExist when slug is the only strategy and model has no slug field."""
+        """Slug-only lookups on a model without a slug field are a config error."""
         Tag.objects.create(name="Test Tag")
 
-        with pytest.raises(Tag.DoesNotExist):
+        with pytest.raises(ImproperlyConfigured, match="no 'slug' field"):
             Tag.objects.get_by_identifier(
                 "some-slug",
                 strategies=("slug",),
@@ -561,18 +580,13 @@ class TestSlugFieldGracefulHandling:
         result = Invoice.objects.get_by_identifier("test-invoice")
         assert result == invoice
 
-    def test_get_by_identifiers_slug_raises_on_model_without_slug_field(self, db):
-        """Slug string raises InvalidIdentifierError on models without a slug field."""
+    def test_get_by_identifiers_slug_left_out_on_model_without_slug_field(self, db):
+        """Slug strings are left out on models without a slug field."""
         tag1 = Tag.objects.create(name="Tag 1")
 
         # Slug string can't be parsed when slug strategy is stripped
-        with pytest.raises(InvalidIdentifierError):
-            Tag.objects.get_by_identifiers(
-                [
-                    tag1.display_id,
-                    "some-slug",
-                ],
-            )
+        result = Tag.objects.get_by_identifiers([tag1.display_id, "some-slug"])
+        assert list(result) == [tag1]
 
     def test_get_by_identifiers_without_slugs_on_model_without_slug_field(self, db):
         """Batch lookup works with non-slug identifiers on models without a slug field."""
@@ -588,14 +602,11 @@ class TestSlugFieldGracefulHandling:
         assert set(result) == {tag1, tag2}
 
     def test_get_by_identifiers_slug_only_on_model_without_slug_field(self, db):
-        """Batch lookup with only slugs returns empty when model has no slug field."""
+        """Slug-only batch lookups on a model without a slug field are a config error."""
         Tag.objects.create(name="Tag 1")
 
-        with pytest.raises(InvalidIdentifierError):
-            Tag.objects.get_by_identifiers(
-                ["some-slug"],
-                strategies=("slug",),
-            )
+        with pytest.raises(ImproperlyConfigured, match="no 'slug' field"):
+            Tag.objects.get_by_identifiers(["some-slug"], strategies=("slug",))
 
     def test_get_by_identifiers_slug_on_model_with_slug_field(self, db):
         """Batch slug lookup still works on models that have a slug field."""

@@ -54,9 +54,12 @@ The prefix argument is required and must be 1-16 lowercase letters.
 Error Handling
 --------------
 
+The value can be a UUID object or a UUID string, with or without hyphens, in
+any case.
+
 Errors raise ``TemplateSyntaxError``:
 
-- Value is not a UUID
+- Value is not a UUID or UUID string
 - Invalid prefix format (must be 1-16 lowercase letters)
 
 ``None`` values return an empty string (not an error).

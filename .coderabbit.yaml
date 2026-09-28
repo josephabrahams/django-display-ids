@@ -15,7 +15,7 @@ reviews:
           rest_framework or drf_spectacular.
         - Code must support Python 3.12+ and Django 4.2 through 6.1.
         - Lookup paths (resolver, managers, admin, view mixins) should go
-          through resolver._build_lookup() so they accept and reject the
+          through resolver._Lookup so they accept and reject the
           same identifiers.
     - path: "tests/**"
       instructions: |

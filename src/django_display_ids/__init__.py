@@ -19,7 +19,7 @@ Example:
     # Use in Django views — prefix is inherited from the model
     class InvoiceDetailView(DisplayIDMixin, DetailView):
         model = Invoice
-        lookup_param = "id"
+        lookup_url_kwarg = "id"
 """
 
 from importlib.metadata import version

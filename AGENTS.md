@@ -13,7 +13,7 @@ Django library for Stripe-like prefixed display IDs. Published on PyPI as `djang
 ## Commands
 
 - **Tests**: `python -m pytest tests/ -x -q`
-- **Full matrix**: `uvx nox` (Python 3.12–3.14 × Django 4.2–6.0)
+- **Full matrix**: `uvx nox` (Python 3.12–3.14 × Django 4.2–6.1)
 - **Lint**: `ruff check .`
 - **Format**: `ruff format .`
 

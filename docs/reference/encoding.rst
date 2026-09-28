@@ -19,6 +19,12 @@ Encode a UUID to a 22-character base62 string.
    u = uuid.UUID("550e8400-e29b-41d4-a716-446655440000")
    encoded = encode_uuid(u)  # -> "2aUyqjCzEIiEcYMKj7TZtw"
 
+   # UUID strings work too, in any form uuid.UUID() accepts
+   encode_uuid("550E8400E29B41D4A716446655440000")  # -> "2aUyqjCzEIiEcYMKj7TZtw"
+
+Raises ``ValueError`` for a string that isn't a UUID, and ``TypeError`` for
+anything other than a UUID or string.
+
 decode_uuid
 ~~~~~~~~~~~
 
@@ -55,10 +61,10 @@ Parameters:
 ``prefix``
    1-16 lowercase letters.
 
-``uuid``
-   A UUID object.
+``value``
+   A UUID object or UUID string.
 
-Raises ``ValueError`` if the prefix is invalid.
+Raises ``ValueError`` if the prefix or UUID string is invalid.
 
 decode_display_id
 ~~~~~~~~~~~~~~~~~

@@ -2,22 +2,18 @@
 
 from __future__ import annotations
 
-import uuid
 from typing import TYPE_CHECKING, Any, Self, TypeVar
 
-from django.core.exceptions import FieldDoesNotExist
 from django.db import models
 from django.db.models import Q
 
-from .conf import get_setting
-from .encoding import decode_display_id
 from .exceptions import (
     DisplayIDLookupError,
-    MissingPrefixError,
 )
-from .strategies import parse_identifier
+from .resolver import _Lookup
 
 if TYPE_CHECKING:
+    import uuid
     from collections.abc import Sequence
 
     from .typing import StrategyName
@@ -96,36 +92,10 @@ class DisplayIDQuerySet(models.QuerySet[M]):
                 format is invalid, or if the prefix doesn't match.
             MissingPrefixError: If no prefix is configured on the model.
         """
-        model = self.model
-        uuid_field = self._get_uuid_field()
-
-        # UUID objects skip display ID parsing entirely
-        if isinstance(value, uuid.UUID):
-            return self.get(**{uuid_field: value})
-
-        # Get model config
-        expected_prefix = prefix or self._get_model_prefix()
-
-        # Require a prefix for display ID lookups
-        if expected_prefix is None:
-            raise MissingPrefixError(model_name=model.__name__)
-
-        # Decode the display ID and validate prefix
-        try:
-            decoded_prefix, uuid_value = decode_display_id(value)
-        except ValueError as e:
-            raise model.DoesNotExist(  # type: ignore[attr-defined]
-                f"{model.__name__}: invalid display ID: {value!r}"
-            ) from e
-
-        if decoded_prefix != expected_prefix:
-            raise model.DoesNotExist(  # type: ignore[attr-defined]
-                f"{model.__name__}: unknown prefix {decoded_prefix!r} "
-                f"in {value!r}, expected {expected_prefix!r}"
-            )
-
-        # Query the database
-        return self.get(**{uuid_field: uuid_value})
+        lookup = _Lookup.for_model(
+            self.model, strategies=("display_id",), prefix=prefix
+        )
+        return self.get(**self._build(lookup, value))
 
     def get_by_identifier(
         self,
@@ -152,40 +122,8 @@ class DisplayIDQuerySet(models.QuerySet[M]):
                 no matching object exists.
             Model.MultipleObjectsReturned: If multiple objects match (slug).
         """
-        model = self.model
-        uuid_field = self._get_uuid_field()
-
-        # UUID objects skip strategy parsing entirely
-        if isinstance(value, uuid.UUID):
-            return self.get(**{uuid_field: value})
-
-        slug_field = self._get_slug_field()
-        expected_prefix = prefix or self._get_model_prefix()
-        lookup_strategies = strategies or self._get_strategies()
-
-        # Skip slug strategy if the model has no slug field
-        if not self._has_slug_field(slug_field):
-            lookup_strategies = tuple(s for s in lookup_strategies if s != "slug")
-
-        # Parse the identifier
-        try:
-            result = parse_identifier(
-                value, lookup_strategies, expected_prefix=expected_prefix
-            )
-        except DisplayIDLookupError as e:
-            raise model.DoesNotExist(  # type: ignore[attr-defined]
-                f"{model.__name__}: {e}"
-            ) from e
-
-        # Build the lookup
-        lookup: dict[str, Any]
-        if result.strategy in ("uuid", "display_id"):
-            lookup = {uuid_field: result.uuid}
-        else:
-            lookup = {slug_field: result.slug}
-
-        # Execute the query
-        return self.get(**lookup)
+        lookup = _Lookup.for_model(self.model, strategies=strategies, prefix=prefix)
+        return self.get(**self._build(lookup, value))
 
     def resolve_identifier(
         self,
@@ -217,38 +155,15 @@ class DisplayIDQuerySet(models.QuerySet[M]):
                 no matching object exists (slug lookup).
             Model.MultipleObjectsReturned: If multiple objects match (slug).
         """
-        model = self.model
-        uuid_field = self._get_uuid_field()
+        lookup = _Lookup.for_model(self.model, strategies=strategies, prefix=prefix)
+        kwargs = self._build(lookup, value)
 
-        # UUID objects are returned as-is
-        if isinstance(value, uuid.UUID):
-            return value
+        # UUID and display ID lookups already hold the UUID, so no query
+        if lookup.uuid_field in kwargs:
+            return kwargs[lookup.uuid_field]  # type: ignore[no-any-return]
 
-        slug_field = self._get_slug_field()
-        expected_prefix = prefix or self._get_model_prefix()
-        lookup_strategies = strategies or self._get_strategies()
-
-        # Skip slug strategy if the model has no slug field
-        if not self._has_slug_field(slug_field):
-            lookup_strategies = tuple(s for s in lookup_strategies if s != "slug")
-
-        # Parse the identifier
-        try:
-            result = parse_identifier(
-                value, lookup_strategies, expected_prefix=expected_prefix
-            )
-        except DisplayIDLookupError as e:
-            raise model.DoesNotExist(  # type: ignore[attr-defined]
-                f"{model.__name__}: {e}"
-            ) from e
-
-        # UUID and display_id strategies yield a UUID directly — no DB query
-        if result.strategy in ("uuid", "display_id"):
-            return result.uuid  # type: ignore[return-value]
-
-        # Slug strategy requires a DB lookup
-        obj = self.get(**{slug_field: result.slug})
-        return getattr(obj, uuid_field)  # type: ignore[no-any-return]
+        # Slug lookups need a query
+        return getattr(self.get(**kwargs), lookup.uuid_field)  # type: ignore[no-any-return]
 
     def get_by_identifiers(
         self,
@@ -270,10 +185,10 @@ class DisplayIDQuerySet(models.QuerySet[M]):
 
         Returns:
             A queryset containing matching objects. Order is not guaranteed
-            to match input order. Missing identifiers are silently excluded.
-
-        Raises:
-            InvalidIdentifierError: If any identifier cannot be parsed.
+            to match input order. Identifiers that match nothing are left
+            out, whether no row exists or the identifier is invalid or has
+            the wrong prefix, the same inputs ``get_by_identifier()``
+            rejects with ``DoesNotExist``.
 
         Example:
             invoices = Invoice.objects.get_by_identifiers([
@@ -286,77 +201,35 @@ class DisplayIDQuerySet(models.QuerySet[M]):
         if not values:
             return self.none()
 
-        uuid_field = self._get_uuid_field()
-        slug_field = self._get_slug_field()
-        expected_prefix = prefix or self._get_model_prefix()
-        lookup_strategies = strategies or self._get_strategies()
+        lookup = _Lookup.for_model(self.model, strategies=strategies, prefix=prefix)
 
-        # Skip slug strategy if the model has no slug field
-        if not self._has_slug_field(slug_field):
-            lookup_strategies = tuple(s for s in lookup_strategies if s != "slug")
-
-        # Collect UUIDs and slugs separately
-        uuids: list[Any] = []
-        slugs: list[str] = []
-
+        # Group values by field so the query is one IN per field
+        by_field: dict[str, list[Any]] = {}
         for value in values:
-            # UUID objects skip strategy parsing entirely
-            if isinstance(value, uuid.UUID):
-                uuids.append(value)
-                continue
+            try:
+                kwargs = lookup.build(value)
+            except DisplayIDLookupError:
+                continue  # can't match anything, like a missing row
+            for field, field_value in kwargs.items():
+                by_field.setdefault(field, []).append(field_value)
 
-            result = parse_identifier(
-                value, lookup_strategies, expected_prefix=expected_prefix
-            )
-            if result.strategy in ("uuid", "display_id"):
-                uuids.append(result.uuid)
-            else:
-                slugs.append(result.slug)  # type: ignore[arg-type]
+        # An empty Q() would match every row
+        if not by_field:
+            return self.none()
 
-        # Build query with OR conditions
         query = Q()
-        if uuids:
-            query |= Q(**{f"{uuid_field}__in": uuids})
-        if slugs:
-            query |= Q(**{f"{slug_field}__in": slugs})
-
+        for field, field_values in by_field.items():
+            query |= Q(**{f"{field}__in": field_values})
         return self.filter(query)
 
-    def _get_uuid_field(self) -> str:
-        """Get the UUID field name for this model."""
-        if hasattr(self.model, "_get_uuid_field"):
-            result: str = self.model._get_uuid_field()  # type: ignore[attr-defined]
-            return result
-        return str(get_setting("UUID_FIELD"))
-
-    def _get_slug_field(self) -> str:
-        """Get the slug field name for this model."""
-        if hasattr(self.model, "_get_slug_field"):
-            result: str = self.model._get_slug_field()  # type: ignore[attr-defined]
-            return result
-        return str(get_setting("SLUG_FIELD"))
-
-    def _get_strategies(self) -> tuple[StrategyName, ...]:
-        """Get the default strategies."""
-        return get_setting("STRATEGIES")  # type: ignore[return-value]
-
-    def _has_slug_field(self, slug_field: str) -> bool:
-        """Check whether the model has the configured slug field."""
+    def _build(self, lookup: _Lookup, value: str | uuid.UUID) -> dict[str, Any]:
+        """Build a lookup, raising ``Model.DoesNotExist`` on bad input like ``get()``."""
         try:
-            self.model._meta.get_field(slug_field)
-            return True
-        except FieldDoesNotExist:
-            return False
-
-    def _get_model_prefix(self) -> str | None:
-        """Get the display ID prefix from the model, if defined."""
-        if hasattr(self.model, "get_display_id_prefix"):
-            try:
-                result: str | None = self.model.get_display_id_prefix()  # type: ignore[attr-defined]
-                return result
-            except NotImplementedError:
-                return None
-        return None
+            return lookup.build(value)
+        except DisplayIDLookupError as e:
+            raise self.model.DoesNotExist(  # type: ignore[attr-defined]
+                f"{self.model.__name__}: {e}"
+            ) from e
 
 
 class DisplayIDManager(models.Manager[M]):

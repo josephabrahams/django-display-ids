@@ -67,9 +67,13 @@ Configuration Attributes
 Error Handling
 ~~~~~~~~~~~~~~
 
-- ``ObjectNotFoundError`` → ``NotFound`` (404)
-- ``InvalidIdentifierError`` → ``ParseError`` (400)
-- ``UnknownPrefixError`` → ``ParseError`` (400)
+``get_object()`` behaves like DRF's own ``GenericAPIView.get_object()``:
+
+- The queryset goes through ``filter_queryset()`` before the lookup.
+- An unparseable identifier, a wrong prefix, or no match all raise ``Http404``,
+  which DRF returns as a 404 response.
+- A slug that matches more than one row raises ``MultipleObjectsReturned``.
+- A missing URL keyword argument fails an ``AssertionError``.
 
 DisplayIDField
 --------------
@@ -176,23 +180,21 @@ Use the provided helper for consistent API documentation:
                OpenApiTypes.STR,
                OpenApiParameter.PATH,
                description=id_param_description("inv"),
-               # -> "Identifier: display_id (inv_xxx) or UUID"
+               # -> "Identifier: display_id (inv_xxx), UUID, or slug"
            )
        ],
    )
    class InvoiceViewSet(DisplayIDMixin, ModelViewSet):
        ...
 
-For endpoints that also accept slugs:
+By default the description lists the formats in the ``STRATEGIES`` setting.
+If a view sets its own ``lookup_strategies``, pass ``with_uuid`` and
+``with_slug`` to match:
 
 .. code-block:: python
 
-   description=id_param_description("app", with_slug=True)
-   # -> "Identifier: display_id (app_xxx), UUID, or slug"
+   description=id_param_description("inv", with_slug=False)
+   # -> "Identifier: display_id (inv_xxx) or UUID"
 
-For display ID only (no UUID fallback):
-
-.. code-block:: python
-
-   description=id_param_description("inv", with_uuid=False)
+   description=id_param_description("inv", with_uuid=False, with_slug=False)
    # -> "Identifier: display_id (inv_xxx)"

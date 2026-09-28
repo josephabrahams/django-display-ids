@@ -34,12 +34,13 @@ For Django REST Framework integration:
 
 .. code-block:: console
 
-   pip install djangorestframework>=3.14
+   pip install "django-display-ids[drf]"
 
-For automatic OpenAPI schema generation with drf-spectacular:
+For OpenAPI schemas with drf-spectacular (includes DRF):
 
 .. code-block:: console
 
-   pip install drf-spectacular>=0.28
+   pip install "django-display-ids[spectacular]"
 
-Both are optional and the package gracefully handles their absence.
+Only Django is required. DRF is imported only when you import from
+``django_display_ids.contrib.rest_framework``.

@@ -46,6 +46,8 @@ SLUG_REGEX
 The ``SLUG_REGEX`` setting controls what patterns are considered valid slugs
 in the :class:`~django_display_ids.converters.DisplayIDOrSlugConverter` and
 :class:`~django_display_ids.converters.DisplayIDOrUUIDOrSlugConverter`.
+It's read when Django builds your URL patterns, so ``override_settings`` in
+tests works as expected.
 
 By default, it uses Django's slug pattern (``[-a-zA-Z0-9_]+``), which allows:
 
@@ -82,7 +84,7 @@ All mixins accept these attributes to override defaults:
    * - Attribute
      - Default
      - Description
-   * - ``lookup_param`` / ``lookup_url_kwarg``
+   * - ``lookup_url_kwarg``
      - ``"pk"``
      - URL parameter name to read
    * - ``lookup_strategies``

@@ -266,3 +266,30 @@ class TestShortUuidCompatibility:
         shortuuid_padded = shortuuid_encoded.zfill(ENCODED_UUID_LENGTH)
 
         assert our_encoded == shortuuid_padded
+
+
+class TestEncodeAcceptsStrings:
+    """Encoders accept UUID strings, the same forms the lookup side accepts."""
+
+    value = uuid.UUID("550e8400-e29b-41d4-a716-446655440000")
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "550e8400-e29b-41d4-a716-446655440000",
+            "550E8400-E29B-41D4-A716-446655440000",
+            "550e8400e29b41d4a716446655440000",
+            " 550e8400-e29b-41d4-a716-446655440000 ",
+        ],
+    )
+    def test_string_matches_uuid_object(self, text):
+        assert encode_uuid(text) == encode_uuid(self.value)
+        assert encode_display_id("inv", text) == encode_display_id("inv", self.value)
+
+    def test_invalid_string_raises_value_error(self):
+        with pytest.raises(ValueError):
+            encode_uuid("not-a-uuid")
+
+    def test_other_types_raise_type_error(self):
+        with pytest.raises(TypeError, match="got int"):
+            encode_uuid(12345)

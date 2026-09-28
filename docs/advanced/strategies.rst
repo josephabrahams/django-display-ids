@@ -17,7 +17,7 @@ Available Strategies
      - ``prefix_base62uuid``
      - Decode display ID and lookup by UUID field
    * - ``uuid``
-     - UUID (v4/v7)
+     - UUID (any version)
      - Parse as UUID and lookup by UUID field
    * - ``slug``
      - any string
@@ -36,6 +36,17 @@ performs the database lookup.
    # "inv_2aUy..." -> display_id strategy matches, decodes UUID, queries
    # "550e8400-..." -> display_id fails, uuid strategy matches, queries
    # "my-slug" -> both fail -> InvalidIdentifierError
+
+UUID objects
+~~~~~~~~~~~~
+
+Every lookup function also accepts a ``uuid.UUID`` object. It's already a
+UUID, so it goes straight to a UUID lookup and strategies aren't checked.
+Strategies only control which text formats are accepted.
+
+.. code-block:: python
+
+   resolve_object(Invoice, invoice.id)  # works even with strategies=("slug",)
 
 Default Strategies
 ------------------
@@ -59,8 +70,8 @@ This prevents accidentally matching display IDs from other models. For example,
 if you're looking up an ``Invoice`` with prefix ``inv``, a ``User`` display ID
 like ``usr_xxx`` won't match — the strategy detects the wrong prefix.
 
-In ``resolve_object``, the display_id strategy is automatically skipped for
-models without a ``display_id_prefix``.
+Every lookup skips the display_id strategy for models without a
+``display_id_prefix``.
 
 .. code-block:: python
 
@@ -73,7 +84,7 @@ uuid Strategy
 
 No configuration required. Attempts to parse the value as a standard UUID.
 
-Works with both hyphenated and non-hyphenated formats:
+Works with any UUID version, in either case, with or without hyphens:
 
 - ``550e8400-e29b-41d4-a716-446655440000``
 - ``550e8400e29b41d4a716446655440000``
@@ -87,6 +98,16 @@ anything, **always put it last** in the strategy list.
 If the model doesn't have the configured slug field, the slug strategy is
 automatically skipped. This means you can safely include ``"slug"`` in your
 global default strategies without breaking models that don't have a slug field.
+
+Strategies that can't be used
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Skipping only applies while other strategies are left. If every strategy you
+asked for is skipped, for example ``lookup_strategies = ("display_id",)`` on a
+model with no prefix, the lookup could never match anything. Instead of
+returning 404 for every request, it raises ``MissingPrefixError`` (or
+``ImproperlyConfigured`` for a slug-only lookup without a slug field), so the
+mistake shows up straight away.
 
 Strategy Ordering Best Practices
 --------------------------------

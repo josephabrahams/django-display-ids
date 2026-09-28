@@ -30,7 +30,7 @@ django-display-ids provides several integration points:
    Use :class:`DisplayIDField` in serializers to include display IDs in responses.
 
 **Django Admin**
-   Add :class:`DisplayIDAdminSearchMixin` to enable searching by display ID or UUID.
+   Add :class:`DisplayIDAdminSearchMixin` to search by display ID, UUID, or slug.
 
 **Templates**
    Use the ``display_id`` filter to encode UUIDs as display IDs.

@@ -21,20 +21,38 @@ ENCODED_UUID_LENGTH = 22
 
 # Display ID format: {prefix}_{base62(uuid)}
 # Prefix must be lowercase letters only, 1-16 chars
-PREFIX_PATTERN = re.compile(r"^[a-z]{1,16}$")
-DISPLAY_ID_PATTERN = re.compile(r"^([a-z]{1,16})_([0-9A-Za-z]{22})$")
+PREFIX_REGEX = r"[a-z]{1,16}"
+ENCODED_UUID_REGEX = rf"[0-9A-Za-z]{{{ENCODED_UUID_LENGTH}}}"
+DISPLAY_ID_REGEX = rf"{PREFIX_REGEX}_{ENCODED_UUID_REGEX}"
+
+PREFIX_PATTERN = re.compile(rf"^{PREFIX_REGEX}$")
+DISPLAY_ID_PATTERN = re.compile(rf"^({PREFIX_REGEX})_({ENCODED_UUID_REGEX})$")
 
 
-def encode_uuid(value: uuid.UUID) -> str:
+def _to_uuid(value: uuid.UUID | str) -> uuid.UUID:
+    """Return *value* as a UUID object, parsing strings with ``uuid.UUID()``."""
+    if isinstance(value, uuid.UUID):
+        return value
+    if isinstance(value, str):
+        return uuid.UUID(value.strip())
+    raise TypeError(f"Expected a UUID or string, got {type(value).__name__}")
+
+
+def encode_uuid(value: uuid.UUID | str) -> str:
     """Encode a UUID to a fixed-length base62 string.
 
     Args:
-        value: UUID to encode.
+        value: UUID to encode, as a UUID object or any string
+            ``uuid.UUID()`` accepts.
 
     Returns:
         22-character base62 string.
+
+    Raises:
+        ValueError: If a string isn't a valid UUID.
+        TypeError: If value is neither a UUID nor a string.
     """
-    num = value.int
+    num = _to_uuid(value).int
     chars = []
 
     for _ in range(ENCODED_UUID_LENGTH):
@@ -75,18 +93,20 @@ def decode_uuid(value: str) -> uuid.UUID:
     return uuid.UUID(int=num)
 
 
-def encode_display_id(prefix: str, value: uuid.UUID) -> str:
+def encode_display_id(prefix: str, value: uuid.UUID | str) -> str:
     """Encode a UUID to a display ID with prefix.
 
     Args:
         prefix: Lowercase letter prefix (1-16 chars).
-        value: UUID to encode.
+        value: UUID to encode, as a UUID object or any string
+            ``uuid.UUID()`` accepts.
 
     Returns:
         Display ID in format {prefix}_{base62(uuid)}.
 
     Raises:
-        ValueError: If prefix is invalid.
+        ValueError: If prefix is invalid or a string isn't a valid UUID.
+        TypeError: If value is neither a UUID nor a string.
     """
     if not PREFIX_PATTERN.match(prefix):
         raise ValueError(f"Prefix must be 1-16 lowercase letters, got: {prefix!r}")

@@ -30,7 +30,7 @@ no migrations or schema changes.
 Features
 --------
 
-- **Multiple identifier formats**: display ID (``prefix_base62uuid``), UUID (v4/v7), slug
+- **Multiple identifier formats**: display ID (``prefix_base62uuid``), UUID (any version), slug
 - **Framework support**: Django CBVs and Django REST Framework
 - **Zero model changes required**: Works with any existing UUID field
 - **Stateless**: Pure lookup, no database writes

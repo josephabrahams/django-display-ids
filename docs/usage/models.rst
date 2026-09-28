@@ -49,7 +49,8 @@ registered. This allows the library to:
 - Look up models by prefix using ``get_model_for_prefix()``
 
 Prefix collisions (two models with the same prefix) raise ``ValueError`` at
-class definition time.
+class definition time. Models are told apart by module and class name, so
+``billing.Invoice`` and ``legacy.Invoice`` can't share a prefix either.
 
 DisplayIDManager
 ----------------
@@ -190,6 +191,7 @@ Parameters:
 
 Notes:
 
-- Missing identifiers are silently excluded from the results
+- Identifiers that match nothing are left out of the results. That covers
+  missing rows, unparseable input and display IDs with the wrong prefix,
+  the same cases where ``get_by_identifier()`` raises ``DoesNotExist``.
 - Order is not guaranteed to match input order
-- Raises ``InvalidIdentifierError`` if any identifier cannot be parsed

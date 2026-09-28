@@ -52,16 +52,30 @@ class TestDisplayIdFilter:
         with pytest.raises(TemplateSyntaxError, match="lowercase letters"):
             t.render(Context({"my_uuid": test_uuid}))
 
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "550e8400-e29b-41d4-a716-446655440000",
+            "550E8400-E29B-41D4-A716-446655440000",
+            "550e8400e29b41d4a716446655440000",
+        ],
+    )
+    def test_filter_with_uuid_string(self, value) -> None:
+        """Filter accepts UUID strings, like the lookup functions do."""
+        t = Template('{% load display_ids %}{{ obj|display_id:"inv" }}')
+        result = t.render(Context({"obj": value}))
+        assert result == encode_display_id("inv", uuid.UUID(value))
+
     def test_filter_with_non_uuid_raises(self) -> None:
         """Filter raises error when value is not a UUID."""
         t = Template('{% load display_ids %}{{ obj|display_id:"inv" }}')
-        with pytest.raises(TemplateSyntaxError, match="requires a UUID"):
+        with pytest.raises(TemplateSyntaxError, match="display_id filter"):
             t.render(Context({"obj": "not-a-uuid"}))
 
     def test_filter_with_integer_raises(self) -> None:
         """Filter raises error for integer value."""
         t = Template('{% load display_ids %}{{ obj|display_id:"inv" }}')
-        with pytest.raises(TemplateSyntaxError, match="requires a UUID"):
+        with pytest.raises(TemplateSyntaxError, match="got int"):
             t.render(Context({"obj": 12345}))
 
     @pytest.mark.django_db

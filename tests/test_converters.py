@@ -89,11 +89,20 @@ class TestDisplayIDOrUUIDConverter:
 
         assert pattern.match("550e8400-e29b-41d4-a716-446655440000")
 
-    def test_regex_rejects_unhyphenated_uuid(self):
-        """Regex rejects unhyphenated UUIDs (consistent with Django)."""
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "550e8400-e29b-41d4-a716-446655440000",
+            "550E8400-E29B-41D4-A716-446655440000",
+            "550e8400e29b41d4a716446655440000",
+            "550E8400E29B41D4A716446655440000",
+        ],
+    )
+    def test_regex_matches_all_uuid_forms(self, value):
+        """Regex matches UUIDs with or without hyphens, in any case."""
         pattern = re.compile(f"^{DisplayIDOrUUIDConverter.regex}$")
 
-        assert not pattern.match("550e8400e29b41d4a716446655440000")
+        assert pattern.match(value)
 
     def test_regex_rejects_invalid(self):
         """Regex rejects invalid identifiers."""
@@ -101,7 +110,9 @@ class TestDisplayIDOrUUIDConverter:
 
         invalid = [
             "INV_0000000000000000000000",  # uppercase prefix
-            "550e8400e29b41d4a716446655440000",  # unhyphenated UUID
+            "550e8400e29b-41d4-a716-446655440000",  # partly hyphenated
+            "550e8400-e29b-41d4-a716-44665544000",  # too short
+            "550e8400-e29b-41d4-a716-44665544000g",  # not hex
         ]
         for invalid_id in invalid:
             assert not pattern.match(invalid_id), f"Should not match: {invalid_id}"
@@ -204,12 +215,11 @@ class TestDisplayIDOrUUIDOrSlugConverter:
 
         assert pattern.match("550e8400-e29b-41d4-a716-446655440000")
 
-    def test_regex_rejects_unhyphenated_uuid(self):
-        """Regex rejects unhyphenated UUIDs (consistent with Django)."""
+    def test_regex_matches_unhyphenated_uppercase_uuid(self):
+        """Regex matches UUIDs without hyphens, in any case."""
         pattern = re.compile(f"^{DisplayIDOrUUIDOrSlugConverter.regex}$")
 
-        # Unhyphenated UUIDs match as slugs, not as UUIDs
-        assert pattern.match("550e8400e29b41d4a716446655440000")
+        assert pattern.match("550E8400E29B41D4A716446655440000")
 
     def test_regex_matches_slug(self):
         """Regex matches slugs."""
@@ -520,3 +530,97 @@ class TestConverterRouting:
             urlconf=type("urls", (), {"urlpatterns": urlpatterns}),
         )
         assert url == f"/items/{slug}/"
+
+
+class TestUUIDObjects:
+    """Converters accept uuid.UUID objects in reverse(), like Django's <uuid:>."""
+
+    @pytest.mark.parametrize(
+        "converter",
+        [
+            DisplayIDConverter,
+            DisplayIDOrUUIDConverter,
+            DisplayIDOrSlugConverter,
+            DisplayIDOrUUIDOrSlugConverter,
+        ],
+    )
+    def test_to_url_stringifies_uuid(self, converter):
+        value = uuid.UUID("550e8400-e29b-41d4-a716-446655440000")
+        assert converter().to_url(value) == "550e8400-e29b-41d4-a716-446655440000"
+
+    @pytest.mark.parametrize("name", ["display_id_or_uuid", "identifier"])
+    def test_reverse_with_uuid_object(self, name):
+        from django.urls import reverse
+
+        urlpatterns = [path(f"items/<{name}:id>/", lambda _r, _id: None, name="item")]
+        value = uuid.UUID("550e8400-e29b-41d4-a716-446655440000")
+
+        url = reverse(
+            "item",
+            kwargs={"id": value},
+            urlconf=type("urls", (), {"urlpatterns": urlpatterns}),
+        )
+        assert url == f"/items/{value}/"
+
+    def test_reverse_display_id_rejects_uuid_object(self):
+        """<display_id:> can't build a URL from a bare UUID (no prefix)."""
+        from django.urls import NoReverseMatch, reverse
+
+        urlpatterns = [
+            path("items/<display_id:id>/", lambda _r, _id: None, name="item")
+        ]
+
+        with pytest.raises(NoReverseMatch):
+            reverse(
+                "item",
+                kwargs={"id": uuid.uuid4()},
+                urlconf=type("urls", (), {"urlpatterns": urlpatterns}),
+            )
+
+    def test_uuid_regex_builds_on_django(self):
+        """The UUID pattern reuses Django's <uuid:> pattern."""
+        from django.urls.converters import UUIDConverter
+
+        from django_display_ids.converters import UUID_REGEX
+
+        assert UUIDConverter.regex in UUID_REGEX
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "8c2b67fc-0fff-4c46-a3b3-e30d1829a559",
+            "8C2B67FC-0FFF-4C46-A3B3-E30D1829A559",
+            "8c2b67fc0fff4c46a3b3e30d1829a559",
+            "8C2B67FC0FFF4C46A3B3E30D1829A559",
+        ],
+    )
+    @pytest.mark.parametrize("name", ["display_id_or_uuid", "identifier"])
+    def test_all_uuid_forms_route_and_reverse(self, name, value):
+        from django.urls import resolve, reverse
+
+        urlpatterns = [path(f"items/<{name}:id>/", lambda _r, _id: None, name="item")]
+        urlconf = type("urls", (), {"urlpatterns": urlpatterns})
+
+        assert resolve(f"/items/{value}/", urlconf=urlconf).kwargs["id"] == value
+        url = reverse("item", kwargs={"id": value}, urlconf=urlconf)
+        assert url == f"/items/{value}/"
+
+
+class TestSlugRegexSetting:
+    """The default slug converters read SLUG_REGEX when the URLconf is built."""
+
+    def test_class_regex_follows_setting(self, settings):
+        settings.DISPLAY_IDS = {"SLUG_REGEX": r"[a-z]+"}
+        assert DisplayIDOrSlugConverter.regex.endswith("|[a-z]+)")
+        assert DisplayIDOrUUIDOrSlugConverter.regex.endswith("|[a-z]+)")
+
+    def test_route_follows_setting(self, settings):
+        from django.urls import Resolver404, resolve
+
+        settings.DISPLAY_IDS = {"SLUG_REGEX": r"[a-z]+"}
+        urlpatterns = [path("p/<display_id_or_slug:id>/", lambda _r, _id: None)]
+        urlconf = type("urls", (), {"urlpatterns": urlpatterns})
+
+        assert resolve("/p/lowercase/", urlconf=urlconf).kwargs["id"] == "lowercase"
+        with pytest.raises(Resolver404):
+            resolve("/p/Has-Caps-1/", urlconf=urlconf)

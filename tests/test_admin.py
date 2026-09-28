@@ -9,7 +9,7 @@ from django.test import RequestFactory
 
 from django_display_ids import DisplayIDAdminSearchMixin, encode_display_id
 
-from .models import Invoice, Product
+from .models import Invoice, Order, Product
 
 
 class InvoiceAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
@@ -291,3 +291,73 @@ class TestParseIdentifier:
         uid = uuid.uuid4()
         display_id = encode_display_id("inv", uid)
         assert DisplayIDAdminSearchMixin._parse_identifier(f"inv_ {display_id}") is None
+
+    def test_model_prefix_must_match(self):
+        """With model=, display IDs must use that model's prefix."""
+        uid = uuid.uuid4()
+        parse = DisplayIDAdminSearchMixin._parse_identifier
+        assert parse(encode_display_id("inv", uid), model=Invoice) == uid
+        assert parse(encode_display_id("prod", uid), model=Invoice) is None
+        assert parse(str(uid), model=Invoice) == uid
+
+    def test_model_without_prefix_matches_uuids_only(self):
+        """With a model that has no prefix, only raw UUIDs match."""
+        uid = uuid.uuid4()
+        parse = DisplayIDAdminSearchMixin._parse_identifier
+        assert parse(encode_display_id("inv", uid), model=Order) is None
+        assert parse(str(uid), model=Order) == uid
+
+
+@pytest.mark.django_db
+class TestAdminStrategies:
+    """Admin search uses the same strategies and overrides as the views."""
+
+    def _search(self, admin_class, term):
+        qs, _ = admin_class(Invoice, AdminSite()).get_search_results(
+            None, Invoice.objects.all(), term
+        )
+        return list(qs)
+
+    def test_lookup_strategies_attribute(self):
+        invoice = Invoice.objects.create(name="x", slug="my-slug")
+
+        class UUIDOnlyAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
+            search_fields = ("name",)
+            lookup_strategies = ("uuid",)
+
+        assert self._search(UUIDOnlyAdmin, str(invoice.id)) == [invoice]
+        assert self._search(UUIDOnlyAdmin, invoice.display_id) == []
+        assert self._search(UUIDOnlyAdmin, "my-slug") == []
+
+    def test_display_id_prefix_attribute(self):
+        invoice = Invoice.objects.create(name="x")
+
+        class CustomPrefixAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
+            search_fields = ("name",)
+            display_id_prefix = "bill"
+
+        assert self._search(CustomPrefixAdmin, invoice.display_id) == []
+        bill_id = encode_display_id("bill", invoice.id)
+        assert self._search(CustomPrefixAdmin, bill_id) == [invoice]
+
+    def test_slug_field_attribute(self):
+        invoice = Invoice.objects.create(name="Exact Name")
+
+        class NameAsSlugAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
+            # A search field that never matches, so only the slug lookup can
+            search_fields = ("slug",)
+            slug_field = "name"
+
+        assert self._search(NameAsSlugAdmin, "Exact Name") == [invoice]
+        assert self._search(NameAsSlugAdmin, "Exact") == []
+
+    def test_empty_search_adds_nothing(self):
+        """Loading the changelist (empty search) doesn't add a slug match."""
+        Invoice.objects.create(name="x", slug=None)
+
+        class InvoiceAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
+            search_fields = ("name",)
+
+        # Empty search returns the full queryset, same as plain ModelAdmin
+        assert len(self._search(InvoiceAdmin, "")) == 1
+        assert len(self._search(InvoiceAdmin, "   ")) == 1

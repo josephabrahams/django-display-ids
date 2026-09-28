@@ -61,15 +61,17 @@ class TestCustomFieldNames:
         expected = encode_display_id("prod", product.uid)
         assert product.display_id == expected
 
-    def test_get_uuid_field(self):
-        """_get_uuid_field returns custom field name."""
-        assert Invoice._get_uuid_field() == "id"
-        assert Product._get_uuid_field() == "uid"
+    def test_display_id_uses_custom_uuid_field(self):
+        """display_id encodes the model's uuid_field, not the primary key."""
+        uid = uuid.UUID("550e8400-e29b-41d4-a716-446655440000")
+        product = Product(uid=uid)
+        assert product.display_id == encode_display_id("prod", uid)
 
-    def test_get_slug_field(self):
-        """_get_slug_field returns custom field name."""
-        assert Invoice._get_slug_field() == "slug"
-        assert Product._get_slug_field() == "handle"
+    def test_display_id_uses_uuid_field_setting(self, settings):
+        """Without uuid_field on the model, the UUID_FIELD setting is used."""
+        settings.DISPLAY_IDS = {"UUID_FIELD": "id"}
+        invoice = Invoice(id=uuid.UUID("550e8400-e29b-41d4-a716-446655440000"))
+        assert invoice.display_id == encode_display_id("inv", invoice.id)
 
 
 class TestPrefixRegistry:
@@ -93,6 +95,24 @@ class TestPrefixRegistry:
 
                 class Meta:
                     app_label = "tests"
+
+    def test_same_class_name_in_another_module_collides(self):
+        """A different model that happens to share the class name still collides."""
+        with pytest.raises(ValueError, match=r"already used by tests\.models\.Invoice"):
+
+            class Invoice(DisplayIDModel):  # same name as tests.models.Invoice
+                __module__ = "billing.models"
+                display_id_prefix = "inv"
+
+                class Meta:
+                    app_label = "billing"
+
+    def test_reregistering_same_model_is_allowed(self):
+        """Re-importing a module registers the same model again without error."""
+        from django_display_ids.models import _register_prefix
+
+        _register_prefix("inv", Invoice)
+        assert get_model_for_prefix("inv") == "Invoice"
 
     def test_abstract_models_are_registered(self):
         """Abstract models with prefixes are registered.

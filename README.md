@@ -2,7 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/django-display-ids)](https://pypi.org/project/django-display-ids/)
 [![Python](https://img.shields.io/pypi/pyversions/django-display-ids)](https://pypi.org/project/django-display-ids/)
-[![Django](https://img.shields.io/badge/django-4.2%20%7C%205.2%20%7C%206.0-blue)](https://pypi.org/project/django-display-ids/)
+[![Django](https://img.shields.io/badge/django-4.2%20%7C%205.2%20%7C%206.0%20%7C%206.1-blue)](https://pypi.org/project/django-display-ids/)
 [![CI](https://github.com/josephabrahams/django-display-ids/actions/workflows/ci.yml/badge.svg)](https://github.com/josephabrahams/django-display-ids/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/josephabrahams/django-display-ids/graph/badge.svg)](https://codecov.io/gh/josephabrahams/django-display-ids)
 [![Docs](https://readthedocs.org/projects/django-display-ids/badge/?version=stable)](https://django-display-ids.readthedocs.io/)
@@ -82,7 +82,7 @@ from django_display_ids import DisplayIDMixin
 
 class InvoiceDetailView(DisplayIDMixin, DetailView):
     model = Invoice
-    lookup_param = "id"
+    lookup_url_kwarg = "id"
 
 # Django REST Framework
 from rest_framework.viewsets import ModelViewSet
@@ -111,7 +111,7 @@ Your views now accept:
 
 ## Features
 
-- **Multiple identifier formats**: display ID (`prefix_base62uuid`), UUID (v4/v7), slug
+- **Multiple identifier formats**: display ID (`prefix_base62uuid`), UUID (any version), slug
 - **Framework support**: Django CBVs and Django REST Framework
 - **Template filter**: Encode UUIDs as display IDs in templates
 - **Zero model changes required**: Works with any existing UUID field

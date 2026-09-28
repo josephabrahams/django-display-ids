@@ -57,7 +57,7 @@ Add the mixin to your view
 
    class InvoiceDetailView(DisplayIDMixin, DetailView):
        model = Invoice
-       lookup_param = "id"
+       lookup_url_kwarg = "id"
 
    # Django REST Framework
    from rest_framework.viewsets import ModelViewSet
@@ -79,7 +79,7 @@ What's Happening
 
 1. ``DisplayIDModel`` registers the prefix on the model
 2. The path converter validates the identifier format in the URL
-3. ``lookup_param`` / ``lookup_url_kwarg`` tells the view mixin which URL parameter to read
+3. ``lookup_url_kwarg`` tells the view mixin which URL parameter to read
 4. The view mixin auto-detects ``display_id_prefix`` from the model
 5. The default ``lookup_strategies`` tries display IDs, UUIDs, and slugs (in that order)
 

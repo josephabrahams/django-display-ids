@@ -9,36 +9,45 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from django_display_ids.conf import get_setting
+
 # OpenAPI parameter description helpers
 # These work regardless of whether drf-spectacular is installed
 
 
 def id_param_description(
-    prefix: str, *, with_uuid: bool = True, with_slug: bool = False
+    prefix: str, *, with_uuid: bool | None = None, with_slug: bool | None = None
 ) -> str:
     """Generate ID parameter description with the actual prefix.
 
     Args:
         prefix: The display_id prefix (e.g., "user", "app").
-        with_uuid: Include UUID as an identifier option.
-        with_slug: Include slug as an identifier option.
+        with_uuid: Include UUID as an identifier option. Defaults to whether
+            ``"uuid"`` is in the ``DISPLAY_IDS["STRATEGIES"]`` setting.
+        with_slug: Include slug as an identifier option. Defaults to whether
+            ``"slug"`` is in the ``DISPLAY_IDS["STRATEGIES"]`` setting.
 
     Returns:
         Description string for OpenAPI parameter.
 
     Example:
-        >>> id_param_description("user")
-        'Identifier: display_id (user_xxx) or UUID'
+        With the default strategies, ("display_id", "uuid", "slug"):
 
-        >>> id_param_description("user", with_uuid=False)
-        'Identifier: display_id (user_xxx)'
-
-        >>> id_param_description("app", with_slug=True)
+        >>> id_param_description("app")
         'Identifier: display_id (app_xxx), UUID, or slug'
 
-        >>> id_param_description("app", with_uuid=False, with_slug=True)
-        'Identifier: display_id (app_xxx) or slug'
+        >>> id_param_description("user", with_slug=False)
+        'Identifier: display_id (user_xxx) or UUID'
+
+        >>> id_param_description("user", with_uuid=False, with_slug=False)
+        'Identifier: display_id (user_xxx)'
     """
+    strategies = get_setting("STRATEGIES")
+    if with_uuid is None:
+        with_uuid = "uuid" in strategies
+    if with_slug is None:
+        with_slug = "slug" in strategies
+
     parts = [f"display_id ({prefix}_xxx)"]
     if with_uuid:
         parts.append("UUID")
@@ -66,8 +75,8 @@ else:
     if TYPE_CHECKING:
         from drf_spectacular.openapi import AutoSchema
 
-    from django_display_ids.encoding import ENCODED_UUID_LENGTH, encode_uuid
-    from django_display_ids.examples import example_uuid as make_example_uuid
+    from django_display_ids.encoding import DISPLAY_ID_REGEX
+    from django_display_ids.examples import example_display_id
 
     class DisplayIDFieldExtension(OpenApiSerializerFieldExtension):  # type: ignore[no-untyped-call]
         """OpenAPI schema extension for DisplayIDField.
@@ -106,21 +115,16 @@ else:
             self, auto_schema: AutoSchema, direction: str
         ) -> dict[str, Any]:
             """Generate OpenAPI schema for DisplayIDField."""
-            # Get prefix from field override / prefix_from, or try the model
+            # Use the same sources the field uses at runtime: prefix= or
+            # prefix_from=, then the serialized model's display_id_prefix.
             prefix = self.target._computed_prefix
 
             if prefix is None:
                 parent = self.target.parent
-                if parent is not None:
-                    # Try serializer's display_id_prefix attribute first
-                    prefix = getattr(parent, "display_id_prefix", None)
-
-                    # Then try Meta.model.display_id_prefix
-                    if prefix is None:
-                        meta = getattr(parent, "Meta", None)
-                        model = getattr(meta, "model", None) if meta else None
-                        if model is not None:
-                            prefix = getattr(model, "display_id_prefix", None)
+                meta = getattr(parent, "Meta", None) if parent is not None else None
+                model = getattr(meta, "model", None) if meta else None
+                if model is not None:
+                    prefix = getattr(model, "display_id_prefix", None)
 
             # Try to get prefix from view's queryset model
             if prefix is None:
@@ -130,20 +134,16 @@ else:
 
             # Build schema
             if prefix:
-                example_uuid = make_example_uuid(prefix)
-                example_encoded = encode_uuid(example_uuid)
-                example = f"{prefix}_{example_encoded}"
+                example = example_display_id(prefix)
                 description = f"Human-readable identifier with '{prefix}_' prefix"
             else:
-                example_uuid = make_example_uuid("type")
-                example_encoded = encode_uuid(example_uuid)
-                example = f"type_{example_encoded}"
+                example = example_display_id("type")
                 description = "Human-readable identifier with type prefix"
 
             return {
                 "type": "string",
                 "description": description,
                 "example": example,
-                "pattern": f"^[a-z]{{1,16}}_[0-9A-Za-z]{{{ENCODED_UUID_LENGTH}}}$",
+                "pattern": f"^{DISPLAY_ID_REGEX}$",
                 "readOnly": True,
             }

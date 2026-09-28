@@ -160,9 +160,11 @@ Raised when multiple records match (typically with slug lookups).
 QuerySet Methods
 ----------------
 
-``DisplayIDQuerySet`` methods (``get_by_display_id``, ``get_by_identifier``)
-raise ``Model.DoesNotExist`` and ``Model.MultipleObjectsReturned``, matching
-Django's ``QuerySet.get()`` contract:
+``DisplayIDQuerySet`` methods (``get_by_display_id``, ``get_by_identifier``,
+``resolve_identifier``) raise ``Model.DoesNotExist`` and
+``Model.MultipleObjectsReturned``, matching Django's ``QuerySet.get()``
+contract. ``get_by_identifiers`` works like ``filter()`` and leaves out
+identifiers that match nothing.
 
 .. code-block:: python
 
@@ -179,11 +181,11 @@ Framework-Specific Handling
 ---------------------------
 
 **Django CBVs** (``DisplayIDMixin``):
-   All exceptions are converted to ``Http404``.
+   ``AmbiguousIdentifierError`` is re-raised. Everything else becomes ``Http404``.
 
 **Django REST Framework** (``DisplayIDMixin`` from ``contrib.rest_framework``):
-   - ``ObjectNotFoundError`` → ``NotFound`` (404)
-   - Other exceptions → ``ParseError`` (400)
+   Duplicate slugs raise ``MultipleObjectsReturned``. Everything else raises
+   ``Http404``, which DRF returns as a 404 response.
 
 **Django Admin** (``DisplayIDAdminSearchMixin``):
    Exceptions are silently caught and the search falls back to normal behavior.

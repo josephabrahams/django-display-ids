@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-import uuid
+from typing import TYPE_CHECKING
 
 from django import template
 
 from ..encoding import encode_display_id
+
+if TYPE_CHECKING:
+    import uuid
 
 __all__ = [
     "display_id",
@@ -16,7 +19,7 @@ register = template.Library()
 
 
 @register.filter(name="display_id")
-def display_id(value: uuid.UUID | None, prefix: str) -> str:
+def display_id(value: uuid.UUID | str | None, prefix: str) -> str:
     """Encode a UUID as a display ID.
 
     Usage:
@@ -24,7 +27,7 @@ def display_id(value: uuid.UUID | None, prefix: str) -> str:
         {{ invoice.customer_id|display_id:"cust" }}
 
     Args:
-        value: UUID to encode.
+        value: UUID to encode, as a UUID object or a UUID string.
         prefix: Display ID prefix (1-16 lowercase letters).
 
     Returns:
@@ -37,12 +40,7 @@ def display_id(value: uuid.UUID | None, prefix: str) -> str:
     if value is None:
         return ""
 
-    if not isinstance(value, uuid.UUID):
-        raise template.TemplateSyntaxError(
-            f"display_id filter requires a UUID, got {type(value).__name__}"
-        )
-
     try:
         return encode_display_id(prefix, value)
-    except ValueError as e:
-        raise template.TemplateSyntaxError(str(e)) from e
+    except (ValueError, TypeError) as e:
+        raise template.TemplateSyntaxError(f"display_id filter: {e}") from e

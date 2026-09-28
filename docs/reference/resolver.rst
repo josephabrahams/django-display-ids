@@ -25,7 +25,9 @@ Parameters
    The identifier string to resolve.
 
 ``strategies``
-   Tuple of strategy names to try, in order. Defaults to ``("display_id", "uuid", "slug")``.
+   Tuple of strategy names to try, in order. Defaults to the
+   ``DISPLAY_IDS["STRATEGIES"]`` setting, which is ``("display_id", "uuid", "slug")``
+   unless you change it.
 
 ``prefix``
    Expected display ID prefix. When ``None`` (the default), auto-detected
@@ -63,14 +65,14 @@ Exceptions
 get_model_for_prefix
 --------------------
 
-Look up a model class by its registered display ID prefix.
+Look up the name of the model registered for a display ID prefix.
 
 .. code-block:: python
 
    from django_display_ids import get_model_for_prefix
 
-   model_class = get_model_for_prefix("inv")
-   # -> <class 'myapp.models.Invoice'>
+   get_model_for_prefix("inv")
+   # -> "Invoice"
 
 Returns ``None`` if no model is registered with that prefix.
 

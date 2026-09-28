@@ -4,13 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from django_display_ids.conf import get_setting
-from django_display_ids.exceptions import (
-    DisplayIDLookupError,
-    ObjectNotFoundError,
-)
-from django_display_ids.resolver import resolve_object
-from django_display_ids.typing import StrategyName  # noqa: TC001 - used at runtime
+from django.http import Http404
+from rest_framework.generics import get_object_or_404
+
+from django_display_ids.exceptions import DisplayIDLookupError
+from django_display_ids.resolver import _LookupOptions
 
 if TYPE_CHECKING:
     from django.db import models
@@ -20,20 +18,7 @@ __all__ = [
 ]
 
 
-def _get_drf_exceptions() -> tuple[type[Exception], type[Exception]]:
-    """Lazily import DRF exceptions to avoid hard dependency."""
-    try:
-        from rest_framework.exceptions import NotFound, ParseError
-
-        return NotFound, ParseError
-    except ImportError:
-        raise ImportError(
-            "Django REST Framework is required for DisplayIDMixin. "
-            "Install it with: pip install djangorestframework"
-        ) from None
-
-
-class DisplayIDMixin:
+class DisplayIDMixin(_LookupOptions):
     """Mixin for DRF views that resolves objects by display ID, UUID, or slug.
 
     Works with APIView, GenericAPIView, and ViewSets. Does not require
@@ -65,19 +50,10 @@ class DisplayIDMixin:
     """
 
     lookup_url_kwarg: str = "pk"
-    lookup_strategies: tuple[StrategyName, ...] | None = None
-    display_id_prefix: str | None = None
-    uuid_field: str | None = None
-    slug_field: str | None = None
 
     # These may be provided by parent classes
     kwargs: dict[str, Any]
     request: Any
-
-    def _get_strategies(self) -> tuple[StrategyName, ...]:
-        if self.lookup_strategies is not None:
-            return self.lookup_strategies
-        return get_setting("STRATEGIES")  # type: ignore[return-value]
 
     def get_queryset(self) -> Any:
         """Get the base queryset.
@@ -104,39 +80,38 @@ class DisplayIDMixin:
         Returns:
             The matching model instance.
 
+        Matches DRF's ``GenericAPIView.get_object()``: the queryset goes
+        through ``filter_queryset()``, bad or unknown identifiers return 404,
+        and object permissions are checked.
+
         Raises:
-            NotFound: If the object is not found.
-            ParseError: If the identifier format is invalid.
+            Http404: If the identifier is invalid, has the wrong prefix, or
+                matches no object. DRF turns this into a 404 response.
+            AssertionError: If the URL has no ``lookup_url_kwarg`` parameter.
+            MultipleObjectsReturned: If a slug matches more than one object.
         """
-        NotFound, ParseError = _get_drf_exceptions()
-
-        # Get the queryset
         queryset = self.get_queryset()
-
-        # Get the model from the queryset
-        model = queryset.model
+        if hasattr(self, "filter_queryset"):
+            queryset = self.filter_queryset(queryset)
 
         # Get the identifier from URL kwargs
         value = self.kwargs.get(self.lookup_url_kwarg)
         if value is None:
-            raise ParseError(f"Missing URL parameter: {self.lookup_url_kwarg}")
-
-        try:
-            obj = resolve_object(
-                model,
-                str(value),
-                strategies=self._get_strategies(),
-                prefix=self.display_id_prefix,
-                uuid_field=self.uuid_field,
-                slug_field=self.slug_field,
-                queryset=queryset,
+            raise AssertionError(
+                f"Expected view {self.__class__.__name__} to be called with a "
+                f"URL keyword argument named {self.lookup_url_kwarg!r}. Fix "
+                "your URL conf, or set the `.lookup_url_kwarg` attribute on "
+                "the view correctly."
             )
-        except ObjectNotFoundError as e:
-            raise NotFound(str(e)) from e
+
+        # Outside the try: a misconfigured lookup is an error, not a 404
+        lookup = self._get_lookup(queryset.model)
+        try:
+            kwargs = lookup.build(str(value))
         except DisplayIDLookupError as e:
-            raise ParseError(str(e)) from e
+            raise Http404(str(e)) from e
 
-        # Check object-level permissions
+        # DRF's own 404 handling; MultipleObjectsReturned propagates
+        obj = get_object_or_404(queryset, **kwargs)
         self.check_object_permissions(self.request, obj)
-
         return obj  # type: ignore[no-any-return]

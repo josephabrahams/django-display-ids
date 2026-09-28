@@ -3,6 +3,7 @@
 import uuid
 
 import pytest
+from django.core.exceptions import ImproperlyConfigured
 
 from django_display_ids.encoding import encode_display_id
 from django_display_ids.exceptions import (
@@ -467,10 +468,10 @@ class TestResolveObjectSlugFieldGraceful:
         assert result == tag
 
     def test_slug_only_on_model_without_slug_field(self, db):
-        """InvalidIdentifierError when slug is only strategy and model has no slug field."""
+        """Slug-only lookups on a model without a slug field are a config error."""
         Tag.objects.create(name="Test Tag")
 
-        with pytest.raises(InvalidIdentifierError):
+        with pytest.raises(ImproperlyConfigured, match="no 'slug' field"):
             resolve_object(
                 Tag,
                 "some-slug",
@@ -486,3 +487,50 @@ class TestResolveObjectSlugFieldGraceful:
             prefix="inv",
         )
         assert result == invoice
+
+
+@pytest.mark.django_db
+class TestResolveObjectStrategiesSetting:
+    """resolve_object() reads DISPLAY_IDS["STRATEGIES"] when strategies isn't passed."""
+
+    def test_uses_setting(self, settings):
+        from django_display_ids import InvalidIdentifierError
+
+        invoice = Invoice.objects.create(name="x")
+        settings.DISPLAY_IDS = {"STRATEGIES": ("display_id",)}
+
+        assert resolve_object(Invoice, invoice.display_id) == invoice
+        with pytest.raises(InvalidIdentifierError):
+            resolve_object(Invoice, str(invoice.id))
+
+
+@pytest.mark.django_db
+class TestLookupThatCanNeverMatch:
+    """A configuration that leaves no usable strategy raises instead of 404ing."""
+
+    def test_display_id_only_on_model_without_prefix(self):
+        from django_display_ids.exceptions import MissingPrefixError
+
+        with pytest.raises(MissingPrefixError):
+            resolve_object(Order, "anything", strategies=("display_id",))
+
+    def test_views_raise_instead_of_404(self, rf):
+        from django.views.generic import DetailView
+
+        from django_display_ids.views import DisplayIDMixin
+
+        class View(DisplayIDMixin, DetailView):
+            model = Order
+            lookup_strategies = ("display_id",)
+
+        view = View()
+        view.kwargs = {"pk": "anything"}
+        view.request = rf.get("/")
+        with pytest.raises(ImproperlyConfigured):
+            view.get_object()
+
+    def test_some_strategies_left_is_fine(self):
+        """Dropping only some strategies still leaves a working lookup."""
+        order = Order.objects.create(name="x")
+        result = resolve_object(Order, str(order.id), strategies=("display_id", "uuid"))
+        assert result == order

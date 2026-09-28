@@ -39,15 +39,23 @@ DisplayIDOrUUIDConverter
    Matches either format:
 
    - Display ID: ``{prefix}_{base62}``
-   - UUID: hyphenated (``550e8400-e29b-41d4-a716-446655440000``)
+   - UUID: with or without hyphens, in any case
 
-   Consistent with Django's built-in ``<uuid:id>`` converter, only hyphenated
-   UUIDs are accepted.
+   The UUID pattern is Django's ``<uuid:>`` pattern made case-insensitive,
+   plus the 32-character form without hyphens. Django's own converter only
+   accepts lowercase with hyphens, but people paste UUIDs from tools that
+   print uppercase (``uuidgen``, SQL Server) or drop the hyphens
+   (``uuid.hex``), so these converters accept all four forms.
 
    **Example matches:**
 
    - ``inv_2aUyqjCzEIiEcYMKj7TZtw`` (display ID)
    - ``550e8400-e29b-41d4-a716-446655440000`` (UUID)
+   - ``550E8400E29B41D4A716446655440000`` (UUID, uppercase, no hyphens)
+
+   **Does not match:**
+
+   - ``550e8400e29b-41d4-a716-446655440000`` (hyphens in only some places)
 
 DisplayIDOrSlugConverter
 ------------------------
@@ -77,7 +85,7 @@ DisplayIDOrUUIDOrSlugConverter
    Matches any of:
 
    - Display ID: ``{prefix}_{base62}``
-   - UUID: hyphenated (``550e8400-e29b-41d4-a716-446655440000``)
+   - UUID: with or without hyphens, in any case
    - Slug: Django's default slug pattern (``[-a-zA-Z0-9_]+``)
 
    This is the most permissive converter, useful when you want to accept

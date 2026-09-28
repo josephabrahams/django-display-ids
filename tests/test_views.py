@@ -3,6 +3,7 @@
 import uuid
 
 import pytest
+from django.core.exceptions import ImproperlyConfigured, MultipleObjectsReturned
 from django.http import Http404
 from django.test import RequestFactory
 from django.views.generic import DetailView
@@ -17,7 +18,7 @@ class InvoiceDetailView(DisplayIDMixin, DetailView):
     """Test view for Invoice model."""
 
     model = Invoice
-    lookup_param = "id"
+    lookup_url_kwarg = "id"
     display_id_prefix = "inv"
 
 
@@ -25,7 +26,7 @@ class ProductDetailView(DisplayIDMixin, DetailView):
     """Test view for Product model with custom fields."""
 
     model = Product
-    lookup_param = "id"
+    lookup_url_kwarg = "id"
     display_id_prefix = "prod"
     uuid_field = "uid"
     slug_field = "handle"
@@ -36,7 +37,7 @@ class TagDetailView(DisplayIDMixin, DetailView):
     """Test view for Tag model (no slug field)."""
 
     model = Tag
-    lookup_param = "id"
+    lookup_url_kwarg = "id"
     display_id_prefix = "tag"
 
 
@@ -44,7 +45,7 @@ class NoPrefixView(DisplayIDMixin, DetailView):
     """Test view without display_id_prefix."""
 
     model = Invoice
-    lookup_param = "id"
+    lookup_url_kwarg = "id"
     lookup_strategies = ("uuid", "slug")  # No display_id strategy
 
 
@@ -52,7 +53,7 @@ class ModelPrefixFallbackView(DisplayIDMixin, DetailView):
     """Test view that inherits prefix from model."""
 
     model = Invoice
-    lookup_param = "id"
+    lookup_url_kwarg = "id"
     # display_id_prefix not set - should fall back to model's "inv"
 
 
@@ -125,14 +126,22 @@ class TestDisplayIDMixin:
         with pytest.raises(Http404):
             view.get_object()
 
-    def test_missing_lookup_param(self, rf, invoice):
-        """Http404 raised when lookup param is missing."""
+    def test_missing_lookup_url_kwarg(self, rf, invoice):
+        """A missing URL parameter is a URLconf bug, not a 404."""
         view = InvoiceDetailView()
         view.kwargs = {}  # Missing 'id'
         view.request = rf.get("/")
 
-        with pytest.raises(Http404, match="Missing URL parameter"):
+        with pytest.raises(AttributeError, match="'id' URL parameter"):
             view.get_object()
+
+    def test_get_object_padded_identifier(self, rf, invoice):
+        """Surrounding whitespace is ignored."""
+        view = InvoiceDetailView()
+        view.kwargs = {"id": f" {invoice.display_id} "}
+        view.request = rf.get("/")
+
+        assert view.get_object() == invoice
 
 
 @pytest.mark.django_db
@@ -169,7 +178,7 @@ class TestQuerysetFiltering:
 
         class FilteredInvoiceView(DisplayIDMixin, DetailView):
             model = Invoice
-            lookup_param = "id"
+            lookup_url_kwarg = "id"
             display_id_prefix = "inv"
 
             def get_queryset(self):
@@ -189,7 +198,7 @@ class TestQuerysetFiltering:
 
         class FilteredInvoiceView(DisplayIDMixin, DetailView):
             model = Invoice
-            lookup_param = "id"
+            lookup_url_kwarg = "id"
             display_id_prefix = "inv"
 
             def get_queryset(self):
@@ -232,18 +241,54 @@ class TestNoPrefixBehavior:
 class TestModelAttribute:
     """Tests for model attribute requirement."""
 
-    def test_missing_model_raises_error(self, rf):
-        """AttributeError raised when model is not set."""
+    def test_missing_model_and_queryset_raises_error(self, rf):
+        """Django's own ImproperlyConfigured is raised with neither set."""
 
         class NoModelView(DisplayIDMixin, DetailView):
-            lookup_param = "id"
-            # model not set (intentionally omitted)
+            lookup_url_kwarg = "id"
 
         view = NoModelView()
         view.kwargs = {"id": "test"}
         view.request = rf.get("/")
 
-        with pytest.raises(AttributeError, match="must define 'model'"):
+        with pytest.raises(ImproperlyConfigured):
+            view.get_object()
+
+    def test_queryset_without_model(self, rf, invoice):
+        """The model is taken from the queryset when not set on the view."""
+
+        class QuerysetOnlyView(DisplayIDMixin, DetailView):
+            queryset = Invoice.objects.all()
+            lookup_url_kwarg = "id"
+
+        view = QuerysetOnlyView()
+        view.kwargs = {"id": invoice.display_id}
+        view.request = rf.get("/")
+
+        assert view.get_object() == invoice
+
+
+@pytest.mark.django_db
+class TestAmbiguousSlug:
+    """Duplicate slugs raise like Django's get_object() instead of 404ing."""
+
+    def test_ambiguous_slug_raises(self, rf):
+        from .models import Order
+
+        # name isn't unique, so use it as the slug field to get duplicates
+        Order.objects.create(name="dup")
+        Order.objects.create(name="dup")
+
+        class OrderView(DisplayIDMixin, DetailView):
+            model = Order
+            lookup_url_kwarg = "id"
+            slug_field = "name"
+
+        view = OrderView()
+        view.kwargs = {"id": "dup"}
+        view.request = rf.get("/")
+
+        with pytest.raises(MultipleObjectsReturned):
             view.get_object()
 
 
@@ -289,7 +334,7 @@ class TestPrefixValidation:
 
         class EmptyPrefixView(DisplayIDMixin, DetailView):
             model = Invoice
-            lookup_param = "id"
+            lookup_url_kwarg = "id"
             display_id_prefix = ""
 
         view = EmptyPrefixView()
@@ -304,7 +349,7 @@ class TestPrefixValidation:
 
         class InvalidPrefixView(DisplayIDMixin, DetailView):
             model = Invoice
-            lookup_param = "id"
+            lookup_url_kwarg = "id"
             display_id_prefix = "Invalid123"
 
         view = InvalidPrefixView()
@@ -319,7 +364,7 @@ class TestPrefixValidation:
 
         class LongPrefixView(DisplayIDMixin, DetailView):
             model = Invoice
-            lookup_param = "id"
+            lookup_url_kwarg = "id"
             display_id_prefix = "waytoolongprefix123"
 
         view = LongPrefixView()
@@ -366,3 +411,26 @@ class TestSlugFieldGracefulInViews:
 
         with pytest.raises(Http404):
             view.get_object()
+
+
+class TestLookupParamRenamed:
+    """lookup_param was renamed to lookup_url_kwarg in 0.8."""
+
+    def test_old_name_fails_at_class_definition(self):
+        with pytest.raises(TypeError, match="renamed to lookup_url_kwarg"):
+
+            class OldStyleView(DisplayIDMixin, DetailView):
+                model = Invoice
+                lookup_param = "id"
+
+    def test_new_name_is_used(self, rf, db):
+        invoice = Invoice.objects.create(name="x")
+
+        class NewStyleView(DisplayIDMixin, DetailView):
+            model = Invoice
+            lookup_url_kwarg = "invoice_id"
+
+        view = NewStyleView()
+        view.kwargs = {"invoice_id": invoice.display_id}
+        view.request = rf.get("/")
+        assert view.get_object() == invoice

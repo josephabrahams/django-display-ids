@@ -2,19 +2,25 @@
 
 from __future__ import annotations
 
-import uuid
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TypeVar
 
-from django.core.exceptions import FieldDoesNotExist
+from django.core.exceptions import FieldDoesNotExist, ImproperlyConfigured
 from django.db import models
 
 from .conf import get_setting
 from .encoding import PREFIX_PATTERN
-from .exceptions import AmbiguousIdentifierError, ObjectNotFoundError
+from .exceptions import (
+    AmbiguousIdentifierError,
+    MissingPrefixError,
+    ObjectNotFoundError,
+)
 from .strategies import parse_identifier
-from .typing import DEFAULT_STRATEGIES, StrategyName
+from .typing import StrategyName  # noqa: TC001
 
 if TYPE_CHECKING:
+    import uuid
+
     from django.db.models import QuerySet
 
 __all__ = [
@@ -79,11 +85,107 @@ def _resolve_prefix(model: type[models.Model], override: str | None) -> str | No
     return prefix
 
 
+@dataclass(frozen=True)
+class _Lookup:
+    """Lookup settings for one model, resolved once.
+
+    Every lookup path builds its query through here, so they all accept and
+    reject the same identifiers.
+    """
+
+    prefix: str | None
+    uuid_field: str
+    slug_field: str
+    strategies: tuple[StrategyName, ...]
+
+    @classmethod
+    def for_model(
+        cls,
+        model: type[models.Model],
+        *,
+        strategies: tuple[StrategyName, ...] | None = None,
+        prefix: str | None = None,
+        uuid_field: str | None = None,
+        slug_field: str | None = None,
+    ) -> _Lookup:
+        """Resolve each setting from the argument, then the model, then settings.
+
+        ``display_id`` is dropped when the model has no prefix, so a display ID
+        for one model can't match a row in another model that shares UUIDs.
+        ``slug`` is dropped when the model has no slug field. If that leaves
+        nothing to try, the configuration can never match anything, so it
+        raises instead of treating every identifier as not found.
+
+        Raises:
+            ValueError: If the prefix is not 1-16 lowercase letters.
+            MissingPrefixError: If only ``display_id`` (and unusable
+                strategies) were requested for a model without a prefix.
+            ImproperlyConfigured: If only ``slug`` was requested for a model
+                without the slug field.
+        """
+        prefix = _resolve_prefix(model, prefix)
+        slug_field = _resolve_slug_field(model, slug_field)
+        if strategies is None:
+            strategies = get_setting("STRATEGIES")  # type: ignore[assignment]
+        assert strategies is not None
+        requested = strategies
+
+        if prefix is None:
+            strategies = tuple(s for s in strategies if s != "display_id")
+        try:
+            model._meta.get_field(slug_field)
+        except FieldDoesNotExist:
+            strategies = tuple(s for s in strategies if s != "slug")
+
+        if requested and not strategies:
+            if "display_id" in requested and prefix is None:
+                raise MissingPrefixError(model_name=model.__name__)
+            raise ImproperlyConfigured(
+                f"Cannot lookup by slug: {model.__name__} has no {slug_field!r} field"
+            )
+        return cls(
+            prefix, _resolve_uuid_field(model, uuid_field), slug_field, strategies
+        )
+
+    def build(self, value: str | uuid.UUID) -> dict[str, Any]:
+        """Turn an identifier into keyword arguments for ``QuerySet.get()``.
+
+        Returns ``{uuid_field: UUID}`` for a display ID or UUID, or
+        ``{slug_field: slug}`` for a slug.
+
+        Raises:
+            InvalidIdentifierError: If no strategy can parse the identifier.
+            UnknownPrefixError: If a display ID has the wrong prefix.
+        """
+        result = parse_identifier(value, self.strategies, expected_prefix=self.prefix)
+        if result.strategy == "slug":
+            return {self.slug_field: result.slug}
+        return {self.uuid_field: result.uuid}
+
+
+class _LookupOptions:
+    """Lookup attributes shared by the view mixins and the admin mixin."""
+
+    lookup_strategies: tuple[StrategyName, ...] | None = None
+    display_id_prefix: str | None = None
+    uuid_field: str | None = None
+    slug_field: str | None = None
+
+    def _get_lookup(self, model: type[models.Model]) -> _Lookup:
+        return _Lookup.for_model(
+            model,
+            strategies=self.lookup_strategies,
+            prefix=self.display_id_prefix,
+            uuid_field=self.uuid_field,
+            slug_field=self.slug_field,
+        )
+
+
 def resolve_object(
     model: type[M],
     value: str | uuid.UUID,
     *,
-    strategies: tuple[StrategyName, ...] = DEFAULT_STRATEGIES,
+    strategies: tuple[StrategyName, ...] | None = None,
     prefix: str | None = None,
     uuid_field: str | None = None,
     slug_field: str | None = None,
@@ -96,8 +198,10 @@ def resolve_object(
     Args:
         model: The Django model class.
         value: The identifier string (UUID, display ID, or slug),
-            or a UUID instance for direct UUID lookup.
-        strategies: Tuple of strategy names to try in order.
+            or a UUID instance for direct UUID lookup. A UUID instance
+            skips *strategies*, which only apply to strings.
+        strategies: Tuple of strategy names to try in order. When ``None``
+            (the default), uses the ``DISPLAY_IDS["STRATEGIES"]`` setting.
         prefix: Expected display ID prefix. When ``None`` (the default),
             auto-detected from the model's ``display_id_prefix`` attribute.
         uuid_field: Name of the UUID field on the model. When ``None``
@@ -120,12 +224,6 @@ def resolve_object(
         AmbiguousIdentifierError: If multiple objects match (slug lookup).
         TypeError: If queryset is not for the specified model.
     """
-    # Resolve field names and prefix
-    prefix = _resolve_prefix(model, prefix)
-    uuid_field = _resolve_uuid_field(model, uuid_field)
-    slug_field = _resolve_slug_field(model, slug_field)
-
-    # Get the base queryset
     if queryset is not None:
         if queryset.model is not model:
             raise TypeError(
@@ -136,40 +234,18 @@ def resolve_object(
     else:
         qs = model._default_manager.all()
 
-    # UUID objects skip strategy parsing entirely
-    if isinstance(value, uuid.UUID):
-        try:
-            return qs.get(**{uuid_field: value})
-        except model.DoesNotExist:  # type: ignore[attr-defined]
-            raise ObjectNotFoundError(str(value), model_name=model.__name__) from None
+    lookup = _Lookup.for_model(
+        model,
+        strategies=strategies,
+        prefix=prefix,
+        uuid_field=uuid_field,
+        slug_field=slug_field,
+    ).build(value)
 
-    # Skip display_id strategy if the model has no prefix
-    if prefix is None:
-        strategies = tuple(s for s in strategies if s != "display_id")
-
-    # Skip slug strategy if the model has no slug field
-    try:
-        model._meta.get_field(slug_field)
-    except FieldDoesNotExist:
-        strategies = tuple(s for s in strategies if s != "slug")
-
-    # Parse the identifier to determine type
-    result = parse_identifier(value, strategies, expected_prefix=prefix)
-
-    # Build the lookup based on strategy
-    lookup: dict[str, Any]
-    if result.strategy in ("uuid", "display_id"):
-        # Both UUID and display_id resolve to a UUID lookup
-        lookup = {uuid_field: result.uuid}
-    else:
-        # Slug lookup
-        lookup = {slug_field: result.slug}
-
-    # Execute the query
     try:
         return qs.get(**lookup)
     except model.DoesNotExist:  # type: ignore[attr-defined]
-        raise ObjectNotFoundError(value, model_name=model.__name__) from None
+        raise ObjectNotFoundError(str(value), model_name=model.__name__) from None
     except model.MultipleObjectsReturned:  # type: ignore[attr-defined]
         count = qs.filter(**lookup).count()
-        raise AmbiguousIdentifierError(value, count) from None
+        raise AmbiguousIdentifierError(str(value), count) from None

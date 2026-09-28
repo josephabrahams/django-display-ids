@@ -6,16 +6,20 @@ from typing import Any, ClassVar
 
 from django.db import models
 
-from .conf import get_setting
 from .encoding import PREFIX_PATTERN, encode_display_id
+from .resolver import _resolve_uuid_field
 
 __all__ = [
     "DisplayIDModel",
     "get_model_for_prefix",
 ]
 
-# Registry of prefix -> model class name (for collision detection)
-_prefix_registry: dict[str, str] = {}
+# Registry of prefix -> model class (for collision detection)
+_prefix_registry: dict[str, type[models.Model]] = {}
+
+
+def _dotted_path(cls: type) -> str:
+    return f"{cls.__module__}.{cls.__qualname__}"
 
 
 def get_model_for_prefix(prefix: str) -> str | None:
@@ -27,27 +31,32 @@ def get_model_for_prefix(prefix: str) -> str | None:
     Returns:
         Model class name or None if not registered.
     """
-    return _prefix_registry.get(prefix)
+    cls = _prefix_registry.get(prefix)
+    return cls.__name__ if cls is not None else None
 
 
-def _register_prefix(prefix: str, model_name: str) -> None:
+def _register_prefix(prefix: str, cls: type[models.Model]) -> None:
     """Register a prefix for a model, checking for collisions.
+
+    Models are compared by module and class name, not identity, so a module
+    that gets imported twice (as Django's test runner can do) re-registers
+    cleanly, while two different models with the same class name still
+    collide.
 
     Args:
         prefix: The display ID prefix.
-        model_name: The model class name.
+        cls: The model class.
 
     Raises:
         ValueError: If prefix is already registered to a different model.
     """
-    if prefix in _prefix_registry:
-        existing = _prefix_registry[prefix]
-        if existing != model_name:
-            raise ValueError(
-                f"Display ID prefix '{prefix}' is already used by "
-                f"{existing}, cannot reuse for {model_name}"
-            )
-    _prefix_registry[prefix] = model_name
+    existing = _prefix_registry.get(prefix)
+    if existing is not None and _dotted_path(existing) != _dotted_path(cls):
+        raise ValueError(
+            f"Display ID prefix '{prefix}' is already used by "
+            f"{_dotted_path(existing)}, cannot reuse for {_dotted_path(cls)}"
+        )
+    _prefix_registry[prefix] = cls
 
 
 class DisplayIDModel(models.Model):
@@ -97,19 +106,7 @@ class DisplayIDModel(models.Model):
                         f"{cls.__name__}.display_id_prefix must be 1-16 "
                         f"lowercase letters, got: {prefix!r}"
                     )
-                _register_prefix(prefix, cls.__name__)
-
-    @classmethod
-    def _get_uuid_field(cls) -> str:
-        if cls.uuid_field is not None:
-            return cls.uuid_field
-        return str(get_setting("UUID_FIELD"))
-
-    @classmethod
-    def _get_slug_field(cls) -> str:
-        if cls.slug_field is not None:
-            return cls.slug_field
-        return str(get_setting("SLUG_FIELD"))
+                _register_prefix(prefix, cls)
 
     @classmethod
     def get_display_id_prefix(cls) -> str | None:
@@ -131,7 +128,7 @@ class DisplayIDModel(models.Model):
         prefix = self.get_display_id_prefix()
         if prefix is None:
             return None
-        uuid_value = getattr(self, self._get_uuid_field())
+        uuid_value = getattr(self, _resolve_uuid_field(type(self), None))
         if uuid_value is None:
             return None
         return encode_display_id(prefix, uuid_value)

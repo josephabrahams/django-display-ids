@@ -287,3 +287,33 @@ class TestStrategyResult:
         assert result.uuid is None
         assert result.slug is None
         assert result.prefix is None
+
+
+class TestUUIDObjects:
+    """UUID objects are handled on purpose, not by accident."""
+
+    value = uuid.UUID("550e8400-e29b-41d4-a716-446655440000")
+
+    def test_parse_uuid_returns_uuid_object(self):
+        result = parse_uuid(self.value)
+        assert result == StrategyResult(strategy="uuid", uuid=self.value)
+
+    def test_parse_display_id_rejects_uuid_object(self):
+        assert parse_display_id(self.value, expected_prefix="inv") is None
+
+    def test_parse_slug_rejects_uuid_object(self):
+        assert parse_slug(self.value) is None
+
+    @pytest.mark.parametrize(
+        "strategies", [("display_id", "uuid", "slug"), ("display_id",), ("slug",)]
+    )
+    def test_parse_identifier_skips_strategies(self, strategies):
+        """A UUID object is already parsed, so strategies aren't consulted."""
+        result = parse_identifier(self.value, strategies, expected_prefix="inv")
+        assert result == StrategyResult(strategy="uuid", uuid=self.value)
+
+    @pytest.mark.parametrize("value", [123, None, b"bytes"])
+    def test_non_strings_are_not_identifiers(self, value):
+        assert parse_uuid(value) is None
+        assert parse_display_id(value) is None
+        assert parse_slug(value) is None

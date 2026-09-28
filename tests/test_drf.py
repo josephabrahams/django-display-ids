@@ -3,8 +3,10 @@
 import uuid
 
 import pytest
+from django.core.exceptions import MultipleObjectsReturned
+from django.http import Http404
 from rest_framework import serializers
-from rest_framework.exceptions import NotFound, ParseError
+from rest_framework.generics import GenericAPIView
 from rest_framework.test import APIRequestFactory
 from rest_framework.views import APIView
 
@@ -104,46 +106,103 @@ class TestDisplayIDMixin:
         assert obj == invoice
 
     def test_get_object_not_found(self, rf, invoice):
-        """NotFound raised when object not found."""
+        """Http404 raised when object not found."""
         view = InvoiceAPIView()
         view.kwargs = {"id": str(uuid.uuid4())}
         view.request = rf.get("/")
 
-        with pytest.raises(NotFound):
+        with pytest.raises(Http404):
             view.get_object()
 
     def test_get_object_invalid_identifier(self, rf, invoice):
-        """NotFound raised for identifier that doesn't match any object.
+        """Http404 raised for identifier that doesn't match any object.
 
         With slug in the default strategies, any string is accepted as a slug
-        and results in a database lookup. If nothing matches, NotFound is raised.
+        and results in a database lookup. If nothing matches, Http404 is raised.
         """
         view = InvoiceAPIView()
         view.kwargs = {"id": "invalid"}
         view.request = rf.get("/")
 
-        with pytest.raises(NotFound):
+        with pytest.raises(Http404):
             view.get_object()
 
     def test_get_object_wrong_prefix(self, rf, invoice):
-        """ParseError raised for wrong prefix."""
+        """Http404 raised for wrong prefix, like DRF's own get_object()."""
         view = InvoiceAPIView()
         # Use prod prefix instead of inv
         wrong_display_id = encode_display_id("prod", invoice.id)
         view.kwargs = {"id": wrong_display_id}
         view.request = rf.get("/")
 
-        with pytest.raises(ParseError):
+        with pytest.raises(Http404):
             view.get_object()
 
-    def test_missing_lookup_param(self, rf, invoice):
-        """ParseError raised when lookup param is missing."""
+    def test_get_object_unparseable(self, rf, invoice):
+        """Http404 raised when no strategy can parse the identifier."""
+
+        class NoSlugView(InvoiceAPIView):
+            lookup_strategies = ("display_id", "uuid")
+
+        view = NoSlugView()
+        view.kwargs = {"id": "not-an-id"}
+        view.request = rf.get("/")
+
+        with pytest.raises(Http404):
+            view.get_object()
+
+    def test_missing_lookup_url_kwarg(self, rf, invoice):
+        """A missing URL kwarg fails an assertion, like DRF's get_object()."""
         view = InvoiceAPIView()
         view.kwargs = {}  # Missing 'id'
         view.request = rf.get("/")
 
-        with pytest.raises(ParseError, match="Missing URL parameter"):
+        with pytest.raises(AssertionError, match="URL keyword argument named 'id'"):
             view.get_object()
+
+    def test_ambiguous_slug_raises(self, rf):
+        """Duplicate slugs raise MultipleObjectsReturned, like DRF."""
+        # name isn't unique, so use it as the slug field to get duplicates
+        Order.objects.create(name="dup")
+        Order.objects.create(name="dup")
+
+        class OrderView(DisplayIDMixin, APIView):
+            lookup_url_kwarg = "id"
+            slug_field = "name"
+
+            def get_queryset(self):
+                return Order.objects.all()
+
+        view = OrderView()
+        view.kwargs = {"id": "dup"}
+        view.request = rf.get("/")
+
+        with pytest.raises(MultipleObjectsReturned):
+            view.get_object()
+
+    def test_filter_backends_applied(self, rf, invoice):
+        """filter_queryset() runs before the lookup, like DRF's get_object()."""
+        other = Invoice.objects.create(name="Other")
+
+        class OnlyFirstBackend:
+            def filter_queryset(self, request, queryset, view):
+                return queryset.filter(pk=invoice.pk)
+
+        class FilteredView(DisplayIDMixin, GenericAPIView):
+            lookup_url_kwarg = "id"
+            queryset = Invoice.objects.all()
+            filter_backends = (OnlyFirstBackend,)
+
+        view = FilteredView()
+        view.kwargs = {"id": other.display_id}
+        view.request = rf.get("/")
+        view.format_kwarg = None
+
+        with pytest.raises(Http404):
+            view.get_object()
+
+        view.kwargs = {"id": invoice.display_id}
+        assert view.get_object() == invoice
 
 
 @pytest.mark.django_db
@@ -193,7 +252,7 @@ class TestQuerysetFiltering:
         assert obj == invoice1
 
     def test_filtered_queryset_excludes_object(self, rf, db):
-        """NotFound when object excluded by queryset filter."""
+        """Http404 when object excluded by queryset filter."""
         Invoice.objects.create(name="Invoice 1", slug="invoice-1")
         invoice2 = Invoice.objects.create(name="Invoice 2", slug="invoice-2")
 
@@ -208,7 +267,7 @@ class TestQuerysetFiltering:
         view.kwargs = {"id": str(invoice2.id)}
         view.request = rf.get("/")
 
-        with pytest.raises(NotFound):
+        with pytest.raises(Http404):
             view.get_object()
 
 
@@ -232,8 +291,8 @@ class TestNoPrefixBehavior:
         view.request = rf.get("/")
 
         # display_id strategy is skipped, UUID doesn't match,
-        # slug catches it but no matching slug exists -> NotFound
-        with pytest.raises(NotFound):
+        # slug catches it but no matching slug exists -> Http404
+        with pytest.raises(Http404):
             view.get_object()
 
 
@@ -293,8 +352,8 @@ class TestModelPrefixFallback:
         view.kwargs = {"id": invoice.display_id}
         view.request = rf.get("/")
 
-        # display_id strategy is not in strategies, slug catches it but no match -> NotFound
-        with pytest.raises(NotFound):
+        # display_id strategy is not in strategies, slug catches it but no match -> Http404
+        with pytest.raises(Http404):
             view.get_object()
 
 
@@ -604,6 +663,26 @@ class TestDisplayIDFieldSchema:
         assert schema["type"] == "string"
         assert "type_" in schema["example"]
 
+    def test_serializer_prefix_attribute_is_ignored(self):
+        """The schema only uses prefix sources the field reads at runtime.
+
+        DisplayIDField doesn't read display_id_prefix from its serializer, so
+        the schema mustn't either, or the docs would show inv_... while the
+        API raises or outputs something else.
+        """
+        pytest.importorskip("drf_spectacular")
+        from django_display_ids.contrib.drf_spectacular import DisplayIDFieldExtension
+
+        class PrefixAttrSerializer(serializers.Serializer):
+            display_id_prefix = "inv"
+            display_id = DisplayIDField()
+
+        field = PrefixAttrSerializer().fields["display_id"]
+        schema = DisplayIDFieldExtension(target=field).map_serializer_field(
+            None, "response"
+        )
+        assert schema["example"].startswith("type_")
+
 
 # =============================================================================
 # ID Parameter Description Tests
@@ -613,16 +692,33 @@ class TestDisplayIDFieldSchema:
 class TestIdParamDescription:
     """Tests for id_param_description function."""
 
-    def test_function_default(self):
+    def test_function_default_follows_strategies(self):
+        """By default the description lists what the default strategies accept."""
         from django_display_ids.contrib.drf_spectacular import id_param_description
 
         result = id_param_description("user")
+        assert result == "Identifier: display_id (user_xxx), UUID, or slug"
+
+    def test_function_default_follows_setting(self, settings):
+        from django_display_ids.contrib.drf_spectacular import id_param_description
+
+        settings.DISPLAY_IDS = {"STRATEGIES": ("display_id", "uuid")}
+        result = id_param_description("user")
+        assert result == "Identifier: display_id (user_xxx) or UUID"
+
+    def test_function_without_slug(self):
+        from django_display_ids.contrib.drf_spectacular import id_param_description
+
+        result = id_param_description("user", with_slug=False)
         assert result == "Identifier: display_id (user_xxx) or UUID"
 
     def test_function_without_uuid(self):
         from django_display_ids.contrib.drf_spectacular import id_param_description
 
         result = id_param_description("user", with_uuid=False)
+        assert result == "Identifier: display_id (user_xxx) or slug"
+
+        result = id_param_description("user", with_uuid=False, with_slug=False)
         assert result == "Identifier: display_id (user_xxx)"
 
     def test_function_with_slug(self):
@@ -643,3 +739,34 @@ class TestIdParamDescription:
         assert "inv_xxx" in id_param_description("inv")
         assert "product_xxx" in id_param_description("product")
         assert "a_xxx" in id_param_description("a")
+
+
+@pytest.mark.django_db
+class TestResponses:
+    """Through DRF's request handling, bad identifiers become 404 responses."""
+
+    class View(InvoiceAPIView):
+        def get(self, request, *args, **kwargs):
+            from rest_framework.response import Response
+
+            return Response({"name": self.get_object().name})
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "not-an-id",
+            encode_display_id("prod", uuid.uuid4()),
+            str(uuid.uuid4()),
+        ],
+    )
+    def test_404_response(self, value):
+        request = APIRequestFactory().get("/")
+        response = self.View.as_view()(request, id=value)
+        assert response.status_code == 404
+
+    def test_200_response(self):
+        invoice = Invoice.objects.create(name="Found")
+        request = APIRequestFactory().get("/")
+        response = self.View.as_view()(request, id=invoice.display_id)
+        assert response.status_code == 200
+        assert response.data == {"name": "Found"}

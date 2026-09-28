@@ -8,129 +8,56 @@
 [![Docs](https://readthedocs.org/projects/django-display-ids/badge/?version=stable)](https://django-display-ids.readthedocs.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/josephabrahams/django-display-ids/blob/main/LICENSE)
 
-Stripe-like prefixed IDs for Django. Works with existing UUIDs — no schema changes.
+Stripe-style prefixed IDs for Django, like `inv_2aUyqjCzEIiEcYMKj7TZtw`, on top of the UUID fields you already have. No new fields and no migrations.
 
-## Why?
+```python
+from django_display_ids import DisplayIDMixin, DisplayIDModel
 
-UUIDv7 (native in Python 3.14+) offers excellent database performance with time-ordered indexing. But they lack context — seeing `550e8400-e29b-41d4-a716-446655440000` in a URL or log doesn't tell you what kind of object it refers to.
+class Invoice(DisplayIDModel):
+    display_id_prefix = "inv"
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    slug = models.SlugField(unique=True)
 
-Display IDs like `inv_2aUyqjCzEIiEcYMKj7TZtw` are more useful: the prefix identifies the object type at a glance, and they're compact and URL-safe. But storing display IDs in the database is far less efficient than native UUIDs.
+invoice.display_id  # "inv_2aUyqjCzEIiEcYMKj7TZtw"
 
-Different consumers have different needs:
+class InvoiceDetailView(DisplayIDMixin, DetailView):
+    model = Invoice
+```
 
-- **Humans** prefer slugs (`my-invoice`) or display IDs (`inv_xxx`)
-- **APIs and integrations** work well with UUIDs
+The view now finds the invoice from the display ID, the UUID (`550e8400-e29b-41d4-a716-446655440000`, in any case, with or without hyphens) or the slug. Each one becomes a plain query on the UUID or slug column.
 
-This library gives you the best of both worlds: accept any format in your URLs and API endpoints, then translate to an efficient UUID lookup in the database. Store UUIDs, expose whatever format your users need.
+A UUID in a URL or log doesn't say what it points to; a display ID does. The part after the prefix is the same UUID in base62, so it converts back without a database lookup.
 
 ## Installation
 
 ```bash
 pip install django-display-ids
+pip install "django-display-ids[drf]"          # with Django REST Framework
+pip install "django-display-ids[spectacular]"  # with DRF and drf-spectacular
 ```
 
-Add to `INSTALLED_APPS`:
+Requires Python 3.12+ and Django 4.2+.
 
-```python
-INSTALLED_APPS = [
-    # ...
-    "django_display_ids",
-]
-```
+## What's included
 
-## Quick Start
-
-**Add the mixin to your model:**
-
-```python
-# models.py
-
-import uuid
-from django.db import models
-from django_display_ids import DisplayIDModel
-
-class Invoice(DisplayIDModel, models.Model):
-    display_id_prefix = "inv"
-    uuid_field = "uuid"
-    uuid = models.UUIDField(default=uuid.uuid7, unique=True)
-    slug = models.SlugField(unique=True)
-```
-
-**Update your URLconf:**
-
-```python
-# urls.py
-
-from django.urls import path, register_converter
-from django_display_ids import DisplayIDOrUUIDOrSlugConverter
-
-register_converter(DisplayIDOrUUIDOrSlugConverter, "identifier")
-
-urlpatterns = [
-    path("invoices/<identifier:id>/", InvoiceDetailView.as_view()),
-]
-```
-
-**Add the mixin to your view:**
-
-```python
-# views.py
-
-# Django CBV
-from django.views.generic import DetailView
-from django_display_ids import DisplayIDMixin
-
-class InvoiceDetailView(DisplayIDMixin, DetailView):
-    model = Invoice
-    lookup_url_kwarg = "id"
-
-# Django REST Framework
-from rest_framework.viewsets import ModelViewSet
-from django_display_ids.contrib.rest_framework import DisplayIDMixin
-
-class InvoiceViewSet(DisplayIDMixin, ModelViewSet):
-    queryset = Invoice.objects.all()
-    serializer_class = InvoiceSerializer
-    lookup_url_kwarg = "id"
-```
-
-Your views now accept:
-
-- `inv_2aUyqjCzEIiEcYMKj7TZtw` (display ID)
-- `550e8400-e29b-41d4-a716-446655440000` (UUID)
-- `my-invoice` (slug)
-
-**Update your templates:**
-
-```django
-{% load display_ids %}
-
-{{ invoice.display_id }}                       {# inv_2aUyqjCzEIiEcYMKj7TZtw #}
-{{ order.customer_id|display_id:"cust" }}      {# encode any UUID #}
-```
-
-## Features
-
-- **Multiple identifier formats**: display ID (`prefix_base62uuid`), UUID (any version), slug
-- **Framework support**: Django CBVs and Django REST Framework, including a related field that accepts display IDs in requests
-- **Template filter**: Encode UUIDs as display IDs in templates
-- **Zero model changes required**: Works with any existing UUID field
-- **OpenAPI integration**: Automatic schema generation with drf-spectacular
+- `DisplayIDModel` for the `display_id` property, and a manager with `get_by_identifier()`, `get_by_identifiers()` and `resolve_identifier()`
+- `DisplayIDMixin` for Django class-based views and for DRF views
+- `DisplayIDField` and `DisplayIDRelatedField` for DRF serializers, so APIs can both show and accept display IDs, with drf-spectacular schemas
+- `DisplayIDAdminSearchMixin` to search the admin by display ID, UUID or slug
+- URL converters, and a `display_id` template filter for any UUID
 
 ## Documentation
 
-Full documentation at [django-display-ids.readthedocs.io](https://django-display-ids.readthedocs.io/).
+[django-display-ids.readthedocs.io](https://django-display-ids.readthedocs.io/)
 
 ## Contributing
 
 See [CONTRIBUTING.md](https://github.com/josephabrahams/django-display-ids/blob/main/CONTRIBUTING.md).
 
-## Related Projects
+## Related projects
 
-If you need ID generation and storage (custom model fields), consider:
+These generate and store prefixed IDs in a new model field, where django-display-ids works with the UUID fields you already have:
 
-- [django-prefix-id](https://github.com/jaddison/django-prefix-id) — PrefixIDField that generates and stores base62-encoded UUIDs
-- [django-spicy-id](https://github.com/mik3y/django-spicy-id) — Drop-in AutoField replacement
-- [django-charid-field](https://github.com/yunojuno/django-charid-field) — CharField wrapper supporting cuid, ksuid, ulid
-
-**django-display-ids** works with existing UUID fields and handles resolution only — no migrations required.
+- [django-prefix-id](https://github.com/jaddison/django-prefix-id): a `PrefixIDField` that stores base62-encoded UUIDs
+- [django-spicy-id](https://github.com/mik3y/django-spicy-id): a drop-in `AutoField` replacement
+- [django-charid-field](https://github.com/yunojuno/django-charid-field): a `CharField` for cuid, ksuid or ulid values

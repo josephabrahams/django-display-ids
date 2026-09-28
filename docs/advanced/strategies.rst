@@ -1,139 +1,59 @@
 Lookup Strategies
 =================
 
-Strategies determine how identifiers are parsed and resolved to database records.
+A strategy is one way of reading an identifier. There are three:
 
-Available Strategies
---------------------
+``display_id``
+   ``inv_2aUyqjCzEIiEcYMKj7TZtw``. Decoded to a UUID, then looked up in the UUID
+   field. The prefix must match the model's, or the lookup fails.
 
-.. list-table::
-   :widths: 20 30 50
-   :header-rows: 1
+``uuid``
+   ``550e8400-e29b-41d4-a716-446655440000``. Any UUID version, in either case,
+   with or without hyphens, and anything else Python's ``uuid.UUID()``
+   accepts. Looked up in the UUID field.
 
-   * - Strategy
-     - Format
-     - Description
-   * - ``display_id``
-     - ``prefix_base62uuid``
-     - Decode display ID and lookup by UUID field
-   * - ``uuid``
-     - UUID (any version)
-     - Parse as UUID and lookup by UUID field
-   * - ``slug``
-     - any string
-     - Lookup by slug field
+``slug``
+   Any other non-empty string, looked up exactly in the slug field.
 
-How Resolution Works
---------------------
-
-Strategies are tried in order. The first strategy that can parse the identifier
-performs the database lookup.
+Strategies are tried in order, and the first one that can read the value is
+used. The default is ``("display_id", "uuid", "slug")``. Keep ``slug`` last:
+it accepts any string, so nothing after it would ever be tried. Change the
+order or leave strategies out with ``lookup_strategies`` on a view, or the
+``STRATEGIES`` setting for the whole project (see :doc:`/reference/settings`):
 
 .. code-block:: python
 
-   # With strategies=("display_id", "uuid")
+   lookup_strategies = ("display_id", "uuid")  # no slugs
+   lookup_strategies = ("display_id",)  # display IDs only
 
-   # "inv_2aUy..." -> display_id strategy matches, decodes UUID, queries
-   # "550e8400-..." -> display_id fails, uuid strategy matches, queries
-   # "my-slug" -> both fail -> InvalidIdentifierError
+Surrounding whitespace is stripped before parsing.
 
-UUID objects
-~~~~~~~~~~~~
-
-Every lookup function also accepts a ``uuid.UUID`` object. It's already a
-UUID, so it goes straight to a UUID lookup and strategies aren't checked.
-Strategies only control which text formats are accepted.
-
-.. code-block:: python
-
-   resolve_object(Invoice, invoice.id)  # works even with strategies=("slug",)
-
-Configuration errors are the exception. If the strategies can never be used
-for the model (see below), the lookup raises whatever the value is, including a
-UUID object. The mistake is in the configuration, so it's reported the first
-time the lookup runs rather than only for some inputs.
-
-Default Strategies
+Skipped strategies
 ------------------
 
-The default order is ``("display_id", "uuid", "slug")``.
+``display_id`` is skipped on models without a ``display_id_prefix``, and
+``slug`` on models without the slug field. That's why the default strategies
+are safe for every model.
 
-All three strategies are included by default. The slug strategy is a catch-all
-— any non-empty string is a valid slug — but it's safe to include globally
-because models without a slug field automatically skip the slug strategy.
+It also means a display ID for one model never finds a row in a model without a
+prefix, even if the UUIDs happen to match.
 
-Strategy Requirements
----------------------
+If every strategy you asked for is skipped, for example
+``lookup_strategies = ("display_id",)`` on a model with no prefix, no value
+could ever match. Instead of a 404 for every request, the lookup raises
+``MissingPrefixError``, or ``ImproperlyConfigured`` for a slug-only lookup
+without a slug field.
 
-display_id Strategy
-~~~~~~~~~~~~~~~~~~~
+UUID objects
+------------
 
-When a prefix is configured (either explicitly or auto-detected from the model),
-the strategy validates that the display ID matches the expected prefix.
-
-This prevents accidentally matching display IDs from other models. For example,
-if you're looking up an ``Invoice`` with prefix ``inv``, a ``User`` display ID
-like ``usr_xxx`` won't match — the strategy detects the wrong prefix.
-
-Every lookup skips the display_id strategy for models without a
-``display_id_prefix``.
+The lookup functions also accept a ``uuid.UUID``. It's already parsed, so it
+goes straight to the UUID field and the strategies aren't consulted:
 
 .. code-block:: python
 
-   # With prefix="inv"
-   "inv_xxx" -> matches, decodes, queries
-   "usr_xxx" -> UnknownPrefixError (prefix mismatch)
+   resolve_object(Invoice, invoice.id, strategies=("slug",))  # still found
 
-uuid Strategy
-~~~~~~~~~~~~~
-
-No configuration required. Attempts to parse the value as a standard UUID.
-
-Works with any UUID version, in either case, with or without hyphens:
-
-- ``550e8400-e29b-41d4-a716-446655440000``
-- ``550e8400e29b41d4a716446655440000``
-
-slug Strategy
-~~~~~~~~~~~~~
-
-Matches any non-empty string and looks up by slug field. Because it matches
-anything, **always put it last** in the strategy list.
-
-If the model doesn't have the configured slug field, the slug strategy is
-automatically skipped. This means you can safely include ``"slug"`` in your
-global default strategies without breaking models that don't have a slug field.
-
-Strategies that can't be used
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Skipping only applies while other strategies are left. If every strategy you
-asked for is skipped, for example ``lookup_strategies = ("display_id",)`` on a
-model with no prefix, the lookup could never match anything. Instead of
-returning 404 for every request, it raises ``MissingPrefixError`` (or
-``ImproperlyConfigured`` for a slug-only lookup without a slug field), so the
-mistake shows up straight away.
-
-Strategy Ordering Best Practices
---------------------------------
-
-1. **Always put** ``display_id`` **first** — it's the most specific and will
-   correctly reject display IDs with wrong prefixes.
-
-2. **Put** ``uuid`` **second** — UUIDs have a distinct format that won't
-   accidentally match slugs.
-
-3. **Put** ``slug`` **last** — it's a catch-all that matches any string.
-
-Recommended orders:
-
-.. code-block:: python
-
-   # All formats (default)
-   lookup_strategies = ("display_id", "uuid", "slug")
-
-   # Display IDs and UUIDs only (no slugs)
-   lookup_strategies = ("display_id", "uuid")
-
-   # UUIDs only (no display IDs)
-   lookup_strategies = ("uuid",)
+The configuration errors above are still raised for UUID objects. The
+configuration is wrong whatever the value, so it's reported the first time the
+lookup runs, not only for some inputs.

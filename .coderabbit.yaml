@@ -3,28 +3,3 @@
 reviews:
   # Keep the summary in CodeRabbit's walkthrough comment, not the PR description
   high_level_summary_in_walkthrough: true
-  path_filters:
-    - "!uv.lock"
-  path_instructions:
-    - path: "src/**"
-      instructions: |
-        - Changes to public behavior or API need an entry in CHANGELOG.md.
-        - Only Django is a required dependency. Nothing outside
-          src/django_display_ids/contrib/rest_framework/ and
-          src/django_display_ids/contrib/drf_spectacular/ may import
-          rest_framework or drf_spectacular.
-        - Code must support Python 3.12+ and Django 4.2 through 6.1.
-        - Lookup paths (resolver, managers, admin, view mixins) should go
-          through resolver._Lookup so they accept and reject the
-          same identifiers.
-    - path: "tests/**"
-      instructions: |
-        - Check that each test asserts what its name and docstring say.
-        - Flag tests that can't fail, or that only exercise the happy path
-          when their name suggests an error case.
-    - path: "**/*.{md,rst}"
-      instructions: |
-        - Write plainly and concisely, as a person would. Avoid em dashes,
-          marketing phrases ("seamlessly", "best of both worlds", "just
-          works"), and bold-labelled bullet lists.
-        - Code examples must match the current API.

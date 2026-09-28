@@ -41,7 +41,7 @@ class DisplayIDField(serializers.SerializerMethodField):
             id = serializers.UUIDField(source="uid", read_only=True)
             display_id = DisplayIDField()
 
-        # Output: {"id": "...", "display_id": "user_2nBm7K8xYq1pLwZj"}
+        # Output: {"id": "...", "display_id": "user_2aUyqjCzEIiEcYMKj7TZtw"}
 
     Example with custom prefix (overrides model's prefix):
         class UserSerializer(serializers.Serializer):

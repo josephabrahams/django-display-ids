@@ -1,32 +1,39 @@
 Quick Start
 ===========
 
-Add the mixin to your model
----------------------------
+1. Add a prefix to your model
+-----------------------------
 
 .. code-block:: python
 
    # models.py
    import uuid
-   from django.db import models
-   from django_display_ids import DisplayIDModel
 
-   class Invoice(DisplayIDModel, models.Model):
+   from django.db import models
+   from django_display_ids import DisplayIDManager, DisplayIDModel
+
+   class Invoice(DisplayIDModel):
        display_id_prefix = "inv"
-       uuid_field = "uuid"
-       uuid = models.UUIDField(default=uuid.uuid7, unique=True)
+
+       id = models.UUIDField(primary_key=True, default=uuid.uuid4)
        slug = models.SlugField(unique=True)
 
-This registers the prefix and adds a ``display_id`` property to your model
-instances.
+       objects = DisplayIDManager()
 
-.. note::
+Instances now have a ``display_id``:
 
-   ``uuid.uuid7`` requires Python 3.14+. For earlier versions, use
-   ``uuid.uuid4``.
+.. code-block:: python
 
-Update your URLconf
--------------------
+   >>> invoice.id
+   UUID('550e8400-e29b-41d4-a716-446655440000')
+   >>> invoice.display_id
+   'inv_2aUyqjCzEIiEcYMKj7TZtw'
+
+If the UUID isn't the primary key, name its field with ``uuid_field = "uid"``.
+See :doc:`usage/models`.
+
+2. Route any identifier to the view
+-----------------------------------
 
 .. code-block:: python
 
@@ -40,18 +47,15 @@ Update your URLconf
        path("invoices/<identifier:id>/", InvoiceDetailView.as_view()),
    ]
 
-.. tip::
+The converter only lets through values shaped like a display ID, UUID or slug.
+``<str:id>`` works too, and :doc:`reference/converters` lists stricter options.
 
-   Using ``<str:id>`` also works but accepts any string. Path converters
-   validate the format at the routing layer, returning 404 for invalid formats.
-   See :doc:`reference/converters` for all available converters.
-
-Add the mixin to your view
----------------------------
+3. Add the mixin to the view
+----------------------------
 
 .. code-block:: python
 
-   # Django CBV
+   # views.py
    from django.views.generic import DetailView
    from django_display_ids import DisplayIDMixin
 
@@ -59,8 +63,10 @@ Add the mixin to your view
        model = Invoice
        lookup_url_kwarg = "id"
 
-   # Django REST Framework
-   from rest_framework.viewsets import ModelViewSet
+For Django REST Framework, use the mixin from ``contrib.rest_framework``:
+
+.. code-block:: python
+
    from django_display_ids.contrib.rest_framework import DisplayIDMixin
 
    class InvoiceViewSet(DisplayIDMixin, ModelViewSet):
@@ -68,26 +74,15 @@ Add the mixin to your view
        serializer_class = InvoiceSerializer
        lookup_url_kwarg = "id"
 
-Your views now accept:
+``/invoices/inv_2aUyqjCzEIiEcYMKj7TZtw/``,
+``/invoices/550e8400-e29b-41d4-a716-446655440000/`` and
+``/invoices/march-invoice/`` now all show the same invoice. A display ID with
+another model's prefix, or anything that doesn't match, is a 404.
 
-- ``inv_2aUyqjCzEIiEcYMKj7TZtw`` (display ID)
-- ``550e8400-e29b-41d4-a716-446655440000`` (UUID)
-- ``my-invoice`` (slug)
-
-What's Happening
-----------------
-
-1. ``DisplayIDModel`` registers the prefix on the model
-2. The path converter validates the identifier format in the URL
-3. ``lookup_url_kwarg`` tells the view mixin which URL parameter to read
-4. The view mixin auto-detects ``display_id_prefix`` from the model
-5. The default ``lookup_strategies`` tries display IDs, UUIDs, and slugs (in that order)
-
-The mixin decodes the identifier and looks up the object by UUID (or slug).
-
-Next Steps
+Next steps
 ----------
 
-- :doc:`usage/models` — Add a ``display_id`` property to your models
-- :doc:`usage/views` — Learn all view configuration options
-- :doc:`usage/drf` — Django REST Framework integration
+- :doc:`usage/models` for the manager's lookup methods
+- :doc:`usage/drf` for serializer fields and OpenAPI schemas
+- :doc:`usage/admin` to search the admin by display ID
+- :doc:`usage/templatetags` to show display IDs for any UUID in templates

@@ -1,97 +1,22 @@
-Template Tags
-=============
+Templates
+=========
 
-Encode UUIDs as display IDs directly in Django templates.
+For a ``DisplayIDModel`` instance, use its property:
 
-Setup
------
+.. code-block:: django
 
-Add ``django_display_ids`` to your ``INSTALLED_APPS``:
+   {{ invoice.display_id }}
 
-.. code-block:: python
-
-   INSTALLED_APPS = [
-       # ...
-       "django_display_ids",
-   ]
-
-Then load the template library in your templates:
+For any other UUID, such as a foreign key, use the ``display_id`` filter with a
+prefix. It needs ``"django_display_ids"`` in ``INSTALLED_APPS``:
 
 .. code-block:: django
 
    {% load display_ids %}
 
-Filter: ``display_id``
-----------------------
+   <a href="/customers/{{ order.customer_id|display_id:"cust" }}/">Customer</a>
 
-Encode a UUID as a display ID:
-
-.. code-block:: django
-
-   {% load display_ids %}
-
-   {{ some_uuid|display_id:"inv" }}
-   {# Output: inv_2aUyqjCzEIiEcYMKj7TZtw #}
-
-   {# With a model's UUID field #}
-   {{ invoice.id|display_id:"inv" }}
-
-   {# Foreign key UUID #}
-   {{ order.customer_id|display_id:"cust" }}
-
-The prefix argument is required and must be 1-16 lowercase letters.
-
-.. note::
-
-   For models with ``DisplayIDModel``, use the ``display_id`` property directly:
-
-   .. code-block:: django
-
-      {{ invoice.display_id }}
-
-   The filter is for encoding raw UUIDs that don't come from a mixin-enabled model.
-
-Error Handling
---------------
-
-The value can be a UUID object or a UUID string, with or without hyphens, in
-any case.
-
-Errors raise ``TemplateSyntaxError``:
-
-- Value is not a UUID or UUID string
-- Invalid prefix format (must be 1-16 lowercase letters)
-
-``None`` values return an empty string (not an error).
-
-Examples
---------
-
-Encoding foreign key UUIDs:
-
-.. code-block:: django
-
-   {% load display_ids %}
-
-   <p>Customer: {{ order.customer_id|display_id:"cust" }}</p>
-   <p>Invoice: {{ payment.invoice_id|display_id:"inv" }}</p>
-
-Building URLs with display IDs:
-
-.. code-block:: django
-
-   {% load display_ids %}
-
-   <a href="/customers/{{ customer.id|display_id:"cust" }}/">
-       View Customer
-   </a>
-
-Loop over UUIDs:
-
-.. code-block:: django
-
-   {% load display_ids %}
-
-   {% for uuid in related_ids %}
-       <li>{{ uuid|display_id:"rel" }}</li>
-   {% endfor %}
+The value can be a ``uuid.UUID`` or a UUID string in any form Python's
+``uuid.UUID()`` accepts. ``None`` renders as an empty string. Anything else,
+or a prefix that isn't 1 to 16 lowercase letters, raises
+``TemplateSyntaxError``.

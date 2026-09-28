@@ -30,18 +30,18 @@ class DisplayIDQuerySet(models.QuerySet[M]):
     """QuerySet with display ID lookup methods.
 
     Example:
-        class Invoice(DisplayIDMixin, models.Model):
+        class Invoice(DisplayIDModel):
             display_id_prefix = "inv"
             objects = DisplayIDManager()
 
         # Get by any identifier type
-        invoice = Invoice.objects.get_by_identifier("inv_1a2B3c4D5e6F7g8H")
+        invoice = Invoice.objects.get_by_identifier("inv_2aUyqjCzEIiEcYMKj7TZtw")
 
         # Works with filtered querysets
         invoice = Invoice.objects.filter(active=True).get_by_identifier("inv_xxx")
 
         # Get by display ID only (stricter)
-        invoice = Invoice.objects.get_by_display_id("inv_1a2B3c4D5e6F7g8H")
+        invoice = Invoice.objects.get_by_display_id("inv_2aUyqjCzEIiEcYMKj7TZtw")
     """
 
     # Re-annotate inherited QuerySet methods with -> Self so that
@@ -80,7 +80,7 @@ class DisplayIDQuerySet(models.QuerySet[M]):
         """Get an object by its display ID.
 
         Args:
-            value: The display ID string (e.g., "inv_1a2B3c4D5e6F7g8H"),
+            value: The display ID string (e.g., "inv_2aUyqjCzEIiEcYMKj7TZtw"),
                 or a UUID instance for direct UUID lookup.
             prefix: Expected prefix for validation. If None, uses model's prefix.
 
@@ -135,7 +135,7 @@ class DisplayIDQuerySet(models.QuerySet[M]):
         """Resolve an identifier to a UUID without fetching the object.
 
         For UUID and display_id identifiers, the UUID is extracted by parsing
-        alone — no database query is needed. Only slug identifiers require a
+        alone, with no database query. Only slug identifiers require a
         database lookup.
 
         This is useful for cursor-based pagination where you need the UUID
@@ -236,7 +236,7 @@ class DisplayIDManager(models.Manager[M]):
     """Manager that uses DisplayIDQuerySet.
 
     Example:
-        class Invoice(DisplayIDMixin, models.Model):
+        class Invoice(DisplayIDModel):
             display_id_prefix = "inv"
             objects = DisplayIDManager()
     """

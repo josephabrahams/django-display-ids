@@ -1,141 +1,81 @@
-Settings Reference
-==================
+Settings and Options
+====================
 
-Django Settings
----------------
+Lookup options
+--------------
 
-All settings are optional and have sensible defaults. Configure them in your
-Django settings module:
+Every lookup (the view mixins, the admin mixin, ``DisplayIDRelatedField``,
+``resolve_object()`` and the manager methods) uses the same four options. For
+each one, the most specific setting wins:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 20 20 20 20
+
+   * - Option
+     - On a view, admin or field
+     - Function argument
+     - On the model
+     - Project setting, then default
+   * - Strategies to try, in order
+     - ``lookup_strategies``
+     - ``strategies=``
+     - (none)
+     - ``STRATEGIES``, ``("display_id", "uuid", "slug")``
+   * - Display ID prefix
+     - ``display_id_prefix``
+     - ``prefix=``
+     - ``display_id_prefix``
+     - (none)
+   * - UUID field
+     - ``uuid_field``
+     - ``uuid_field=``
+     - ``uuid_field``
+     - ``UUID_FIELD``, ``"id"``
+   * - Slug field
+     - ``slug_field``
+     - ``slug_field=``
+     - ``slug_field``
+     - ``SLUG_FIELD``, ``"slug"``
+
+The manager methods take ``strategies=`` and ``prefix=``; they read the fields
+from the model. ``DisplayIDRelatedField`` takes the options as keyword
+arguments, such as ``DisplayIDRelatedField(queryset=..., lookup_strategies=...)``.
+
+A strategy the model can't support is skipped: ``display_id`` without a prefix,
+``slug`` without the slug field. If that leaves nothing to try, the lookup
+raises ``MissingPrefixError`` or ``ImproperlyConfigured``. See
+:doc:`/advanced/strategies`.
+
+The view mixins also take ``lookup_url_kwarg``, the URL parameter holding the
+identifier (default ``"pk"``).
+
+Project settings
+----------------
+
+All settings are optional. Set only the ones you want to change:
 
 .. code-block:: python
 
    # settings.py
    DISPLAY_IDS = {
-       "UUID_FIELD": "id",
-       "SLUG_FIELD": "slug",
-       "STRATEGIES": ("display_id", "uuid", "slug"),
-       "SLUG_REGEX": r"[-a-zA-Z0-9_]+",
+       "UUID_FIELD": "uid",
+       "STRATEGIES": ("display_id", "uuid"),
    }
 
-Available Settings
-~~~~~~~~~~~~~~~~~~
+``UUID_FIELD``
+   UUID field name for models that don't set ``uuid_field``. Default ``"id"``.
 
-.. list-table::
-   :widths: 25 25 50
-   :header-rows: 1
+``SLUG_FIELD``
+   Slug field name for models that don't set ``slug_field``. Default ``"slug"``.
 
-   * - Setting
-     - Default
-     - Description
-   * - ``UUID_FIELD``
-     - ``"id"``
-     - Default UUID field name for lookups
-   * - ``SLUG_FIELD``
-     - ``"slug"``
-     - Default slug field name for lookups
-   * - ``STRATEGIES``
-     - ``("display_id", "uuid", "slug")``
-     - Default lookup strategies (in order)
-   * - ``SLUG_REGEX``
-     - ``[-a-zA-Z0-9_]+``
-     - Regex pattern for slug matching in URL converters
+``STRATEGIES``
+   Strategies to try when a lookup doesn't set its own. Default
+   ``("display_id", "uuid", "slug")``.
 
-SLUG_REGEX
-~~~~~~~~~~
-
-The ``SLUG_REGEX`` setting controls what patterns are considered valid slugs
-in the :class:`~django_display_ids.converters.DisplayIDOrSlugConverter` and
-:class:`~django_display_ids.converters.DisplayIDOrUUIDOrSlugConverter`.
-It's read when Django builds your URL patterns, so ``override_settings`` in
-tests works as expected.
-
-By default, it uses Django's slug pattern (``[-a-zA-Z0-9_]+``), which allows:
-
-- Letters (uppercase and lowercase)
-- Numbers
-- Hyphens
-- Underscores
-
-To restrict to lowercase slugs only:
-
-.. code-block:: python
-
-   DISPLAY_IDS = {
-       "SLUG_REGEX": r"[a-z0-9-]+",
-   }
-
-To allow dots in slugs:
-
-.. code-block:: python
-
-   DISPLAY_IDS = {
-       "SLUG_REGEX": r"[-a-zA-Z0-9_.]+",
-   }
-
-View/Mixin Attributes
----------------------
-
-All mixins accept these attributes to override defaults:
-
-.. list-table::
-   :widths: 30 20 50
-   :header-rows: 1
-
-   * - Attribute
-     - Default
-     - Description
-   * - ``lookup_url_kwarg``
-     - ``"pk"``
-     - URL parameter name to read
-   * - ``lookup_strategies``
-     - from settings
-     - Tuple of strategies to try
-   * - ``display_id_prefix``
-     - from model
-     - Expected display ID prefix
-   * - ``uuid_field``
-     - from model, then settings
-     - UUID field name on model
-   * - ``slug_field``
-     - from model, then settings
-     - Slug field name on model
-
-Model Class Attributes
-----------------------
-
-Models using ``DisplayIDModel`` can define:
-
-.. list-table::
-   :widths: 30 20 50
-   :header-rows: 1
-
-   * - Attribute
-     - Required
-     - Description
-   * - ``display_id_prefix``
-     - Yes
-     - Prefix for display IDs (1-16 lowercase letters)
-   * - ``uuid_field``
-     - No
-     - Override default UUID field name
-   * - ``slug_field``
-     - No
-     - Override default slug field name
-
-Attribute Precedence
---------------------
-
-When resolving ``uuid_field`` and ``slug_field``, these are checked in order:
-
-1. View/mixin attribute (e.g., ``self.uuid_field``)
-2. Model class attribute (e.g., ``Model.uuid_field``)
-3. Django settings (``DISPLAY_IDS["UUID_FIELD"]``)
-4. Built-in default
-
-``display_id_prefix`` comes from the view/mixin attribute, then the model.
-There is no setting for it. ``lookup_strategies`` comes from the view/mixin
-attribute, then the ``DISPLAY_IDS["STRATEGIES"]`` setting. There is no model
-attribute for it.
-
-This allows you to set project-wide defaults in settings while overriding
-specific views or models as needed.
+``SLUG_REGEX``
+   What ``DisplayIDOrSlugConverter`` and ``DisplayIDOrUUIDOrSlugConverter``
+   accept as a slug in a URL. Default is Django's slug pattern,
+   ``[-a-zA-Z0-9_]+``. For lowercase slugs only, use ``r"[a-z0-9-]+"``. It's
+   read when Django builds your URL patterns, so ``override_settings`` works in
+   tests.

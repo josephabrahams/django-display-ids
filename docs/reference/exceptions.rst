@@ -1,194 +1,73 @@
 Exceptions
 ==========
 
-All exceptions inherit from both ``DisplayIDLookupError`` **and** a standard
-Django/Python exception, so you can catch them with either:
-
-.. code-block:: python
-
-   from django_display_ids import ObjectNotFoundError
-
-   # Catch with library-specific type
-   except ObjectNotFoundError: ...
-
-   # Or catch with Django's built-in type
-   except ObjectDoesNotExist: ...
-
-Exception Hierarchy
--------------------
-
-.. code-block:: text
-
-   DisplayIDLookupError
-   ├── InvalidIdentifierError     (+ ValueError)
-   ├── UnknownPrefixError         (+ ValueError)
-   ├── MissingPrefixError         (+ ImproperlyConfigured)
-   ├── ObjectNotFoundError        (+ ObjectDoesNotExist)
-   └── AmbiguousIdentifierError   (+ MultipleObjectsReturned)
-
-Django/Python Base Classes
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Each exception inherits from the Django or Python exception that best matches
-its semantics:
+``resolve_object()`` and the parsing functions raise these. Each one subclasses
+``DisplayIDLookupError`` and the Django or Python exception it corresponds to,
+so an existing ``except`` clause for the standard exception still catches it:
 
 .. list-table::
    :header-rows: 1
 
    * - Exception
-     - Django/Python Base
-     - Why
+     - Also a
+     - Raised when
    * - ``InvalidIdentifierError``
      - ``ValueError``
-     - Bad input — can't parse the identifier
+     - No strategy can read the value
    * - ``UnknownPrefixError``
      - ``ValueError``
-     - Bad input — wrong prefix
-   * - ``MissingPrefixError``
-     - ``ImproperlyConfigured``
-     - Configuration problem — no prefix set
+     - A display ID has another model's prefix
    * - ``ObjectNotFoundError``
      - ``ObjectDoesNotExist``
-     - No matching database record
+     - Nothing matches
    * - ``AmbiguousIdentifierError``
      - ``MultipleObjectsReturned``
-     - Multiple records match
+     - A slug matches more than one row
+   * - ``MissingPrefixError``
+     - ``ImproperlyConfigured``
+     - A lookup needs a prefix and the model has none
 
-This means existing ``except`` clauses work naturally:
+For example:
 
 .. code-block:: python
 
    from django.core.exceptions import ObjectDoesNotExist
+   from django_display_ids import UnknownPrefixError, resolve_object
 
    try:
-       invoice = Invoice.objects.get_by_identifier("inv_xxx")
-   except ObjectDoesNotExist:
-       # Catches ObjectNotFoundError from display ID lookups
-       # AND model.DoesNotExist from regular .get() calls
-       ...
-
-Exception Classes
------------------
-
-InvalidIdentifierError
-~~~~~~~~~~~~~~~~~~~~~~
-
-Raised when the identifier cannot be parsed by any strategy.
-
-.. code-block:: python
-
-   from django_display_ids import InvalidIdentifierError
-
-   try:
-       invoice = resolve_object(Invoice, "not-valid-anything", prefix="inv")
-   except InvalidIdentifierError:
-       # Handle invalid input
-   except ValueError:
-       # Also works — InvalidIdentifierError IS a ValueError
-
-UnknownPrefixError
-~~~~~~~~~~~~~~~~~~
-
-Raised when a display ID has a prefix that doesn't match the expected one.
-
-.. code-block:: python
-
-   from django_display_ids import UnknownPrefixError
-
-   try:
-       # Expecting "inv" but got "usr"
-       invoice = resolve_object(Invoice, "usr_2aUyqjCzEIiEcYMKj7TZtw", prefix="inv")
+       invoice = resolve_object(Invoice, value)
    except UnknownPrefixError as e:
-       print(f"Expected prefix: {e.expected}")
-       print(f"Got prefix: {e.actual}")
+       print(f"Expected {e.expected}_..., got {e.actual}_...")
+   except ObjectDoesNotExist:  # also catches ObjectNotFoundError
+       invoice = None
 
-Attributes:
+The exceptions carry the details as attributes: ``value`` on all of them except
+``MissingPrefixError``; ``actual`` and ``expected`` on ``UnknownPrefixError``;
+``model_name`` on ``ObjectNotFoundError`` and ``MissingPrefixError``; and
+``count`` on ``AmbiguousIdentifierError``.
 
-- ``expected`` — The expected prefix
-- ``actual`` — The prefix that was received
+Where they surface
+------------------
 
-MissingPrefixError
-~~~~~~~~~~~~~~~~~~
+Not every entry point raises these directly:
 
-Raised when a display ID operation is attempted on a model without a prefix.
+Manager methods (``get_by_identifier()`` and friends)
+   Raise ``Model.DoesNotExist`` for anything that doesn't match, like
+   ``QuerySet.get()``. ``get_by_identifiers()`` leaves non-matches out, like
+   ``filter()``.
 
-.. code-block:: python
+Django and DRF view mixins
+   Return a 404 for anything that doesn't match. A slug that matches more than
+   one row raises the model's ``MultipleObjectsReturned``, as Django's and
+   DRF's ``get_object()`` do.
 
-   from django_display_ids import MissingPrefixError
+Admin search
+   An identifier that doesn't parse or has the wrong prefix just adds no match
+   to the results.
 
-   try:
-       # Order has no display_id_prefix
-       order = Order.objects.get_by_display_id("ord_xxx")
-   except MissingPrefixError:
-       # Configure a prefix on the model
-   except ImproperlyConfigured:
-       # Also works
+``DisplayIDRelatedField``
+   Reports non-matches as a ``does_not_exist`` validation error.
 
-ObjectNotFoundError
-~~~~~~~~~~~~~~~~~~~
-
-Raised when no database record matches the resolved identifier.
-
-.. code-block:: python
-
-   from django_display_ids import ObjectNotFoundError
-
-   try:
-       invoice = resolve_object(Invoice, "inv_2aUyqjCzEIiEcYMKj7TZtw", prefix="inv")
-   except ObjectNotFoundError:
-       # Handle not found
-   except ObjectDoesNotExist:
-       # Also works — same as Django's model.DoesNotExist
-
-AmbiguousIdentifierError
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-Raised when multiple records match (typically with slug lookups).
-
-.. code-block:: python
-
-   from django_display_ids import AmbiguousIdentifierError
-
-   try:
-       # Multiple invoices have the slug "duplicate-name"
-       invoice = resolve_object(Invoice, "duplicate-name", strategies=("slug",))
-   except AmbiguousIdentifierError:
-       # Handle ambiguity
-   except MultipleObjectsReturned:
-       # Also works
-
-QuerySet Methods
-----------------
-
-``DisplayIDQuerySet`` methods (``get_by_display_id``, ``get_by_identifier``,
-``resolve_identifier``) raise ``Model.DoesNotExist`` and
-``Model.MultipleObjectsReturned``, matching Django's ``QuerySet.get()``
-contract. ``get_by_identifiers`` works like ``filter()`` and leaves out
-identifiers that match nothing.
-
-.. code-block:: python
-
-   try:
-       invoice = Invoice.objects.get_by_identifier("inv_xxx")
-   except Invoice.DoesNotExist:
-       # Same as Invoice.objects.get(slug="xxx") — natural Django pattern
-
-The library's typed exceptions (``ObjectNotFoundError``, ``InvalidIdentifierError``,
-etc.) are still raised by lower-level functions like ``resolve_object()`` and
-``parse_identifier()``.
-
-Framework-Specific Handling
----------------------------
-
-**Django CBVs** (``DisplayIDMixin``) and **Django REST Framework**
-(``DisplayIDMixin`` from ``contrib.rest_framework``):
-   An unparseable identifier, a wrong prefix, or no match raises ``Http404``
-   (DRF returns it as a 404 response). A slug that matches more than one row
-   raises the model's ``MultipleObjectsReturned``, as Django's and DRF's
-   ``get_object()`` do. Configuration errors, such as ``MissingPrefixError``,
-   are raised as they are.
-
-**Django Admin** (``DisplayIDAdminSearchMixin``):
-   An identifier that can't be parsed or has the wrong prefix adds no ID match,
-   and the normal ``search_fields`` results are returned. Configuration errors
-   are raised.
+In all of them, configuration errors (``MissingPrefixError`` and
+``ImproperlyConfigured``) are raised as they are, because they mean the code
+needs fixing rather than the input.

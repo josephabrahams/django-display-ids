@@ -1,111 +1,33 @@
-Encoding Functions
-==================
+Encoding
+========
 
-Low-level functions for encoding and decoding display IDs.
+A display ID is a prefix of 1 to 16 lowercase letters, an underscore, and the
+UUID in base62 (``0-9``, ``A-Z``, ``a-z``). A UUID is 128 bits, which always
+takes 22 base62 characters, so the pattern is ``^[a-z]{1,16}_[0-9A-Za-z]{22}$``.
 
-UUID Encoding
--------------
-
-encode_uuid
-~~~~~~~~~~~
-
-Encode a UUID to a 22-character base62 string.
+These functions do the conversion and don't touch the database:
 
 .. code-block:: python
 
-   from django_display_ids import encode_uuid
-   import uuid
+   >>> import uuid
+   >>> from django_display_ids import (
+   ...     decode_display_id, decode_uuid, encode_display_id, encode_uuid,
+   ... )
+   >>> value = uuid.UUID("550e8400-e29b-41d4-a716-446655440000")
 
-   u = uuid.UUID("550e8400-e29b-41d4-a716-446655440000")
-   encoded = encode_uuid(u)  # -> "2aUyqjCzEIiEcYMKj7TZtw"
+   >>> encode_display_id("inv", value)
+   'inv_2aUyqjCzEIiEcYMKj7TZtw'
+   >>> decode_display_id("inv_2aUyqjCzEIiEcYMKj7TZtw")
+   ('inv', UUID('550e8400-e29b-41d4-a716-446655440000'))
 
-   # UUID strings work too, in any form uuid.UUID() accepts
-   encode_uuid("550E8400E29B41D4A716446655440000")  # -> "2aUyqjCzEIiEcYMKj7TZtw"
+   >>> encode_uuid(value)
+   '2aUyqjCzEIiEcYMKj7TZtw'
+   >>> decode_uuid("2aUyqjCzEIiEcYMKj7TZtw")
+   UUID('550e8400-e29b-41d4-a716-446655440000')
 
-Raises ``ValueError`` for a string that isn't a UUID, and ``TypeError`` for
-anything other than a UUID or string.
+The encoders also take a UUID string, in any form ``uuid.UUID()`` accepts.
 
-decode_uuid
-~~~~~~~~~~~
-
-Decode a base62 string back to a UUID.
-
-.. code-block:: python
-
-   from django_display_ids import decode_uuid
-
-   u = decode_uuid("2aUyqjCzEIiEcYMKj7TZtw")
-   # -> UUID("550e8400-e29b-41d4-a716-446655440000")
-
-Raises ``ValueError`` if the string is not valid base62 or wrong length.
-
-Display ID Encoding
--------------------
-
-encode_display_id
-~~~~~~~~~~~~~~~~~
-
-Create a display ID from a prefix and UUID.
-
-.. code-block:: python
-
-   from django_display_ids import encode_display_id
-   import uuid
-
-   invoice_id = uuid.uuid4()
-   display_id = encode_display_id("inv", invoice_id)
-   # -> "inv_2aUyqjCzEIiEcYMKj7TZtw"
-
-Parameters:
-
-``prefix``
-   1-16 lowercase letters.
-
-``value``
-   A UUID object or UUID string.
-
-Raises ``ValueError`` if the prefix or UUID string is invalid.
-
-decode_display_id
-~~~~~~~~~~~~~~~~~
-
-Extract the prefix and UUID from a display ID.
-
-.. code-block:: python
-
-   from django_display_ids import decode_display_id
-
-   prefix, u = decode_display_id("inv_2aUyqjCzEIiEcYMKj7TZtw")
-   # prefix -> "inv"
-   # u -> UUID("550e8400-e29b-41d4-a716-446655440000")
-
-Raises ``InvalidIdentifierError`` if the format is invalid.
-
-Display ID Format
------------------
-
-A display ID consists of:
-
-.. list-table::
-   :widths: 25 75
-   :header-rows: 1
-
-   * - Component
-     - Description
-   * - Prefix
-     - 1-16 lowercase letters (``[a-z]{1,16}``)
-   * - Separator
-     - Underscore (``_``)
-   * - Encoded UUID
-     - 22 base62 characters (``[0-9A-Za-z]{22}``)
-
-**Pattern:** ``^[a-z]{1,16}_[0-9A-Za-z]{22}$``
-
-**Example:** ``inv_2aUyqjCzEIiEcYMKj7TZtw``
-
-Base62 Alphabet
-~~~~~~~~~~~~~~~
-
-The base62 encoding uses: ``0-9``, ``A-Z``, ``a-z`` (62 characters total).
-
-UUIDs are 128 bits, which requires exactly 22 base62 characters to represent.
+All four raise ``ValueError`` for bad input: a prefix that isn't 1 to 16
+lowercase letters, a string that isn't a UUID, or a display ID or base62
+string in the wrong format. The encoders raise ``TypeError`` for a value that's
+neither a UUID nor a string.

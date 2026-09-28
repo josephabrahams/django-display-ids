@@ -1,10 +1,8 @@
 Django Admin
 ============
 
-Search the admin by display ID, UUID, or slug.
-
-DisplayIDAdminSearchMixin
--------------------------
+Add ``DisplayIDAdminSearchMixin`` to a ``ModelAdmin`` to search by display ID,
+UUID or slug:
 
 .. code-block:: python
 
@@ -13,55 +11,33 @@ DisplayIDAdminSearchMixin
 
    @admin.register(Invoice)
    class InvoiceAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
-       list_display = ["id", "display_id", "name", "created"]
+       list_display = ["display_id", "name", "created"]
        search_fields = ["name"]
 
-The admin search box now also accepts:
+Searching ``inv_2aUyqjCzEIiEcYMKj7TZtw``,
+``550e8400-e29b-41d4-a716-446655440000`` or ``march-invoice`` now finds that
+invoice, alongside the normal ``search_fields`` results. ``display_id`` works in
+``list_display`` because it's a property on the model.
 
-- ``inv_2aUyqjCzEIiEcYMKj7TZtw`` (display ID)
-- ``01970b3e-1234-5678-9abc-def012345678`` (UUID, with or without hyphens)
-- ``march-invoice`` (slug, if the model has a slug field)
+The search term is parsed the same way a URL is in the view mixins:
 
-How it works
-------------
+- A display ID must use the model's prefix. Searching ``cust_...`` in the
+  invoice admin won't match an invoice, even if the UUID is the same.
+- Slugs match exactly. Add the slug field to ``search_fields`` too if you want
+  partial matches.
+- Surrounding whitespace is ignored, so an ID pasted from a log still matches.
+- The search only adds matches from the queryset the admin passes in, so it
+  respects ``get_queryset()`` scoping.
 
-The search term is parsed the same way the view mixins and
-``resolve_object()`` parse a URL. It uses the same strategies, prefix check,
-and field names. If it parses, an exact match is added to the normal
-``search_fields`` results, so text search keeps working.
+The mixin takes the same ``lookup_strategies``, ``display_id_prefix``,
+``uuid_field`` and ``slug_field`` attributes as the view mixins. See
+:doc:`/reference/settings`.
 
-Some details:
+Searching related objects
+-------------------------
 
-- Display IDs must use the model's prefix. Searching ``cust_...`` in the
-  invoice admin won't match an invoice, even if the UUIDs are the same.
-- Slugs match exactly. Add the slug field to ``search_fields`` if you also
-  want partial matches.
-- Surrounding whitespace is ignored, so an ID pasted from a terminal or email
-  still matches.
-
-Configuration
--------------
-
-The mixin takes the same attributes as the view mixins, with the same
-defaults. ``lookup_strategies`` defaults to the ``DISPLAY_IDS["STRATEGIES"]``
-setting. ``display_id_prefix`` defaults to the model's ``display_id_prefix``.
-``uuid_field`` and ``slug_field`` default to the model's attribute of the same
-name, then the ``DISPLAY_IDS`` setting:
-
-.. code-block:: python
-
-   class InvoiceAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
-       lookup_strategies = ("display_id", "uuid")  # no slug search
-       display_id_prefix = "inv"
-       uuid_field = "uuid"
-       slug_field = "handle"
-
-Searching Related UUID Fields
------------------------------
-
-To search by a related model's display ID or UUID (e.g., find all sessions
-belonging to a user), override ``get_search_results`` and use the
-``_parse_identifier`` static method:
+To also find, say, sessions by their user's display ID, override
+``get_search_results`` and use ``_parse_identifier``:
 
 .. code-block:: python
 
@@ -74,34 +50,10 @@ belonging to a user), override ``get_search_results`` and use the
            queryset, use_distinct = super().get_search_results(
                request, queryset, search_term
            )
-           # Search the related user's UUID field too
            if uuid_val := self._parse_identifier(search_term, model=User):
-               queryset |= original_queryset.filter(
-                   user__uid=uuid_val
-               )
+               queryset |= original_queryset.filter(user__uid=uuid_val)
            return queryset, use_distinct
 
-Now searching by ``user_2aUyqjCzEIi...`` or a raw UUID will also match
-sessions belonging to that user.
-
-``_parse_identifier`` is a static method that strips surrounding whitespace,
-tries to decode a display ID first, then falls back to raw UUID parsing. It
-returns ``None`` for unparseable input and never raises exceptions. Pass
-``model=`` to apply that model's rules: display IDs must use its prefix, and
-on a model without a prefix only raw UUIDs match.
-
-Displaying Display IDs
-----------------------
-
-If your model uses ``DisplayIDModel``, you can include ``display_id`` in
-``list_display``:
-
-.. code-block:: python
-
-   class Invoice(DisplayIDModel, models.Model):
-       display_id_prefix = "inv"
-       # ...
-
-   @admin.register(Invoice)
-   class InvoiceAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
-       list_display = ["id", "display_id", "name"]  # display_id is a property
+``_parse_identifier`` returns the UUID for a display ID or UUID, and ``None``
+for anything else. It never raises. With ``model=``, display IDs must use that
+model's prefix; without it, any prefix is accepted.

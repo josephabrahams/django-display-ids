@@ -13,6 +13,6 @@ __all__ = [
 StrategyName = Literal["uuid", "display_id", "slug"]
 
 # Default strategy order: display_id first (most specific), then uuid, then slug
-# Slug is a catch-all — it's safe to include by default because the manager
+# Slug is a catch-all. It's safe to include by default because the manager
 # and resolver automatically skip it for models without a slug field.
 DEFAULT_STRATEGIES: tuple[StrategyName, ...] = ("display_id", "uuid", "slug")

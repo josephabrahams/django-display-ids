@@ -48,6 +48,11 @@ Strategies only control which text formats are accepted.
 
    resolve_object(Invoice, invoice.id)  # works even with strategies=("slug",)
 
+Configuration errors are the exception. If the strategies can never be used
+for the model (see below), the lookup raises whatever the value is, including a
+UUID object. The mistake is in the configuration, so it's reported the first
+time the lookup runs rather than only for some inputs.
+
 Default Strategies
 ------------------
 

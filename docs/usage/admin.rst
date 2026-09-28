@@ -42,8 +42,11 @@ Some details:
 Configuration
 -------------
 
-The mixin takes the same attributes as the view mixins. Each one defaults to
-the model's attribute, then the ``DISPLAY_IDS`` setting:
+The mixin takes the same attributes as the view mixins, with the same
+defaults. ``lookup_strategies`` defaults to the ``DISPLAY_IDS["STRATEGIES"]``
+setting. ``display_id_prefix`` defaults to the model's ``display_id_prefix``.
+``uuid_field`` and ``slug_field`` default to the model's attribute of the same
+name, then the ``DISPLAY_IDS`` setting:
 
 .. code-block:: python
 

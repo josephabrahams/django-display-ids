@@ -48,7 +48,8 @@ Configuration Attributes
    The URL parameter name. Defaults to ``"pk"``.
 
 ``lookup_strategies``
-   Tuple of strategies to try. Defaults to ``("display_id", "uuid", "slug")``.
+   Tuple of strategies to try. Defaults to the ``DISPLAY_IDS["STRATEGIES"]``
+   setting.
 
 ``display_id_prefix``
    Expected prefix. When ``None`` (the default), auto-detected by
@@ -73,7 +74,7 @@ Error Handling
 - An unparseable identifier, a wrong prefix, or no match all raise ``Http404``,
   which DRF returns as a 404 response.
 - A slug that matches more than one row raises ``MultipleObjectsReturned``.
-- A missing URL keyword argument fails an ``AssertionError``.
+- A missing URL keyword argument raises ``AssertionError``.
 
 DisplayIDField
 --------------

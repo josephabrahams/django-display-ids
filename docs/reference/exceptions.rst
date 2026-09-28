@@ -180,12 +180,15 @@ etc.) are still raised by lower-level functions like ``resolve_object()`` and
 Framework-Specific Handling
 ---------------------------
 
-**Django CBVs** (``DisplayIDMixin``):
-   ``AmbiguousIdentifierError`` is re-raised. Everything else becomes ``Http404``.
-
-**Django REST Framework** (``DisplayIDMixin`` from ``contrib.rest_framework``):
-   Duplicate slugs raise ``MultipleObjectsReturned``. Everything else raises
-   ``Http404``, which DRF returns as a 404 response.
+**Django CBVs** (``DisplayIDMixin``) and **Django REST Framework**
+(``DisplayIDMixin`` from ``contrib.rest_framework``):
+   An unparseable identifier, a wrong prefix, or no match raises ``Http404``
+   (DRF returns it as a 404 response). A slug that matches more than one row
+   raises the model's ``MultipleObjectsReturned``, as Django's and DRF's
+   ``get_object()`` do. Configuration errors, such as ``MissingPrefixError``,
+   are raised as they are.
 
 **Django Admin** (``DisplayIDAdminSearchMixin``):
-   Exceptions are silently caught and the search falls back to normal behavior.
+   An identifier that can't be parsed or has the wrong prefix adds no ID match,
+   and the normal ``search_fields`` results are returned. Configuration errors
+   are raised.

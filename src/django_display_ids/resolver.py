@@ -222,7 +222,8 @@ def resolve_object(
         model: The Django model class.
         value: The identifier string (UUID, display ID, or slug),
             or a UUID instance for direct UUID lookup. A UUID instance
-            skips *strategies*, which only apply to strings.
+            skips *strategies*, which only apply to strings. Strategies that
+            can never be used for the model still raise, whatever the value.
         strategies: Tuple of strategy names to try in order. When ``None``
             (the default), uses the ``DISPLAY_IDS["STRATEGIES"]`` setting.
         prefix: Expected display ID prefix. When ``None`` (the default),

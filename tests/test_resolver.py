@@ -75,6 +75,12 @@ class TestUUIDObjects:
         """A UUID object is already parsed, so strategies don't apply."""
         assert resolve_object(Invoice, invoice.id, strategies=("slug",)) == invoice
 
+    def test_configuration_errors_still_raise(self, order):
+        """Strategies that can never work for the model are a configuration
+        error whatever the value, so a UUID object doesn't hide the mistake."""
+        with pytest.raises(MissingPrefixError):
+            resolve_object(Order, order.id, strategies=("display_id",))
+
 
 class TestSettings:
     def test_uuid_field(self, invoice, settings):

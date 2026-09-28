@@ -94,10 +94,10 @@ All mixins accept these attributes to override defaults:
      - from model
      - Expected display ID prefix
    * - ``uuid_field``
-     - ``"id"``
+     - from model, then settings
      - UUID field name on model
    * - ``slug_field``
-     - ``"slug"``
+     - from model, then settings
      - Slug field name on model
 
 Model Class Attributes
@@ -125,12 +125,17 @@ Models using ``DisplayIDModel`` can define:
 Attribute Precedence
 --------------------
 
-When resolving configuration, attributes are checked in this order:
+When resolving ``uuid_field`` and ``slug_field``, these are checked in order:
 
-1. View/mixin attribute (e.g., ``self.display_id_prefix``)
-2. Model class attribute (e.g., ``Model.display_id_prefix``)
-3. Django settings (``DISPLAY_IDS["..."]``)
+1. View/mixin attribute (e.g., ``self.uuid_field``)
+2. Model class attribute (e.g., ``Model.uuid_field``)
+3. Django settings (``DISPLAY_IDS["UUID_FIELD"]``)
 4. Built-in default
+
+``display_id_prefix`` comes from the view/mixin attribute, then the model.
+There is no setting for it. ``lookup_strategies`` comes from the view/mixin
+attribute, then the ``DISPLAY_IDS["STRATEGIES"]`` setting. There is no model
+attribute for it.
 
 This allows you to set project-wide defaults in settings while overriding
 specific views or models as needed.

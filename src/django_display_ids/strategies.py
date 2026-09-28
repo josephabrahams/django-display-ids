@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from .encoding import decode_display_id
+from .encoding import decode_display_id, parse_uuid_string
 from .exceptions import InvalidIdentifierError, UnknownPrefixError
 
 if TYPE_CHECKING:
@@ -41,8 +41,10 @@ class StrategyResult:
 def parse_uuid(value: str | uuid.UUID) -> StrategyResult | None:
     """Attempt to parse a value as a UUID.
 
-    Accepts any UUID version, in either case, with or without hyphens.
-    A ``uuid.UUID`` object is returned as-is.
+    Accepts the standard hyphenated form (8-4-4-4-12) of any UUID version, in
+    either case. Other forms, such as 32 hex digits without hyphens, aren't
+    treated as UUIDs, so they can't be mistaken for slugs or vice versa. A
+    ``uuid.UUID`` object is returned as-is.
 
     Args:
         value: The identifier string, or a UUID object.
@@ -55,7 +57,7 @@ def parse_uuid(value: str | uuid.UUID) -> StrategyResult | None:
     if not isinstance(value, str):
         return None
     try:
-        return StrategyResult(strategy="uuid", uuid=uuid.UUID(value))
+        return StrategyResult(strategy="uuid", uuid=parse_uuid_string(value))
     except ValueError:
         return None
 

@@ -25,7 +25,7 @@ These functions do the conversion and don't touch the database:
    >>> decode_uuid("2aUyqjCzEIiEcYMKj7TZtw")
    UUID('550e8400-e29b-41d4-a716-446655440000')
 
-The encoders also take a UUID string, in any form ``uuid.UUID()`` accepts.
+The encoders also take a UUID string in the hyphenated form, in either case.
 
 All four raise ``ValueError`` for bad input: a prefix that isn't 1 to 16
 lowercase letters, a string that isn't a UUID, or a display ID or base62

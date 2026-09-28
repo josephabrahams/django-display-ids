@@ -161,11 +161,18 @@ WITH_FIELD_OPTIONS = [
 UUID_FORMS = {
     "lowercase": str(UUID),
     "uppercase": str(UUID).upper(),
+    "mixed case": str(UUID)[:18].upper() + str(UUID)[18:],
+    "padded": f"  {UUID}\n",
+}
+
+# Only the hyphenated form counts as a UUID. These are ordinary strings, so
+# they can only match as slugs.
+NOT_UUID_FORMS = {
     "no hyphens": UUID.hex,
     "no hyphens uppercase": UUID.hex.upper(),
+    "some hyphens missing": UUID.hex[:8] + "-" + UUID.hex[8:],
     "braces": f"{{{UUID}}}",
     "urn": UUID.urn,
-    "padded": f"  {UUID}\n",
 }
 
 
@@ -194,6 +201,20 @@ class TestConsistency:
     @pytest.mark.parametrize("value", UUID_FORMS.values(), ids=UUID_FORMS.keys())
     def test_uuid_forms_match(self, lookup, invoice, value):
         assert lookup(Invoice, value) == invoice
+
+    @pytest.mark.parametrize(
+        "value", NOT_UUID_FORMS.values(), ids=NOT_UUID_FORMS.keys()
+    )
+    def test_other_uuid_forms_do_not_match(self, lookup, invoice, value):
+        assert lookup(Invoice, value) is None
+
+    def test_hex_slug_matches_as_slug(self, lookup, invoice):
+        """A slug that looks like an unhyphenated UUID (here an MD5 hash) is
+        still a slug, not a UUID."""
+        md5 = Invoice.objects.create(
+            name="md5", slug="d41d8cd98f00b204e9800998ecf8427e"
+        )
+        assert lookup(Invoice, "d41d8cd98f00b204e9800998ecf8427e") == md5
 
     def test_display_id_matches(self, lookup, invoice):
         assert lookup(Invoice, invoice.display_id) == invoice

@@ -9,8 +9,7 @@ A strategy is one way of reading an identifier. There are three:
 
 ``uuid``
    ``550e8400-e29b-41d4-a716-446655440000``. Any UUID version, in either case,
-   with or without hyphens, and anything else Python's ``uuid.UUID()``
-   accepts. Looked up in the UUID field.
+   but only in this hyphenated form. Looked up in the UUID field.
 
 ``slug``
    Any other non-empty string, looked up exactly in the slug field.
@@ -37,6 +36,12 @@ are safe for every model.
 
 It also means a display ID for one model never finds a row in a model without a
 prefix, even if the UUIDs happen to match.
+
+Which strategy reads a value is decided by its shape alone. If that lookup
+finds nothing, the next strategy isn't tried. So a slug shaped like a UUID or
+a display ID can't be looked up as a slug. That's why only the hyphenated UUID
+form counts: 32 hex digits without hyphens (an MD5 hash, say), braces and
+``urn:uuid:`` are read as ordinary strings, so slugs like that still work.
 
 If every strategy you asked for is skipped, for example
 ``lookup_strategies = ("display_id",)`` on a model with no prefix, no value

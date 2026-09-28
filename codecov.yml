@@ -2,7 +2,7 @@ coverage:
   status:
     project:
       default:
-        # Compare against the base branch, so any real drop fails
+        # Compare against the base branch; fails if coverage drops more than 1%
         target: auto
         threshold: 1%
     patch:

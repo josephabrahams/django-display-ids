@@ -84,7 +84,7 @@ class TestParseIdentifier:
         [
             encode_display_id("inv", uid),
             str(uid),
-            uid.hex,
+            str(uid).upper(),
             f"  {encode_display_id('inv', uid)}\n",
             f"  {uid}\n",
         ],
@@ -100,6 +100,7 @@ class TestParseIdentifier:
             "",
             "   ",
             f"inv_ {encode_display_id('inv', uid)}",  # interior whitespace
+            uid.hex,  # only the hyphenated form is a UUID
         ],
     )
     def test_returns_none(self, term):

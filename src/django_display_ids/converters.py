@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from django.urls.converters import UUIDConverter
-
 from .conf import SLUG_REGEX, get_setting
-from .encoding import DISPLAY_ID_REGEX
+from .encoding import DISPLAY_ID_REGEX, UUID_REGEX
 
 if TYPE_CHECKING:
     import uuid
@@ -23,11 +21,6 @@ __all__ = [
     "make_display_id_or_slug_converter",
     "make_display_id_or_uuid_or_slug_converter",
 ]
-
-# Django's <uuid:> pattern (8-4-4-4-12 with hyphens) plus the 32-character
-# form without hyphens, in any case. (?i:...) only applies inside the group,
-# so display ID prefixes stay lowercase.
-UUID_REGEX = rf"(?i:{UUIDConverter.regex}|[0-9a-f]{{32}})"
 
 
 class _SlugRegex:
@@ -89,7 +82,7 @@ class DisplayIDOrUUIDConverter(BaseConverter):
 
     Matches either format:
     - Display ID: {prefix}_{base62}
-    - UUID: with or without hyphens, any case
+    - UUID: hyphenated, in either case
 
     Example:
         from django.urls import path, register_converter
@@ -131,7 +124,7 @@ class DisplayIDOrUUIDOrSlugConverter(BaseConverter):
 
     Matches any of:
     - Display ID: {prefix}_{base62}
-    - UUID: with or without hyphens, any case
+    - UUID: hyphenated, in either case
     - Slug: matches DISPLAY_IDS["SLUG_REGEX"] setting (default: [-a-zA-Z0-9_]+)
 
     Example:

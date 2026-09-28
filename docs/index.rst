@@ -21,8 +21,7 @@ of the UUID fields you already have. No new fields and no migrations.
 The view now finds the invoice from any of these in the URL:
 
 - ``inv_2aUyqjCzEIiEcYMKj7TZtw``, the display ID
-- ``550e8400-e29b-41d4-a716-446655440000``, the UUID, in any case, with or
-  without hyphens
+- ``550e8400-e29b-41d4-a716-446655440000``, the UUID, in either case
 - ``march-invoice``, the slug
 
 Every lookup turns into a plain query on the UUID or slug column, so nothing

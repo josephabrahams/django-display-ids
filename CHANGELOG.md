@@ -15,14 +15,15 @@ The views, DRF, managers, admin search and `resolve_object()` used to disagree a
 - `get_by_identifiers()` leaves out invalid identifiers and wrong prefixes, as it already did for missing rows, instead of raising for the whole batch.
 - `resolve_object()` and `id_param_description()` follow the `STRATEGIES` setting when not given strategies. Before, they used the built-in default.
 - Two models with the same class name in different modules can no longer share a prefix. This now raises `ValueError` when the second model is defined.
+- UUID strings must be in the standard hyphenated form, in either case, everywhere: lookups, admin search, converters, encoders and the template filter. 32 hex digits without hyphens, braces and `urn:uuid:` are no longer read as UUIDs; they're treated like any other string, so a slug like an MD5 hash can now be found. Before, lookups and admin search accepted any form `uuid.UUID()` does.
 - The drf-spectacular extension no longer reads `display_id_prefix` from the serializer class, which `DisplayIDField` never used. Set `prefix=` or `prefix_from=` on the field instead.
 
 ### New
 
 - `DisplayIDRelatedField` for DRF serializers: shows the related object's display ID and accepts a display ID, UUID or slug in requests. It supports `many=True`, takes the same lookup options as the view mixins, avoids a query per row when the UUID is the primary key, and has a drf-spectacular schema.
-- The `<display_id_or_uuid:>` and `<identifier:>` converters accept UUIDs in any case, with or without hyphens. `reverse()` accepts `uuid.UUID` objects.
+- The `<display_id_or_uuid:>` and `<identifier:>` converters accept uppercase UUIDs. `reverse()` accepts `uuid.UUID` objects.
 - Surrounding whitespace is ignored everywhere, not only in admin search.
-- `encode_uuid()`, `encode_display_id()` and the `display_id` template filter accept UUID strings as well as UUID objects.
+- `encode_uuid()`, `encode_display_id()` and the `display_id` template filter accept hyphenated UUID strings as well as UUID objects.
 - `DisplayIDAdminSearchMixin` takes `lookup_strategies`, `display_id_prefix` and `slug_field`, like the view mixins. `_parse_identifier()` takes `model=` to apply another model's prefix.
 - The Django view mixin works with only `queryset` set, without `model`.
 - `pip install "django-display-ids[drf]"` and `"django-display-ids[spectacular]"` install the optional dependencies. Only Django is required, as before.

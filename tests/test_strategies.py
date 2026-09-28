@@ -19,22 +19,28 @@ class TestParseUuid:
     """Tests for parse_uuid function."""
 
     @pytest.mark.parametrize(
-        "form",
-        [
-            str,
-            lambda u: str(u).upper(),
-            lambda u: u.hex,
-            lambda u: f"{{{u}}}",
-            lambda u: u.urn,
-        ],
-        ids=["hyphenated", "uppercase", "hex", "braces", "urn"],
+        "form", [str, lambda u: str(u).upper()], ids=["lower", "upper"]
     )
-    def test_valid_forms(self, form):
-        """Any form uuid.UUID() accepts is parsed."""
+    def test_hyphenated_in_either_case(self, form):
         test_uuid = uuid.uuid4()
         assert parse_uuid(form(test_uuid)) == StrategyResult(
             strategy="uuid", uuid=test_uuid
         )
+
+    @pytest.mark.parametrize(
+        "form",
+        [
+            lambda u: u.hex,
+            lambda u: u.hex[:8] + "-" + u.hex[8:],
+            lambda u: f"{{{u}}}",
+            lambda u: u.urn,
+            lambda u: f"{u}-",
+        ],
+        ids=["no_hyphens", "some_hyphens", "braces", "urn", "trailing_hyphen"],
+    )
+    def test_other_forms_are_not_uuids(self, form):
+        """uuid.UUID() accepts these, but they're too easy to confuse with slugs."""
+        assert parse_uuid(form(uuid.uuid4())) is None
 
     def test_invalid_string(self):
         """Invalid string returns None."""

@@ -39,8 +39,12 @@ DISPLAY_ID = "inv_2aUyqjCzEIiEcYMKj7TZtw"
 UUID_FORMS = [
     "550e8400-e29b-41d4-a716-446655440000",
     "550E8400-E29B-41D4-A716-446655440000",
+]
+# Not UUIDs: only the hyphenated form is, so these can't be mistaken for slugs
+NOT_UUID_FORMS = [
     "550e8400e29b41d4a716446655440000",
     "550E8400E29B41D4A716446655440000",
+    "550e8400e29b-41d4-a716-446655440000",
 ]
 
 
@@ -96,7 +100,7 @@ class TestDisplayIDOrUUIDConverter:
         "value",
         [
             "INV_0000000000000000000000",  # uppercase prefix stays rejected
-            "550e8400e29b-41d4-a716-446655440000",  # hyphens in only some places
+            *NOT_UUID_FORMS,
             "550e8400-e29b-41d4-a716-44665544000",  # too short
             "550e8400-e29b-41d4-a716-44665544000g",  # not hex
             "my-slug",

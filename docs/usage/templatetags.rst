@@ -16,7 +16,6 @@ prefix. It needs ``"django_display_ids"`` in ``INSTALLED_APPS``:
 
    <a href="/customers/{{ invoice.customer_id|display_id:"cust" }}/">Customer</a>
 
-The value can be a ``uuid.UUID`` or a UUID string in any form Python's
-``uuid.UUID()`` accepts. ``None`` renders as an empty string. Anything else,
-or a prefix that isn't 1 to 16 lowercase letters, raises
-``TemplateSyntaxError``.
+The value can be a ``uuid.UUID`` or a hyphenated UUID string in either case.
+``None`` renders as an empty string. Anything else, or a prefix that isn't 1
+to 16 lowercase letters, raises ``TemplateSyntaxError``.

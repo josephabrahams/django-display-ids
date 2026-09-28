@@ -151,7 +151,7 @@ class TestShortUuidCompatibility:
 
 
 class TestEncodeAcceptsStrings:
-    """Encoders accept UUID strings, the same forms the lookup side accepts."""
+    """Encoders accept UUID strings in the same form the lookup side accepts."""
 
     value = uuid.UUID("550e8400-e29b-41d4-a716-446655440000")
 
@@ -160,7 +160,6 @@ class TestEncodeAcceptsStrings:
         [
             "550e8400-e29b-41d4-a716-446655440000",
             "550E8400-E29B-41D4-A716-446655440000",
-            "550e8400e29b41d4a716446655440000",
             " 550e8400-e29b-41d4-a716-446655440000 ",
         ],
     )
@@ -168,9 +167,18 @@ class TestEncodeAcceptsStrings:
         assert encode_uuid(text) == encode_uuid(self.value)
         assert encode_display_id("inv", text) == encode_display_id("inv", self.value)
 
-    def test_invalid_string_raises_value_error(self):
-        with pytest.raises(ValueError):
-            encode_uuid("not-a-uuid")
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "not-a-uuid",
+            "550e8400e29b41d4a716446655440000",
+            "{550e8400-e29b-41d4-a716-446655440000}",
+            "urn:uuid:550e8400-e29b-41d4-a716-446655440000",
+        ],
+    )
+    def test_invalid_string_raises_value_error(self, text):
+        with pytest.raises(ValueError, match="Invalid UUID"):
+            encode_uuid(text)
 
     def test_other_types_raise_type_error(self):
         with pytest.raises(TypeError, match="got int"):

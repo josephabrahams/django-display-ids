@@ -24,7 +24,7 @@ class InvoiceDetailView(DisplayIDMixin, DetailView):
     model = Invoice
 ```
 
-The view now finds the invoice from the display ID, the UUID (`550e8400-e29b-41d4-a716-446655440000`, in any case, with or without hyphens) or the slug. Each one becomes a plain query on the UUID or slug column.
+The view now finds the invoice from the display ID, the UUID (`550e8400-e29b-41d4-a716-446655440000`, in either case) or the slug. Each one becomes a plain query on the UUID or slug column.
 
 A UUID in a URL or log doesn't say what it points to; a display ID does. The part after the prefix is the same UUID in base62, so it converts back without a database lookup.
 

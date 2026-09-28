@@ -5,11 +5,14 @@ from __future__ import annotations
 import re
 import uuid
 
+from django.urls.converters import UUIDConverter
+
 __all__ = [
     "decode_display_id",
     "decode_uuid",
     "encode_display_id",
     "encode_uuid",
+    "parse_uuid_string",
 ]
 
 # Base62 alphabet: 0-9, A-Z, a-z
@@ -25,16 +28,34 @@ PREFIX_REGEX = r"[a-z]{1,16}"
 ENCODED_UUID_REGEX = rf"[0-9A-Za-z]{{{ENCODED_UUID_LENGTH}}}"
 DISPLAY_ID_REGEX = rf"{PREFIX_REGEX}_{ENCODED_UUID_REGEX}"
 
+# The only UUID string format accepted anywhere: Django's <uuid:> pattern
+# (8-4-4-4-12 with hyphens) in either case. Forms like 32 hex digits without
+# hyphens, braces or urn:uuid: aren't accepted, because they're too easy to
+# confuse with other strings, such as slugs made from MD5 hashes.
+UUID_REGEX = rf"(?i:{UUIDConverter.regex})"
+
 PREFIX_PATTERN = re.compile(rf"^{PREFIX_REGEX}$")
 DISPLAY_ID_PATTERN = re.compile(rf"^({PREFIX_REGEX})_({ENCODED_UUID_REGEX})$")
+UUID_PATTERN = re.compile(rf"^{UUID_REGEX}$")
+
+
+def parse_uuid_string(value: str) -> uuid.UUID:
+    """Parse a UUID string in the standard hyphenated form, in either case.
+
+    Raises:
+        ValueError: If *value* isn't 8-4-4-4-12 hex digits with hyphens.
+    """
+    if not UUID_PATTERN.match(value):
+        raise ValueError(f"Invalid UUID: {value!r}")
+    return uuid.UUID(value)
 
 
 def _to_uuid(value: uuid.UUID | str) -> uuid.UUID:
-    """Return *value* as a UUID object, parsing strings with ``uuid.UUID()``."""
+    """Return *value* as a UUID object, parsing strings with ``parse_uuid_string``."""
     if isinstance(value, uuid.UUID):
         return value
     if isinstance(value, str):
-        return uuid.UUID(value.strip())
+        return parse_uuid_string(value.strip())
     raise TypeError(f"Expected a UUID or string, got {type(value).__name__}")
 
 
@@ -42,8 +63,8 @@ def encode_uuid(value: uuid.UUID | str) -> str:
     """Encode a UUID to a fixed-length base62 string.
 
     Args:
-        value: UUID to encode, as a UUID object or any string
-            ``uuid.UUID()`` accepts.
+        value: UUID to encode, as a UUID object or a hyphenated UUID
+            string in either case.
 
     Returns:
         22-character base62 string.
@@ -98,8 +119,8 @@ def encode_display_id(prefix: str, value: uuid.UUID | str) -> str:
 
     Args:
         prefix: Lowercase letter prefix (1-16 chars).
-        value: UUID to encode, as a UUID object or any string
-            ``uuid.UUID()`` accepts.
+        value: UUID to encode, as a UUID object or a hyphenated UUID
+            string in either case.
 
     Returns:
         Display ID in format {prefix}_{base62(uuid)}.

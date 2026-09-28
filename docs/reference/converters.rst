@@ -49,10 +49,10 @@ Display ID
    An uppercase prefix doesn't match.
 
 UUID
-   With or without hyphens, in either case: ``550e8400-e29b-41d4-a716-446655440000``
-   or ``550E8400E29B41D4A716446655440000``. Hyphens in only some places don't
-   match. Django's own ``<uuid:>`` converter only accepts lowercase with
-   hyphens, but UUIDs pasted from tools like ``uuidgen`` are often uppercase.
+   The hyphenated form in either case: ``550e8400-e29b-41d4-a716-446655440000``
+   or ``550E8400-E29B-41D4-A716-446655440000``. This is Django's ``<uuid:>``
+   pattern plus uppercase, which tools like ``uuidgen`` print. Other forms,
+   such as 32 hex digits without hyphens, don't match, the same as in lookups.
 
 Slug
    The ``SLUG_REGEX`` setting, which defaults to Django's slug pattern

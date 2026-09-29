@@ -9,6 +9,7 @@ import uuid
 import pytest
 from django.contrib import admin
 from django.contrib.admin.sites import AdminSite
+from django.contrib.contenttypes.fields import GenericForeignKey
 from django.core.checks import run_checks
 from django.db import models
 from django.test.utils import isolate_apps
@@ -43,6 +44,17 @@ class TestModelUUIDField:
             display_id_prefix = "ckinteger"
 
         assert check_ids(IntegerKey.check()) == ["display_ids.W001"]
+
+    @isolate_apps("tests")
+    def test_foreign_key_to_a_uuid(self):
+        """display_id reads the attribute, which is an object, not a UUID."""
+
+        class Child(DisplayIDModel):
+            display_id_prefix = "ckchild"
+            uuid_field = "invoice"
+            invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE)
+
+        assert check_ids(Child.check()) == ["display_ids.W001"]
 
     @isolate_apps("tests")
     def test_no_prefix_needs_no_uuid(self):
@@ -87,6 +99,27 @@ class TestModelSlugUnique:
                 )
 
         assert check_ids(PerTenant.check()) == []
+
+    @isolate_apps("tests")
+    def test_conditional_unique_constraint(self):
+        """Unique among rows that aren't deleted counts: the default manager
+        usually hides deleted rows."""
+
+        class SoftDeleted(DisplayIDModel):
+            id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+            slug = models.SlugField()
+            deleted = models.BooleanField(default=False)
+
+            class Meta:
+                constraints = (
+                    models.UniqueConstraint(
+                        fields=["slug"],
+                        condition=models.Q(deleted=False),
+                        name="unique_live_slug",
+                    ),
+                )
+
+        assert check_ids(SoftDeleted.check()) == []
 
     @isolate_apps("tests")
     def test_unique_together(self):
@@ -151,6 +184,24 @@ class TestAdmin:
     def test_search_field_ends_at_uuid(self, path):
         fields = {path: None}
         assert admin_check(LineItem, display_id_search_fields=fields) == []
+
+    @isolate_apps("tests")
+    def test_generic_foreign_key(self):
+        """A GenericForeignKey has no single column to compare, so it warns."""
+
+        class Tagged(models.Model):
+            content_type = models.ForeignKey(
+                "contenttypes.ContentType", on_delete=models.CASCADE
+            )
+            object_id = models.UUIDField()
+            target = GenericForeignKey("content_type", "object_id")
+            name = models.CharField(max_length=10)
+
+        fields = {"target": None, "object_id": None}
+        assert admin_check(Tagged, display_id_search_fields=fields) == [
+            "display_ids.W003",  # Tagged's own id is an integer
+            "display_ids.W004",
+        ]
 
     @pytest.mark.parametrize(
         "path", ["nope", "id", "name", "products", "invoice__name", "uid__nope"]

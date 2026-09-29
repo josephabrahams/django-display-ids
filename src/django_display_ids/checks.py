@@ -29,7 +29,9 @@ def _final_field(model: type[models.Model], path: str) -> Field[Any, Any] | None
     """The field a lookup path compares against, or None if it doesn't resolve.
 
     A path that ends at a relation compares against the related key, so
-    ``customer`` and ``customer_id`` resolve to Customer's primary key.
+    ``customer`` and ``customer_id`` resolve to Customer's primary key. A
+    relation without one column to compare, like a GenericForeignKey,
+    doesn't resolve.
     """
     field: Any = None
     current: type[models.Model] | None = model
@@ -43,7 +45,9 @@ def _final_field(model: type[models.Model], path: str) -> Field[Any, Any] | None
         current = field.related_model
     while field.is_relation:
         if field.many_to_one or (field.one_to_one and field.concrete):
-            field = field.target_field
+            field = getattr(field, "target_field", None)
+            if field is None:
+                return None
         else:
             field = field.related_model._meta.pk
     return field  # type: ignore[no-any-return]
@@ -53,11 +57,24 @@ def _is_uuid_field(model: type[models.Model], path: str) -> bool:
     return isinstance(_final_field(model, path), models.UUIDField)
 
 
+def _is_own_uuid_field(model: type[models.Model], name: str) -> bool:
+    """True if *name* is a UUIDField on the model itself.
+
+    Unlike ``_is_uuid_field()``, a relation doesn't count: ``display_id``
+    reads the attribute, and a foreign key's attribute is an object.
+    """
+    try:
+        return isinstance(model._meta.get_field(name), models.UUIDField)
+    except FieldDoesNotExist:
+        return False
+
+
 def _is_unique(model: type[models.Model], name: str) -> bool:
     """True if the field is unique on its own or as part of a constraint.
 
-    A constraint shared with other fields (unique per tenant, say) counts,
-    since lookups are usually run on a queryset already filtered by them.
+    A constraint shared with other fields (unique per tenant) or with a
+    condition (unique among rows that aren't deleted) counts, since lookups
+    usually run on a queryset already scoped the same way.
     """
     opts = model._meta
     if getattr(opts.get_field(name), "unique", False):
@@ -74,7 +91,7 @@ def check_model(model: type[models.Model]) -> list[checks.CheckMessage]:
     errors: list[checks.CheckMessage] = []
 
     uuid_field = _resolve_uuid_field(model, None)
-    if getattr(model, "display_id_prefix", None) and not _is_uuid_field(
+    if getattr(model, "display_id_prefix", None) and not _is_own_uuid_field(
         model, uuid_field
     ):
         errors.append(
@@ -122,7 +139,7 @@ def check_admin(admin: Any) -> list[checks.CheckMessage]:
 
     errors: list[checks.CheckMessage] = []
     uses_uuid = {"uuid", "display_id"} & set(lookup.strategies)
-    if uses_uuid and not _is_uuid_field(model, lookup.uuid_field):
+    if uses_uuid and not _is_own_uuid_field(model, lookup.uuid_field):
         errors.append(
             checks.Warning(
                 f"{obj.__name__} searches {model.__name__}.{lookup.uuid_field} "

@@ -20,10 +20,13 @@ when a request hits it. The checks run for every ``DisplayIDModel`` and every
        field isn't unique, so two rows with the same slug make a lookup raise
        ``MultipleObjectsReturned``. ``unique=True``, ``unique_together`` or a
        ``UniqueConstraint`` that includes the field all count, including one
-       shared with other fields, such as unique per tenant.
+       shared with other fields (unique per tenant) or with a condition
+       (unique among rows that aren't deleted). Those assume lookups run on a
+       queryset that's already scoped the same way.
    * - ``display_ids.W003``
      - The admin mixin searches by UUID, but its ``uuid_field`` isn't a
-       ``UUIDField``, so every admin search fails.
+       ``UUIDField``. Searching a display ID or UUID then raises an error or
+       finds nothing. Text searches still work.
    * - ``display_ids.W004``
      - A ``display_id_search_fields`` key doesn't end at a ``UUIDField``. For
        example ``customer_id`` when Customer's primary key is an integer; use

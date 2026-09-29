@@ -5,6 +5,7 @@
 ### New
 
 - `filter_by_identifier()` on the manager and queryset. It reads a display ID, UUID or slug like `get_by_identifier()`, but returns a queryset, which is empty when nothing matches.
+- `display_id_search_fields` on `DisplayIDAdminSearchMixin` searches other UUID fields, such as a foreign key, by display ID or UUID. Before, you had to override `get_search_results()`.
 
 ## 0.8.0 — 2026-09-28
 

@@ -6,6 +6,7 @@ point in test_consistency.py. These tests cover admin-specific behavior.
 """
 
 import uuid
+from typing import ClassVar
 
 import pytest
 from django.contrib import admin
@@ -13,7 +14,7 @@ from django.contrib.admin.sites import AdminSite
 
 from django_display_ids import DisplayIDAdminSearchMixin, encode_display_id
 
-from .models import Invoice, Order
+from .models import Invoice, LineItem, Order, Product
 
 
 class InvoiceAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
@@ -71,6 +72,75 @@ class TestSearch:
         excluded = Invoice.objects.create(name="Excluded")
         term = excluded.display_id if form == "display_id" else str(excluded.id)
         assert search(term, queryset=Invoice.objects.filter(pk=included.pk)) == []
+
+
+class LineItemAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
+    search_fields = ("name",)
+    display_id_search_fields: ClassVar = {
+        "invoice_id": Invoice,
+        "products__uid": Product,
+    }
+
+
+class AnyPrefixLineItemAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
+    search_fields = ("name",)
+    display_id_search_fields: ClassVar = {"invoice_id": None}
+
+
+@pytest.mark.django_db
+class TestDisplayIDSearchFields:
+    @pytest.fixture
+    def invoice(self):
+        return Invoice.objects.create(name="Invoice")
+
+    @pytest.fixture
+    def product(self):
+        return Product.objects.create(name="Product", handle="widget")
+
+    @pytest.fixture
+    def line(self, invoice, product):
+        line = LineItem.objects.create(name="Line", invoice=invoice)
+        line.products.add(product)
+        LineItem.objects.create(name="Other line")
+        return line
+
+    def search(self, admin_site, term, admin_class=LineItemAdmin, queryset=None):
+        """Return (rows, use_distinct)."""
+        if queryset is None:
+            queryset = LineItem.objects.all()
+        model_admin = admin_class(LineItem, admin_site)
+        results, use_distinct = model_admin.get_search_results(None, queryset, term)
+        return list(results), use_distinct
+
+    @pytest.mark.parametrize("form", ["display_id", "uuid"])
+    def test_foreign_key(self, admin_site, line, invoice, form):
+        term = invoice.display_id if form == "display_id" else str(invoice.id)
+        assert self.search(admin_site, term)[0] == [line]
+
+    def test_many_to_many(self, admin_site, line, product):
+        assert self.search(admin_site, product.display_id)[0] == [line]
+
+    def test_distinct_only_for_many_to_many(self, admin_site, line, invoice, product):
+        """Like search_fields, a many-to-many path can return a row twice, so
+        the admin needs distinct(). An inv_ ID only reaches the foreign key."""
+        assert self.search(admin_site, product.display_id)[1] is True
+        assert self.search(admin_site, invoice.display_id)[1] is False
+
+    def test_own_identifier_still_matches(self, admin_site, line):
+        assert self.search(admin_site, str(line.uid))[0] == [line]
+
+    def test_prefix_must_match_the_model(self, admin_site, line, invoice):
+        """invoice_id takes inv_ IDs, and no product has the invoice's UUID."""
+        term = encode_display_id("prod", invoice.id)
+        assert self.search(admin_site, term)[0] == []
+
+    def test_none_accepts_any_prefix(self, admin_site, line, invoice):
+        term = encode_display_id("req", invoice.id)
+        assert self.search(admin_site, term, AnyPrefixLineItemAdmin)[0] == [line]
+
+    def test_respects_queryset_scoping(self, admin_site, line, invoice):
+        queryset = LineItem.objects.exclude(pk=line.pk)
+        assert self.search(admin_site, invoice.display_id, queryset=queryset)[0] == []
 
 
 class TestParseSearchUUID:

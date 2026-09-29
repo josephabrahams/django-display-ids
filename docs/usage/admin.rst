@@ -61,6 +61,8 @@ holds:
   any prefix, for IDs no model owns, like request IDs.
 - A path through a many-to-many relation turns on ``distinct()``, as it does
   in ``search_fields``.
+- ``manage.py check`` warns about a key that doesn't end at a ``UUIDField``
+  (see :doc:`/reference/checks`).
 
 For anything more than an exact match, override ``get_search_results`` and
 use ``parse_search_uuid``:

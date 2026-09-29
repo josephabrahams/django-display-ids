@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.db.models import Q
 
+from . import checks
 from .exceptions import DisplayIDLookupError
 from .resolver import _Lookup, _LookupOptions
 from .strategies import parse_identifier
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
     import uuid
     from collections.abc import Mapping
 
+    from django.core.checks import CheckMessage
     from django.db.models import Model, QuerySet
     from django.http import HttpRequest
 
@@ -59,6 +61,10 @@ class DisplayIDAdminSearchMixin(_LookupOptions):
 
     model: type[Model]
     display_id_search_fields: ClassVar[Mapping[str, type[Model] | None]] = {}
+
+    def check(self, **kwargs: Any) -> list[CheckMessage]:
+        """Add this library's checks to the admin's (see ``checks.py``)."""
+        return [*super().check(**kwargs), *checks.check_admin(self)]  # type: ignore[misc]
 
     @staticmethod
     def parse_search_uuid(

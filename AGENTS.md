@@ -32,8 +32,8 @@ When making changes, always update ALL of the following before committing:
 2. **Tests**: add or update tests covering the change
 3. **Docs** (`docs/`): update any relevant `.rst` files (especially usage examples)
 4. **Docstrings**: update code examples in docstrings that show the changed patterns
-5. **CHANGELOG.md**: add an entry under the new version
-6. **`pyproject.toml` version**: bump the version if releasing
+5. **CHANGELOG.md**: add an entry under `## Unreleased`
+6. **`pyproject.toml` version**: leave it alone unless releasing
 
 Search for related patterns across docs and docstrings before considering a change complete. Use `grep` for old patterns to make sure nothing is missed.
 
@@ -49,5 +49,7 @@ This applies to docs, the README, docstrings, the CHANGELOG and commit messages.
 - Every code example must run against the current API. Show real output values, not placeholders that look real.
 
 ## Publishing
+
+To release, make one commit on `main` that renames `## Unreleased` in the CHANGELOG to the new version and date, and bumps the version in `pyproject.toml` and `uv.lock`. Push it, and once CI passes, tag it.
 
 Releases are triggered by pushing a git tag that matches the `pyproject.toml` version. CI verifies the tag matches, builds, and publishes to PyPI via trusted publishing.

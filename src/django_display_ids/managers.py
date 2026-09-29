@@ -159,8 +159,9 @@ class DisplayIDQuerySet(models.QuerySet[M]):
             The resolved UUID value.
 
         Raises:
-            Model.DoesNotExist: If the identifier cannot be parsed or
-                no matching object exists (slug lookup).
+            Model.DoesNotExist: If the identifier cannot be parsed, or has
+                another prefix (both without a query), or no object matches
+                a slug.
             Model.MultipleObjectsReturned: If multiple objects match (slug).
         """
         lookup = _Lookup.for_model(self.model, strategies=strategies, prefix=prefix)

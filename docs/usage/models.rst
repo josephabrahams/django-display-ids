@@ -100,6 +100,10 @@ Display IDs and UUIDs are decoded without a query, and the row isn't checked
 to exist. Slugs need one query. This is handy for cursor pagination, where you
 only need the UUID for a ``WHERE`` clause.
 
+Like the other manager methods, it raises ``Invoice.DoesNotExist`` for a value
+that can't be an identifier, such as a display ID with another prefix, even
+though it doesn't query the database for it.
+
 get_by_identifiers
 ~~~~~~~~~~~~~~~~~~
 

@@ -26,6 +26,8 @@ The search term is parsed the same way a URL is in the view mixins:
 - Slugs match exactly. Add the slug field to ``search_fields`` too if you want
   partial matches.
 - Surrounding whitespace is ignored, so an ID pasted from a log still matches.
+- UUIDs must have their hyphens. A UUID pasted as 32 hex digits, as some
+  database consoles show it, is searched as a slug.
 - The search only adds matches from the queryset the admin passes in, so it
   respects ``get_queryset()`` scoping.
 

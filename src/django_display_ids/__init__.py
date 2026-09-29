@@ -1,8 +1,7 @@
-"""django-display-ids: Resolve external identifiers to Django model instances.
+"""django-display-ids: Stripe-style prefixed IDs for Django on existing UUIDs.
 
-This package provides a clean way to resolve external identifiers (UUIDs,
-display IDs, slugs) to model instances in Django and DRF views without
-requiring model inheritance, custom fields, or serializers.
+Looks up model instances by display ID (``inv_2aUyqjCzEIiEcYMKj7TZtw``), UUID
+or slug, in views, DRF, the admin and your own code.
 
 Example:
     from django_display_ids import (
@@ -16,10 +15,10 @@ Example:
     display_id = encode_display_id("inv", invoice.id)
     # -> "inv_2aUyqjCzEIiEcYMKj7TZtw"
 
-    # Use in Django views — prefix is inherited from the model
+    # Use in Django views; the prefix comes from the model
     class InvoiceDetailView(DisplayIDMixin, DetailView):
         model = Invoice
-        lookup_param = "id"
+        lookup_url_kwarg = "id"
 """
 
 from importlib.metadata import version
@@ -55,7 +54,7 @@ from .exceptions import (
     UnknownPrefixError,
 )
 from .managers import DisplayIDManager, DisplayIDQuerySet
-from .resolver import resolve_object
+from .resolver import resolve_object, resolve_objects
 from .typing import DEFAULT_STRATEGIES, StrategyName
 from .views import DisplayIDMixin
 
@@ -96,6 +95,7 @@ __all__ = [  # noqa: RUF022 - keep categorized order for readability
     "make_display_id_or_uuid_or_slug_converter",
     # Core resolver
     "resolve_object",
+    "resolve_objects",
     # Exceptions
     "DisplayIDLookupError",
     "InvalidIdentifierError",

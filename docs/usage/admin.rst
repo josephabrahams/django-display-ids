@@ -1,10 +1,8 @@
 Django Admin
 ============
 
-Enable searching by display ID or raw UUID in the Django admin.
-
-DisplayIDAdminSearchMixin
--------------------------
+Add ``DisplayIDAdminSearchMixin`` to a ``ModelAdmin`` to search by display ID,
+UUID or slug:
 
 .. code-block:: python
 
@@ -13,56 +11,40 @@ DisplayIDAdminSearchMixin
 
    @admin.register(Invoice)
    class InvoiceAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
-       list_display = ["id", "display_id", "name", "created"]
-       search_fields = ["name"]  # display ID and UUID search is automatic
+       list_display = ["display_id", "name", "created"]
+       search_fields = ["name"]
 
-Now you can search by display ID or raw UUID in the admin search box:
+Searching ``inv_2aUyqjCzEIiEcYMKj7TZtw``,
+``550e8400-e29b-41d4-a716-446655440000`` or ``march-invoice`` now finds that
+invoice, alongside the normal ``search_fields`` results. ``display_id`` works in
+``list_display`` because it's a property on the model.
 
-- ``inv_2aUyqjCzEIiEcYMKj7TZtw`` (display ID)
-- ``01970b3e-1234-5678-9abc-def012345678`` (UUID with hyphens)
-- ``01970b3e123456789abcdef012345678`` (UUID without hyphens)
+The search term is parsed the same way a URL is in the view mixins:
 
-How It Works
-------------
+- A display ID must use the model's prefix. Searching ``cust_...`` in the
+  invoice admin won't match an invoice, even if the UUID is the same.
+- Slugs match exactly. Add the slug field to ``search_fields`` too if you want
+  partial matches.
+- Surrounding whitespace is ignored, so an ID pasted from a log still matches.
+- UUIDs must have their hyphens. A UUID pasted as 32 hex digits, as some
+  database consoles show it, is searched as a slug.
+- The search only adds matches from the queryset the admin passes in, so it
+  respects ``get_queryset()`` scoping.
 
-The mixin intercepts search queries and checks if they look like a display ID
-(contain an underscore) or a raw UUID. If so, it decodes the display ID or
-parses the UUID and does an exact match against the UUID field. Otherwise, it
-falls back to the standard ``search_fields`` behavior.
+The mixin takes the same ``lookup_strategies``, ``display_id_prefix``,
+``uuid_field`` and ``slug_field`` attributes as the view mixins. See
+:doc:`/reference/settings`.
 
-Leading and trailing whitespace is stripped before parsing, so an identifier
-pasted from a terminal, an email, or a log line still matches. Whitespace
-*inside* the search term is left alone, so Django's usual multi-word
-``search_fields`` behavior is unaffected.
+Searching related objects
+-------------------------
 
-This means your existing text-based searches continue to work alongside
-display ID and UUID searches.
-
-Configuration
--------------
-
-The mixin automatically detects the UUID field: first from your model's
-``uuid_field`` attribute (if using ``DisplayIDModel``), then from the
-``DISPLAY_IDS["UUID_FIELD"]`` setting, then ``"id"``.
-
-Override with:
+To also find invoices by their customer's display ID, override
+``get_search_results`` and use ``parse_search_uuid``:
 
 .. code-block:: python
 
+   @admin.register(Invoice)
    class InvoiceAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
-       uuid_field = "uuid"  # custom UUID field name
-
-Searching Related UUID Fields
------------------------------
-
-To search by a related model's display ID or UUID (e.g., find all sessions
-belonging to a user), override ``get_search_results`` and use the
-``_parse_identifier`` static method:
-
-.. code-block:: python
-
-   @admin.register(Session)
-   class SessionAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
        search_fields = ["name"]
 
        def get_search_results(self, request, queryset, search_term):
@@ -70,32 +52,10 @@ belonging to a user), override ``get_search_results`` and use the
            queryset, use_distinct = super().get_search_results(
                request, queryset, search_term
            )
-           # Search the related user's UUID field too
-           if uuid_val := self._parse_identifier(search_term):
-               queryset |= original_queryset.filter(
-                   user__uid=uuid_val
-               )
+           if uuid_val := self.parse_search_uuid(search_term, model=Customer):
+               queryset |= original_queryset.filter(customer_id=uuid_val)
            return queryset, use_distinct
 
-Now searching by ``user_2aUyqjCzEIi...`` or a raw UUID will also match
-sessions belonging to that user.
-
-``_parse_identifier`` is a static method that strips surrounding whitespace,
-tries to decode a display ID first, then falls back to raw UUID parsing. It
-returns ``None`` for unparseable input and never raises exceptions.
-
-Displaying Display IDs
-----------------------
-
-If your model uses ``DisplayIDModel``, you can include ``display_id`` in
-``list_display``:
-
-.. code-block:: python
-
-   class Invoice(DisplayIDModel, models.Model):
-       display_id_prefix = "inv"
-       # ...
-
-   @admin.register(Invoice)
-   class InvoiceAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
-       list_display = ["id", "display_id", "name"]  # display_id is a property
+``parse_search_uuid`` returns the UUID for a display ID or UUID, and ``None``
+for anything else. It never raises. With ``model=``, display IDs must use that
+model's prefix; without it, any prefix is accepted.

@@ -18,23 +18,29 @@ from django_display_ids.strategies import (
 class TestParseUuid:
     """Tests for parse_uuid function."""
 
-    def test_valid_hyphenated_uuid(self):
-        """Standard hyphenated UUID is parsed."""
+    @pytest.mark.parametrize(
+        "form", [str, lambda u: str(u).upper()], ids=["lower", "upper"]
+    )
+    def test_hyphenated_in_either_case(self, form):
         test_uuid = uuid.uuid4()
-        result = parse_uuid(str(test_uuid))
+        assert parse_uuid(form(test_uuid)) == StrategyResult(
+            strategy="uuid", uuid=test_uuid
+        )
 
-        assert result is not None
-        assert result.strategy == "uuid"
-        assert result.uuid == test_uuid
-
-    def test_valid_unhyphenated_uuid(self):
-        """Unhyphenated UUID is parsed."""
-        test_uuid = uuid.uuid4()
-        result = parse_uuid(test_uuid.hex)
-
-        assert result is not None
-        assert result.strategy == "uuid"
-        assert result.uuid == test_uuid
+    @pytest.mark.parametrize(
+        "form",
+        [
+            lambda u: u.hex,
+            lambda u: u.hex[:8] + "-" + u.hex[8:],
+            lambda u: f"{{{u}}}",
+            lambda u: u.urn,
+            lambda u: f"{u}-",
+        ],
+        ids=["no_hyphens", "some_hyphens", "braces", "urn", "trailing_hyphen"],
+    )
+    def test_other_forms_are_not_uuids(self, form):
+        """uuid.UUID() accepts these, but they're too easy to confuse with slugs."""
+        assert parse_uuid(form(uuid.uuid4())) is None
 
     def test_invalid_string(self):
         """Invalid string returns None."""
@@ -245,12 +251,11 @@ class TestParseIdentifier:
         )
         assert result.strategy == "uuid"
 
-    def test_default_strategies(self):
-        """Default strategies work correctly."""
+    def test_display_id_then_uuid(self):
+        """Each form is picked up by its own strategy."""
         test_uuid = uuid.uuid4()
         display_id = encode_display_id("inv", test_uuid)
 
-        # display_id, uuid are default
         result = parse_identifier(
             display_id,
             strategies=("display_id", "uuid"),
@@ -277,9 +282,9 @@ class TestStrategyResult:
             result.strategy = "slug"
 
     def test_slots(self):
-        """StrategyResult uses slots."""
+        """StrategyResult uses slots, so instances have no __dict__."""
         result = StrategyResult(strategy="uuid")
-        assert hasattr(result, "__slots__")
+        assert not hasattr(result, "__dict__")
 
     def test_defaults(self):
         """Optional fields default to None."""
@@ -287,3 +292,53 @@ class TestStrategyResult:
         assert result.uuid is None
         assert result.slug is None
         assert result.prefix is None
+
+
+class TestUUIDObjects:
+    """UUID objects are handled on purpose, not by accident."""
+
+    value = uuid.UUID("550e8400-e29b-41d4-a716-446655440000")
+
+    def test_parse_uuid_returns_uuid_object(self):
+        result = parse_uuid(self.value)
+        assert result == StrategyResult(strategy="uuid", uuid=self.value)
+
+    def test_parse_display_id_rejects_uuid_object(self):
+        assert parse_display_id(self.value, expected_prefix="inv") is None
+
+    def test_parse_slug_rejects_uuid_object(self):
+        assert parse_slug(self.value) is None
+
+    @pytest.mark.parametrize(
+        "strategies", [("display_id", "uuid", "slug"), ("display_id",), ("slug",)]
+    )
+    def test_parse_identifier_skips_strategies(self, strategies):
+        """A UUID object is already parsed, so strategies aren't consulted."""
+        result = parse_identifier(self.value, strategies, expected_prefix="inv")
+        assert result == StrategyResult(strategy="uuid", uuid=self.value)
+
+    @pytest.mark.parametrize("value", [123, None, b"bytes"])
+    def test_non_strings_are_not_identifiers(self, value):
+        assert parse_uuid(value) is None
+        assert parse_display_id(value) is None
+        assert parse_slug(value) is None
+
+
+class TestParseIdentifierEdgeCases:
+    def test_strips_whitespace(self):
+        test_uuid = uuid.uuid4()
+        display_id = encode_display_id("inv", test_uuid)
+        result = parse_identifier(
+            f"  {display_id}\n", ("display_id",), expected_prefix="inv"
+        )
+        assert result.uuid == test_uuid
+
+    def test_wrong_prefix_raises_even_with_slug_after(self):
+        """A display ID with the wrong prefix isn't quietly treated as a slug."""
+        display_id = encode_display_id("prod", uuid.uuid4())
+        with pytest.raises(UnknownPrefixError):
+            parse_identifier(display_id, ("display_id", "slug"), expected_prefix="inv")
+
+    def test_no_strategies(self):
+        with pytest.raises(InvalidIdentifierError):
+            parse_identifier("anything", ())

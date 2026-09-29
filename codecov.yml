@@ -2,10 +2,13 @@ coverage:
   status:
     project:
       default:
-        target: 90%
-        threshold: 2%
+        # Compare against the base branch; fails if coverage drops more than 1%
+        target: auto
+        threshold: 1%
     patch:
-      default: off
+      default:
+        # Lines changed in a PR need tests too
+        target: 90%
 
 comment:
   require_changes: true

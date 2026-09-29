@@ -5,11 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from django.http import Http404
+from django.shortcuts import get_object_or_404
 
-from .conf import get_setting
 from .exceptions import DisplayIDLookupError
-from .resolver import resolve_object
-from .typing import StrategyName  # noqa: TC001 - used at runtime in type hints
+from .resolver import _LookupOptions
 
 if TYPE_CHECKING:
     from django.db import models
@@ -19,7 +18,7 @@ __all__ = [
 ]
 
 
-class DisplayIDMixin:
+class DisplayIDMixin(_LookupOptions):
     """Mixin for Django CBVs that resolves objects by display ID, UUID, or slug.
 
     Drop-in replacement for SingleObjectMixin's get_object() method.
@@ -27,7 +26,7 @@ class DisplayIDMixin:
 
     Attributes:
         model: The model class to query.
-        lookup_param: URL parameter name containing the identifier.
+        lookup_url_kwarg: URL parameter name containing the identifier.
         lookup_strategies: Tuple of strategy names to try in order.
         display_id_prefix: Expected prefix for display IDs (optional).
         uuid_field: Name of the UUID field on the model.
@@ -36,23 +35,24 @@ class DisplayIDMixin:
     Example:
         class InvoiceDetailView(DisplayIDMixin, DetailView):
             model = Invoice  # prefix inherited from model
-            lookup_param = "id"
+            lookup_url_kwarg = "id"
     """
 
     model: type[models.Model] | None = None
-    lookup_param: str = "pk"
-    lookup_strategies: tuple[StrategyName, ...] | None = None
-    display_id_prefix: str | None = None
-    uuid_field: str | None = None
-    slug_field: str | None = None
-
-    def _get_strategies(self) -> tuple[StrategyName, ...]:
-        if self.lookup_strategies is not None:
-            return self.lookup_strategies
-        return get_setting("STRATEGIES")  # type: ignore[return-value]
+    lookup_url_kwarg: str = "pk"
 
     # These may be provided by parent classes
     kwargs: dict[str, Any]
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        # Renamed in 0.8. Without this check the old attribute would be
+        # ignored and every request would fail looking for a "pk" parameter.
+        if "lookup_param" in cls.__dict__:
+            raise TypeError(
+                f"{cls.__name__} sets lookup_param, which was renamed to "
+                "lookup_url_kwarg in django-display-ids 0.8. Rename the attribute."
+            )
 
     def get_queryset(self) -> Any:
         """Get the base queryset.
@@ -79,28 +79,28 @@ class DisplayIDMixin:
             The matching model instance.
 
         Raises:
-            Http404: If the object is not found or identifier is invalid.
+            Http404: If the identifier is invalid, has the wrong prefix, or
+                matches no object.
+            AttributeError: If the URL has no ``lookup_url_kwarg`` parameter.
+            MultipleObjectsReturned: If a slug matches more than one object.
         """
-        if self.model is None:
-            raise AttributeError(f"{self.__class__.__name__} must define 'model'")
-
         # Get the identifier from URL kwargs
-        value = self.kwargs.get(self.lookup_param)
+        value = self.kwargs.get(self.lookup_url_kwarg)
         if value is None:
-            raise Http404(f"Missing URL parameter: {self.lookup_param}")
+            raise AttributeError(
+                f"{self.__class__.__name__} must be called with a "
+                f"{self.lookup_url_kwarg!r} URL parameter."
+            )
 
         # Use provided queryset or get from get_queryset()
         qs = queryset if queryset is not None else self.get_queryset()
 
+        # Outside the try: a misconfigured lookup is an error, not a 404
+        lookup = self._get_lookup(qs.model)
         try:
-            return resolve_object(  # type: ignore[no-any-return]
-                self.model,
-                str(value),
-                strategies=self._get_strategies(),
-                prefix=self.display_id_prefix,
-                uuid_field=self.uuid_field,
-                slug_field=self.slug_field,
-                queryset=qs,
-            )
+            kwargs = lookup.build(str(value))
         except DisplayIDLookupError as e:
             raise Http404(str(e)) from e
+
+        # Django's own 404 handling; MultipleObjectsReturned propagates
+        return get_object_or_404(qs, **kwargs)  # type: ignore[no-any-return]

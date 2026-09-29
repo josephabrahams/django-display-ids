@@ -1,7 +1,5 @@
-Advanced Topics
-===============
-
-Deep dives into specific features and advanced usage patterns.
+Advanced
+========
 
 .. toctree::
    :maxdepth: 2

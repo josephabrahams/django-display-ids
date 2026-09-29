@@ -14,66 +14,55 @@ from .models import Invoice, Order, Product
 class TestDisplayIDModel:
     """Tests for DisplayIDModel."""
 
-    def test_display_id_property(self):
-        """display_id property returns correct format."""
+    def test_display_id(self):
         invoice = Invoice.objects.create(name="Test Invoice")
-        display_id = invoice.display_id
+        assert invoice.display_id == encode_display_id("inv", invoice.id)
 
-        assert display_id.startswith("inv_")
-        assert len(display_id) == 3 + 1 + 22  # prefix + _ + base62
-
-    def test_display_id_matches_encode_function(self):
-        """display_id property matches encode_display_id function."""
-        invoice = Invoice.objects.create(name="Test Invoice")
-        expected = encode_display_id("inv", invoice.id)
-        assert invoice.display_id == expected
-
-    def test_display_id_deterministic(self):
-        """display_id returns same value each time."""
-        invoice = Invoice.objects.create(name="Test Invoice")
-        assert invoice.display_id == invoice.display_id
-
-    def test_different_instances_have_different_ids(self):
-        """Different instances have different display IDs."""
-        invoice1 = Invoice.objects.create(name="Invoice 1")
-        invoice2 = Invoice.objects.create(name="Invoice 2")
-        assert invoice1.display_id != invoice2.display_id
+    def test_display_id_none_without_uuid(self):
+        """An instance whose UUID field is empty has no display ID yet."""
+        assert Invoice(id=None).display_id is None
 
     def test_get_display_id_prefix_classmethod(self):
         """get_display_id_prefix returns correct prefix."""
         assert Invoice.get_display_id_prefix() == "inv"
         assert Product.get_display_id_prefix() == "prod"
 
-    def test_get_display_id_prefix_not_implemented(self):
-        """get_display_id_prefix raises error for models without prefix."""
-        # Order doesn't use DisplayIDModel
+    def test_plain_models_have_no_prefix_method(self):
+        """Order doesn't extend DisplayIDModel, so it has no get_display_id_prefix."""
         assert not hasattr(Order, "get_display_id_prefix")
 
 
-@pytest.mark.django_db
 class TestCustomFieldNames:
     """Tests for custom field name configuration."""
 
-    def test_custom_uuid_field(self):
-        """Custom uuid_field is used for display_id generation."""
-        product = Product.objects.create(name="Test Product")
-        # Product uses 'uid' field, not 'id'
-        expected = encode_display_id("prod", product.uid)
-        assert product.display_id == expected
+    def test_display_id_uses_custom_uuid_field(self):
+        """display_id encodes the model's uuid_field, not the primary key."""
+        uid = uuid.UUID("550e8400-e29b-41d4-a716-446655440000")
+        product = Product(uid=uid)
+        assert product.display_id == encode_display_id("prod", uid)
 
-    def test_get_uuid_field(self):
-        """_get_uuid_field returns custom field name."""
-        assert Invoice._get_uuid_field() == "id"
-        assert Product._get_uuid_field() == "uid"
+    def test_display_id_uses_uuid_field_setting(self, settings):
+        """Without uuid_field on the model, the UUID_FIELD setting is used.
 
-    def test_get_slug_field(self):
-        """_get_slug_field returns custom field name."""
-        assert Invoice._get_slug_field() == "slug"
-        assert Product._get_slug_field() == "handle"
+        Pointing it at the empty slug column gives no display ID, which shows
+        the setting was read.
+        """
+        settings.DISPLAY_IDS = {"UUID_FIELD": "slug"}
+        invoice = Invoice(id=uuid.uuid4(), slug=None)
+        assert invoice.display_id is None
 
 
 class TestPrefixRegistry:
     """Tests for prefix collision detection."""
+
+    @pytest.fixture(autouse=True)
+    def _isolated_registry(self, monkeypatch):
+        """Models defined in these tests mustn't leak into the global registry."""
+        from django_display_ids import models as models_module
+
+        monkeypatch.setattr(
+            models_module, "_prefix_registry", dict(models_module._prefix_registry)
+        )
 
     def test_get_model_for_prefix(self):
         """get_model_for_prefix returns registered model name."""
@@ -93,6 +82,24 @@ class TestPrefixRegistry:
 
                 class Meta:
                     app_label = "tests"
+
+    def test_same_class_name_in_another_module_collides(self):
+        """A different model that happens to share the class name still collides."""
+        with pytest.raises(ValueError, match=r"already used by tests\.models\.Invoice"):
+
+            class Invoice(DisplayIDModel):  # same name as tests.models.Invoice
+                __module__ = "billing.models"
+                display_id_prefix = "inv"
+
+                class Meta:
+                    app_label = "billing"
+
+    def test_reregistering_same_model_is_allowed(self):
+        """Re-importing a module registers the same model again without error."""
+        from django_display_ids.models import _register_prefix
+
+        _register_prefix("inv", Invoice)
+        assert get_model_for_prefix("inv") == "Invoice"
 
     def test_abstract_models_are_registered(self):
         """Abstract models with prefixes are registered.
@@ -114,35 +121,18 @@ class TestPrefixRegistry:
         # Abstract models are registered for collision detection
         assert get_model_for_prefix("abstract") == "AbstractModel"
 
-    def test_empty_prefix_raises_error(self):
-        """Empty string prefix raises ValueError at class definition."""
+    @pytest.mark.parametrize("prefix", ["", "Invalid123", "waytoolongprefix123"])
+    def test_invalid_prefix_fails_at_class_definition(self, prefix):
         with pytest.raises(ValueError, match="1-16 lowercase letters"):
-
-            class EmptyPrefixModel(DisplayIDModel):
-                display_id_prefix = ""
-
-                class Meta:
-                    app_label = "tests"
-
-    def test_invalid_prefix_raises_error(self):
-        """Invalid prefix format raises ValueError at class definition."""
-        with pytest.raises(ValueError, match="1-16 lowercase letters"):
-
-            class InvalidPrefixModel(DisplayIDModel):
-                display_id_prefix = "Invalid123"
-
-                class Meta:
-                    app_label = "tests"
-
-    def test_too_long_prefix_raises_error(self):
-        """Prefix longer than 16 chars raises ValueError at class definition."""
-        with pytest.raises(ValueError, match="1-16 lowercase letters"):
-
-            class LongPrefixModel(DisplayIDModel):
-                display_id_prefix = "waytoolongprefix123"
-
-                class Meta:
-                    app_label = "tests"
+            type(
+                "BadPrefixModel",
+                (DisplayIDModel,),
+                {
+                    "__module__": __name__,
+                    "display_id_prefix": prefix,
+                    "Meta": type("Meta", (), {"app_label": "tests"}),
+                },
+            )
 
 
 @pytest.mark.django_db

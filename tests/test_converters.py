@@ -4,11 +4,19 @@ import re
 import uuid
 
 import pytest
-from django.urls import path, register_converter
+from django.urls import (
+    NoReverseMatch,
+    Resolver404,
+    path,
+    register_converter,
+    resolve,
+    reverse,
+)
+from django.urls.converters import REGISTERED_CONVERTERS, UUIDConverter
 
 from django_display_ids.converters import (
     DISPLAY_ID_REGEX,
-    SLUG_REGEX,
+    UUID_REGEX,
     DisplayIDConverter,
     DisplayIDOrSlugConverter,
     DisplayIDOrUUIDConverter,
@@ -16,507 +24,230 @@ from django_display_ids.converters import (
     make_display_id_or_slug_converter,
     make_display_id_or_uuid_or_slug_converter,
 )
-from django_display_ids.encoding import encode_display_id
+
+CONVERTERS = {
+    "display_id": DisplayIDConverter,
+    "display_id_or_uuid": DisplayIDOrUUIDConverter,
+    "display_id_or_slug": DisplayIDOrSlugConverter,
+    "identifier": DisplayIDOrUUIDOrSlugConverter,
+}
+for _name, _converter in CONVERTERS.items():
+    if _name not in REGISTERED_CONVERTERS:
+        register_converter(_converter, _name)
+
+DISPLAY_ID = "inv_2aUyqjCzEIiEcYMKj7TZtw"
+UUID_FORMS = [
+    "550e8400-e29b-41d4-a716-446655440000",
+    "550E8400-E29B-41D4-A716-446655440000",
+]
+# Not UUIDs: only the hyphenated form is, so these can't be mistaken for slugs
+NOT_UUID_FORMS = [
+    "550e8400e29b41d4a716446655440000",
+    "550E8400E29B41D4A716446655440000",
+    "550e8400e29b-41d4-a716-446655440000",
+]
+
+
+def _matches(converter, value):
+    return re.fullmatch(converter.regex, value) is not None
+
+
+def _urlconf(route):
+    """A throwaway URLconf with one route named "item"."""
+    urlpatterns = [path(route, lambda _r, _id: None, name="item")]
+    return type("urls", (), {"urlpatterns": urlpatterns})
 
 
 class TestDisplayIDConverter:
-    """Tests for DisplayIDConverter."""
-
-    def test_regex_matches_valid_display_id(self):
-        """Regex matches valid display IDs."""
-        pattern = re.compile(f"^{DisplayIDConverter.regex}$")
-
-        valid_ids = [
+    @pytest.mark.parametrize(
+        "value",
+        [
             "inv_0000000000000000000000",
             "a_0123456789ABCDEFabcdef",
-            "abcdefghijklmnop_zzzzzzzzzzzzzzzzzzzzzz",
-            "prod_2aUyqjCzEIiEcYMKj7TZtw",
-        ]
-        for display_id in valid_ids:
-            assert pattern.match(display_id), f"Should match: {display_id}"
+            "abcdefghijklmnop_zzzzzzzzzzzzzzzzzzzzzz",  # 16-letter prefix
+            DISPLAY_ID,
+        ],
+    )
+    def test_matches(self, value):
+        assert _matches(DisplayIDConverter, value)
 
-    def test_regex_rejects_invalid_display_ids(self):
-        """Regex rejects invalid display IDs."""
-        pattern = re.compile(f"^{DisplayIDConverter.regex}$")
-
-        invalid_ids = [
+    @pytest.mark.parametrize(
+        "value",
+        [
             "INV_0000000000000000000000",  # uppercase prefix
-            "inv_000000000000000000000",  # 21 chars (too short)
-            "inv_00000000000000000000000",  # 23 chars (too long)
+            "inv_000000000000000000000",  # 21 characters
+            "inv_00000000000000000000000",  # 23 characters
             "inv-0000000000000000000000",  # hyphen instead of underscore
-            "1nv_0000000000000000000000",  # prefix starts with number
-            "_0000000000000000000000",  # empty prefix
-            "inv_",  # empty base62
-            "550e8400-e29b-41d4-a716-446655440000",  # UUID
-        ]
-        for invalid_id in invalid_ids:
-            assert not pattern.match(invalid_id), f"Should not match: {invalid_id}"
+            "1nv_0000000000000000000000",  # digit in prefix
+            "_0000000000000000000000",  # no prefix
+            "inv_",
+            *UUID_FORMS,
+        ],
+    )
+    def test_rejects(self, value):
+        assert not _matches(DisplayIDConverter, value)
 
-    def test_to_python_returns_value(self):
-        """to_python returns the value unchanged."""
-        converter = DisplayIDConverter()
-        value = "inv_2aUyqjCzEIiEcYMKj7TZtw"
-        assert converter.to_python(value) == value
-
-    def test_to_url_returns_value(self):
-        """to_url returns the value unchanged."""
-        converter = DisplayIDConverter()
-        value = "inv_2aUyqjCzEIiEcYMKj7TZtw"
-        assert converter.to_url(value) == value
-
-    def test_uses_display_id_regex_constant(self):
-        """Converter uses the DISPLAY_ID_REGEX constant."""
+    def test_uses_shared_pattern(self):
         assert DisplayIDConverter.regex == DISPLAY_ID_REGEX
 
 
 class TestDisplayIDOrUUIDConverter:
-    """Tests for DisplayIDOrUUIDConverter."""
+    @pytest.mark.parametrize("value", [DISPLAY_ID, *UUID_FORMS])
+    def test_matches(self, value):
+        assert _matches(DisplayIDOrUUIDConverter, value)
 
-    def test_regex_matches_display_id(self):
-        """Regex matches display IDs."""
-        pattern = re.compile(f"^{DisplayIDOrUUIDConverter.regex}$")
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "INV_0000000000000000000000",  # uppercase prefix stays rejected
+            *NOT_UUID_FORMS,
+            "550e8400-e29b-41d4-a716-44665544000",  # too short
+            "550e8400-e29b-41d4-a716-44665544000g",  # not hex
+            "my-slug",
+        ],
+    )
+    def test_rejects(self, value):
+        assert not _matches(DisplayIDOrUUIDConverter, value)
 
-        valid_ids = [
-            "inv_0000000000000000000000",
-            "prod_2aUyqjCzEIiEcYMKj7TZtw",
-        ]
-        for display_id in valid_ids:
-            assert pattern.match(display_id), f"Should match: {display_id}"
-
-    def test_regex_matches_hyphenated_uuid(self):
-        """Regex matches hyphenated UUIDs."""
-        pattern = re.compile(f"^{DisplayIDOrUUIDConverter.regex}$")
-
-        assert pattern.match("550e8400-e29b-41d4-a716-446655440000")
-
-    def test_regex_rejects_unhyphenated_uuid(self):
-        """Regex rejects unhyphenated UUIDs (consistent with Django)."""
-        pattern = re.compile(f"^{DisplayIDOrUUIDConverter.regex}$")
-
-        assert not pattern.match("550e8400e29b41d4a716446655440000")
-
-    def test_regex_rejects_invalid(self):
-        """Regex rejects invalid identifiers."""
-        pattern = re.compile(f"^{DisplayIDOrUUIDConverter.regex}$")
-
-        invalid = [
-            "INV_0000000000000000000000",  # uppercase prefix
-            "550e8400e29b41d4a716446655440000",  # unhyphenated UUID
-        ]
-        for invalid_id in invalid:
-            assert not pattern.match(invalid_id), f"Should not match: {invalid_id}"
-
-    def test_to_python_returns_value(self):
-        """to_python returns the value unchanged."""
-        converter = DisplayIDOrUUIDConverter()
-        value = "inv_2aUyqjCzEIiEcYMKj7TZtw"
-        assert converter.to_python(value) == value
-
-    def test_to_url_returns_value(self):
-        """to_url returns the value unchanged."""
-        converter = DisplayIDOrUUIDConverter()
-        value = "inv_2aUyqjCzEIiEcYMKj7TZtw"
-        assert converter.to_url(value) == value
+    def test_uuid_pattern_builds_on_django(self):
+        assert UUIDConverter.regex in UUID_REGEX
 
 
 class TestDisplayIDOrSlugConverter:
-    """Tests for DisplayIDOrSlugConverter."""
+    @pytest.mark.parametrize(
+        "value",
+        [DISPLAY_ID, "my-product", "my_product", "MyProduct", "PRODUCT", "a"],
+    )
+    def test_matches(self, value):
+        assert _matches(DisplayIDOrSlugConverter, value)
 
-    def test_regex_matches_display_id(self):
-        """Regex matches display IDs."""
-        pattern = re.compile(f"^{DisplayIDOrSlugConverter.regex}$")
+    def test_matches_uuid_as_slug(self):
+        """UUIDs match through the slug pattern, not a UUID pattern."""
+        assert _matches(DisplayIDOrSlugConverter, UUID_FORMS[0])
 
-        valid_ids = [
-            "inv_0000000000000000000000",
-            "prod_2aUyqjCzEIiEcYMKj7TZtw",
-        ]
-        for display_id in valid_ids:
-            assert pattern.match(display_id), f"Should match: {display_id}"
-
-    def test_regex_matches_slug(self):
-        """Regex matches slugs."""
-        pattern = re.compile(f"^{DisplayIDOrSlugConverter.regex}$")
-
-        valid_slugs = [
-            "my-product",
-            "my_product",
-            "MyProduct",
-            "product-123",
-            "PRODUCT",
-            "a",
-        ]
-        for slug in valid_slugs:
-            assert pattern.match(slug), f"Should match: {slug}"
-
-    def test_regex_rejects_uuid(self):
-        """Regex does not match UUIDs (they match as slugs partially)."""
-        pattern = re.compile(f"^{DisplayIDOrSlugConverter.regex}$")
-
-        # Hyphenated UUID matches because hyphens and alphanumerics are valid slug chars
-        assert pattern.match("550e8400-e29b-41d4-a716-446655440000")
-
-        # Unhyphenated UUID also matches as a slug
-        assert pattern.match("550e8400e29b41d4a716446655440000")
-
-    def test_regex_rejects_invalid(self):
-        """Regex rejects truly invalid identifiers."""
-        pattern = re.compile(f"^{DisplayIDOrSlugConverter.regex}$")
-
-        invalid = [
-            "",  # empty
-            "product slug",  # space
-            "product/slug",  # slash
-            "product.slug",  # dot
-        ]
-        for invalid_id in invalid:
-            assert not pattern.match(invalid_id), f"Should not match: {invalid_id}"
-
-    def test_to_python_returns_value(self):
-        """to_python returns the value unchanged."""
-        converter = DisplayIDOrSlugConverter()
-        value = "my-product"
-        assert converter.to_python(value) == value
-
-    def test_to_url_returns_value(self):
-        """to_url returns the value unchanged."""
-        converter = DisplayIDOrSlugConverter()
-        value = "my-product"
-        assert converter.to_url(value) == value
+    @pytest.mark.parametrize(
+        "value", ["", "product slug", "product/slug", "product.slug"]
+    )
+    def test_rejects(self, value):
+        assert not _matches(DisplayIDOrSlugConverter, value)
 
 
 class TestDisplayIDOrUUIDOrSlugConverter:
-    """Tests for DisplayIDOrUUIDOrSlugConverter."""
+    @pytest.mark.parametrize(
+        "value", [DISPLAY_ID, *UUID_FORMS, "my-product", "my_product", "MyProduct"]
+    )
+    def test_matches(self, value):
+        assert _matches(DisplayIDOrUUIDOrSlugConverter, value)
 
-    def test_regex_matches_display_id(self):
-        """Regex matches display IDs."""
-        pattern = re.compile(f"^{DisplayIDOrUUIDOrSlugConverter.regex}$")
-
-        valid_ids = [
-            "inv_0000000000000000000000",
-            "prod_2aUyqjCzEIiEcYMKj7TZtw",
-        ]
-        for display_id in valid_ids:
-            assert pattern.match(display_id), f"Should match: {display_id}"
-
-    def test_regex_matches_hyphenated_uuid(self):
-        """Regex matches hyphenated UUIDs."""
-        pattern = re.compile(f"^{DisplayIDOrUUIDOrSlugConverter.regex}$")
-
-        assert pattern.match("550e8400-e29b-41d4-a716-446655440000")
-
-    def test_regex_rejects_unhyphenated_uuid(self):
-        """Regex rejects unhyphenated UUIDs (consistent with Django)."""
-        pattern = re.compile(f"^{DisplayIDOrUUIDOrSlugConverter.regex}$")
-
-        # Unhyphenated UUIDs match as slugs, not as UUIDs
-        assert pattern.match("550e8400e29b41d4a716446655440000")
-
-    def test_regex_matches_slug(self):
-        """Regex matches slugs."""
-        pattern = re.compile(f"^{DisplayIDOrUUIDOrSlugConverter.regex}$")
-
-        valid_slugs = [
-            "my-product",
-            "my_product",
-            "MyProduct",
-            "product-123",
-        ]
-        for slug in valid_slugs:
-            assert pattern.match(slug), f"Should match: {slug}"
-
-    def test_regex_rejects_invalid(self):
-        """Regex rejects invalid identifiers."""
-        pattern = re.compile(f"^{DisplayIDOrUUIDOrSlugConverter.regex}$")
-
-        invalid = [
-            "",  # empty
-            "product slug",  # space
-            "product/slug",  # slash
-        ]
-        for invalid_id in invalid:
-            assert not pattern.match(invalid_id), f"Should not match: {invalid_id}"
-
-    def test_to_python_returns_value(self):
-        """to_python returns the value unchanged."""
-        converter = DisplayIDOrUUIDOrSlugConverter()
-        value = "my-product"
-        assert converter.to_python(value) == value
-
-    def test_to_url_returns_value(self):
-        """to_url returns the value unchanged."""
-        converter = DisplayIDOrUUIDOrSlugConverter()
-        value = "my-product"
-        assert converter.to_url(value) == value
+    @pytest.mark.parametrize("value", ["", "product slug", "product/slug"])
+    def test_rejects(self, value):
+        assert not _matches(DisplayIDOrUUIDOrSlugConverter, value)
 
 
-class TestMakeDisplayIDOrSlugConverter:
-    """Tests for make_display_id_or_slug_converter factory."""
+@pytest.mark.parametrize("converter", CONVERTERS.values())
+class TestConversion:
+    def test_to_python_passes_value_through(self, converter):
+        assert converter().to_python("some-value") == "some-value"
 
-    def test_default_uses_slug_regex(self):
-        """Default converter uses SLUG_REGEX."""
-        converter_class = make_display_id_or_slug_converter()
-        # Should contain the default slug pattern
+    def test_to_url_stringifies(self, converter):
+        """Like Django's <uuid:>, so reverse() accepts UUID objects."""
+        value = uuid.UUID(UUID_FORMS[0])
+        assert converter().to_url(value) == UUID_FORMS[0]
+        assert converter().to_url("some-value") == "some-value"
+
+
+@pytest.mark.parametrize(
+    ("factory", "base", "accepts_uuid"),
+    [
+        (make_display_id_or_slug_converter, DisplayIDOrSlugConverter, False),
+        (
+            make_display_id_or_uuid_or_slug_converter,
+            DisplayIDOrUUIDOrSlugConverter,
+            True,
+        ),
+    ],
+)
+class TestConverterFactories:
+    def test_returns_subclass(self, factory, base, accepts_uuid):
+        assert issubclass(factory(), base)
+
+    def test_custom_regex(self, factory, base, accepts_uuid):
+        converter = factory(r"[a-z0-9-]+")
+        assert _matches(converter, DISPLAY_ID)
+        assert _matches(converter, "my-product")
+        assert not _matches(converter, "MY-PRODUCT")
+        # "0000...": all digits, so it only matches through the UUID pattern
         assert (
-            SLUG_REGEX in converter_class.regex
-            or "[-a-zA-Z0-9_]+" in converter_class.regex
+            _matches(converter, "00000000-0000-0000-0000-00000000000A") is accepts_uuid
         )
 
-    def test_custom_regex(self):
-        """Custom regex is used in converter."""
-        custom_regex = r"[a-z0-9-]+"
-        converter_class = make_display_id_or_slug_converter(custom_regex)
+    def test_custom_regex_ignores_setting(self, factory, base, accepts_uuid, settings):
+        converter = factory(r"[a-z]+")
+        settings.DISPLAY_IDS = {"SLUG_REGEX": r"[0-9]+"}
+        assert _matches(converter, "abc")
+        assert not _matches(converter, "123")
 
-        pattern = re.compile(f"^{converter_class.regex}$")
-
-        # Should match display ID
-        assert pattern.match("inv_0000000000000000000000")
-
-        # Should match lowercase slug
-        assert pattern.match("my-product")
-
-        # Should NOT match uppercase (custom regex is lowercase only)
-        assert not pattern.match("MY-PRODUCT")
-
-    def test_returns_subclass(self):
-        """Factory returns a subclass of DisplayIDOrSlugConverter."""
-        converter_class = make_display_id_or_slug_converter()
-        assert issubclass(converter_class, DisplayIDOrSlugConverter)
-
-    def test_converter_methods_work(self):
-        """Converter methods work correctly."""
-        converter_class = make_display_id_or_slug_converter()
-        converter = converter_class()
-        assert converter.to_python("test") == "test"
-        assert converter.to_url("test") == "test"
+    def test_default_follows_setting(self, factory, base, accepts_uuid, settings):
+        """Without a custom regex, SLUG_REGEX is read when the URLconf is built."""
+        converter = factory()
+        settings.DISPLAY_IDS = {"SLUG_REGEX": r"[a-z]+"}
+        assert converter.regex.endswith("|[a-z]+)")
 
 
-class TestMakeDisplayIDOrUUIDOrSlugConverter:
-    """Tests for make_display_id_or_uuid_or_slug_converter factory."""
+class TestDefaultConvertersFollowSetting:
+    def test_class_regex(self, settings):
+        settings.DISPLAY_IDS = {"SLUG_REGEX": r"[a-z]+"}
+        assert DisplayIDOrSlugConverter.regex.endswith("|[a-z]+)")
+        assert DisplayIDOrUUIDOrSlugConverter.regex.endswith("|[a-z]+)")
 
-    def test_default_uses_slug_regex(self):
-        """Default converter uses SLUG_REGEX."""
-        converter_class = make_display_id_or_uuid_or_slug_converter()
-        # Should contain the default slug pattern
+    def test_route(self, settings):
+        settings.DISPLAY_IDS = {"SLUG_REGEX": r"[a-z]+"}
+        urlconf = _urlconf("p/<display_id_or_slug:id>/")
+        assert resolve("/p/lowercase/", urlconf=urlconf).kwargs["id"] == "lowercase"
+        with pytest.raises(Resolver404):
+            resolve("/p/Has-Caps-1/", urlconf=urlconf)
+
+
+class TestRouting:
+    @pytest.mark.parametrize(
+        ("name", "value"),
+        [
+            ("display_id", DISPLAY_ID),
+            ("display_id_or_uuid", DISPLAY_ID),
+            ("display_id_or_slug", DISPLAY_ID),
+            ("display_id_or_slug", "my-awesome-product"),
+            ("identifier", DISPLAY_ID),
+            ("identifier", "my-item-slug"),
+            *[("display_id_or_uuid", v) for v in UUID_FORMS],
+            *[("identifier", v) for v in UUID_FORMS],
+        ],
+    )
+    def test_resolve_and_reverse(self, name, value):
+        urlconf = _urlconf(f"items/<{name}:id>/")
+        assert resolve(f"/items/{value}/", urlconf=urlconf).kwargs["id"] == value
         assert (
-            SLUG_REGEX in converter_class.regex
-            or "[-a-zA-Z0-9_]+" in converter_class.regex
+            reverse("item", kwargs={"id": value}, urlconf=urlconf) == f"/items/{value}/"
         )
-
-    def test_custom_regex(self):
-        """Custom regex is used in converter."""
-        custom_regex = r"[a-z0-9-]+"
-        converter_class = make_display_id_or_uuid_or_slug_converter(custom_regex)
-
-        pattern = re.compile(f"^{converter_class.regex}$")
-
-        # Should match display ID
-        assert pattern.match("inv_0000000000000000000000")
-
-        # Should match UUID
-        assert pattern.match("550e8400-e29b-41d4-a716-446655440000")
-
-        # Should match lowercase slug
-        assert pattern.match("my-product")
-
-        # Should NOT match uppercase slug (custom regex is lowercase only)
-        assert not pattern.match("MY-PRODUCT")
-
-    def test_returns_subclass(self):
-        """Factory returns a subclass of DisplayIDOrUUIDOrSlugConverter."""
-        converter_class = make_display_id_or_uuid_or_slug_converter()
-        assert issubclass(converter_class, DisplayIDOrUUIDOrSlugConverter)
-
-    def test_converter_methods_work(self):
-        """Converter methods work correctly."""
-        converter_class = make_display_id_or_uuid_or_slug_converter()
-        converter = converter_class()
-        assert converter.to_python("test") == "test"
-        assert converter.to_url("test") == "test"
-
-
-def _register_converters_once():
-    """Register converters once at module load time."""
-    from django.urls.converters import REGISTERED_CONVERTERS
-
-    if "display_id" not in REGISTERED_CONVERTERS:
-        register_converter(DisplayIDConverter, "display_id")
-    if "display_id_or_uuid" not in REGISTERED_CONVERTERS:
-        register_converter(DisplayIDOrUUIDConverter, "display_id_or_uuid")
-    if "display_id_or_slug" not in REGISTERED_CONVERTERS:
-        register_converter(DisplayIDOrSlugConverter, "display_id_or_slug")
-    if "identifier" not in REGISTERED_CONVERTERS:
-        register_converter(DisplayIDOrUUIDOrSlugConverter, "identifier")
-
-
-_register_converters_once()
-
-
-class TestConverterRouting:
-    """Integration tests for converter routing."""
-
-    def test_display_id_route_resolves(self):
-        """Display ID route resolves valid display IDs."""
-        from django.urls import resolve
-
-        urlpatterns = [
-            path("invoices/<display_id:id>/", lambda _r, _id: None, name="invoice"),
-        ]
-
-        test_uuid = uuid.uuid4()
-        display_id = encode_display_id("inv", test_uuid)
-
-        # Use resolve with urlconf parameter
-        match = resolve(
-            f"/invoices/{display_id}/",
-            urlconf=type("urls", (), {"urlpatterns": urlpatterns}),
-        )
-        assert match.kwargs["id"] == display_id
 
     def test_display_id_route_rejects_uuid(self):
-        """Display ID route rejects UUIDs."""
-        from django.urls import Resolver404, resolve
-
-        urlpatterns = [
-            path("invoices/<display_id:id>/", lambda _r, _id: None),
-        ]
-
         with pytest.raises(Resolver404):
             resolve(
-                "/invoices/550e8400-e29b-41d4-a716-446655440000/",
-                urlconf=type("urls", (), {"urlpatterns": urlpatterns}),
+                f"/items/{UUID_FORMS[0]}/", urlconf=_urlconf("items/<display_id:id>/")
             )
 
-    def test_either_route_matches_display_id(self):
-        """Either route matches display IDs."""
-        from django.urls import resolve
-
-        urlpatterns = [
-            path("invoices/<display_id_or_uuid:id>/", lambda _r, _id: None),
-        ]
-
-        test_uuid = uuid.uuid4()
-        display_id = encode_display_id("inv", test_uuid)
-
-        match = resolve(
-            f"/invoices/{display_id}/",
-            urlconf=type("urls", (), {"urlpatterns": urlpatterns}),
-        )
-        assert match.kwargs["id"] == display_id
-
-    def test_either_route_matches_uuid(self):
-        """Either route matches UUIDs."""
-        from django.urls import resolve
-
-        urlpatterns = [
-            path("invoices/<display_id_or_uuid:id>/", lambda _r, _id: None),
-        ]
-
-        match = resolve(
-            "/invoices/550e8400-e29b-41d4-a716-446655440000/",
-            urlconf=type("urls", (), {"urlpatterns": urlpatterns}),
-        )
-        assert match.kwargs["id"] == "550e8400-e29b-41d4-a716-446655440000"
-
-    def test_display_id_or_slug_matches_display_id(self):
-        """DisplayIDOrSlug route matches display IDs."""
-        from django.urls import resolve
-
-        urlpatterns = [
-            path("products/<display_id_or_slug:id>/", lambda _r, _id: None),
-        ]
-
-        test_uuid = uuid.uuid4()
-        display_id = encode_display_id("prod", test_uuid)
-
-        match = resolve(
-            f"/products/{display_id}/",
-            urlconf=type("urls", (), {"urlpatterns": urlpatterns}),
-        )
-        assert match.kwargs["id"] == display_id
-
-    def test_display_id_or_slug_matches_slug(self):
-        """DisplayIDOrSlug route matches slugs."""
-        from django.urls import resolve
-
-        urlpatterns = [
-            path("products/<display_id_or_slug:id>/", lambda _r, _id: None),
-        ]
-
-        match = resolve(
-            "/products/my-awesome-product/",
-            urlconf=type("urls", (), {"urlpatterns": urlpatterns}),
-        )
-        assert match.kwargs["id"] == "my-awesome-product"
-
-    def test_identifier_matches_all_formats(self):
-        """Identifier route matches display ID, UUID, and slug."""
-        from django.urls import resolve
-
-        urlpatterns = [
-            path("items/<identifier:id>/", lambda _r, _id: None),
-        ]
-
-        # Display ID
-        test_uuid = uuid.uuid4()
-        display_id = encode_display_id("item", test_uuid)
-        match = resolve(
-            f"/items/{display_id}/",
-            urlconf=type("urls", (), {"urlpatterns": urlpatterns}),
-        )
-        assert match.kwargs["id"] == display_id
-
-        # UUID
-        match = resolve(
-            "/items/550e8400-e29b-41d4-a716-446655440000/",
-            urlconf=type("urls", (), {"urlpatterns": urlpatterns}),
-        )
-        assert match.kwargs["id"] == "550e8400-e29b-41d4-a716-446655440000"
-
-        # Slug
-        match = resolve(
-            "/items/my-item-slug/",
-            urlconf=type("urls", (), {"urlpatterns": urlpatterns}),
-        )
-        assert match.kwargs["id"] == "my-item-slug"
-
-    def test_reverse_display_id(self):
-        """reverse() works with display ID converter."""
-        from django.urls import reverse
-
-        urlpatterns = [
-            path("invoices/<display_id:id>/", lambda _r, _id: None, name="invoice"),
-        ]
-
-        display_id = "inv_2aUyqjCzEIiEcYMKj7TZtw"
+    @pytest.mark.parametrize("name", ["display_id_or_uuid", "identifier"])
+    def test_reverse_with_uuid_object(self, name):
+        value = uuid.UUID(UUID_FORMS[0])
         url = reverse(
-            "invoice",
-            kwargs={"id": display_id},
-            urlconf=type("urls", (), {"urlpatterns": urlpatterns}),
+            "item", kwargs={"id": value}, urlconf=_urlconf(f"items/<{name}:id>/")
         )
-        assert url == f"/invoices/{display_id}/"
+        assert url == f"/items/{value}/"
 
-    def test_reverse_identifier(self):
-        """reverse() works with identifier converter."""
-        from django.urls import reverse
-
-        urlpatterns = [
-            path("items/<identifier:id>/", lambda _r, _id: None, name="item"),
-        ]
-
-        # Works with display ID
-        display_id = "item_2aUyqjCzEIiEcYMKj7TZtw"
-        url = reverse(
-            "item",
-            kwargs={"id": display_id},
-            urlconf=type("urls", (), {"urlpatterns": urlpatterns}),
-        )
-        assert url == f"/items/{display_id}/"
-
-        # Works with slug
-        slug = "my-item"
-        url = reverse(
-            "item",
-            kwargs={"id": slug},
-            urlconf=type("urls", (), {"urlpatterns": urlpatterns}),
-        )
-        assert url == f"/items/{slug}/"
+    def test_reverse_display_id_rejects_uuid_object(self):
+        """<display_id:> can't build a URL from a bare UUID; it has no prefix."""
+        with pytest.raises(NoReverseMatch):
+            reverse(
+                "item",
+                kwargs={"id": uuid.uuid4()},
+                urlconf=_urlconf("items/<display_id:id>/"),
+            )

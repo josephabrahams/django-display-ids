@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from .conf import SLUG_REGEX, get_setting
+from .encoding import DISPLAY_ID_REGEX, UUID_REGEX
+
+if TYPE_CHECKING:
+    import uuid
 
 __all__ = [
     "DISPLAY_ID_REGEX",
     "SLUG_REGEX",
+    "UUID_REGEX",
     "DisplayIDConverter",
     "DisplayIDOrSlugConverter",
     "DisplayIDOrUUIDConverter",
@@ -15,24 +22,39 @@ __all__ = [
     "make_display_id_or_uuid_or_slug_converter",
 ]
 
-# Regex pattern constants
-DISPLAY_ID_REGEX = r"[a-z]{1,16}_[0-9A-Za-z]{22}"
-UUID_REGEX = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 
-# Slug regex from settings (respects DISPLAY_IDS["SLUG_REGEX"] Django setting)
-_SLUG_REGEX: str = str(get_setting("SLUG_REGEX"))
+class _SlugRegex:
+    """Class attribute that builds ``regex`` as ``(?:alternatives|slug)``.
+
+    Without a fixed *slug*, the ``SLUG_REGEX`` setting is read when Django
+    compiles the URLconf rather than when this module is first imported, so
+    ``override_settings`` works.
+    """
+
+    def __init__(self, *alternatives: str, slug: str | None = None) -> None:
+        self.alternatives = alternatives
+        self.slug = slug
+
+    def __get__(self, obj: object, owner: type | None = None) -> str:
+        slug = self.slug if self.slug is not None else str(get_setting("SLUG_REGEX"))
+        return "(?:" + "|".join((*self.alternatives, slug)) + ")"
 
 
 class BaseConverter:
-    """Base class for URL path converters with pass-through conversion."""
+    """Base class for the path converters.
+
+    ``to_python`` passes the matched string through unchanged, since it may be
+    a display ID, UUID, or slug. ``to_url`` calls ``str()`` like Django's
+    ``<uuid:>`` converter, so ``reverse()`` accepts ``uuid.UUID`` objects.
+    """
 
     def to_python(self, value: str) -> str:
         """Convert the URL value to a Python object."""
         return value
 
-    def to_url(self, value: str) -> str:
+    def to_url(self, value: str | uuid.UUID) -> str:
         """Convert a Python object to a URL string."""
-        return value
+        return str(value)
 
 
 class DisplayIDConverter(BaseConverter):
@@ -60,7 +82,7 @@ class DisplayIDOrUUIDConverter(BaseConverter):
 
     Matches either format:
     - Display ID: {prefix}_{base62}
-    - UUID: hyphenated (e.g., 550e8400-e29b-41d4-a716-446655440000)
+    - UUID: hyphenated, in either case
 
     Example:
         from django.urls import path, register_converter
@@ -94,7 +116,7 @@ class DisplayIDOrSlugConverter(BaseConverter):
         ]
     """
 
-    regex = rf"(?:{DISPLAY_ID_REGEX}|{_SLUG_REGEX})"
+    regex: str = _SlugRegex(DISPLAY_ID_REGEX)  # type: ignore[assignment]
 
 
 class DisplayIDOrUUIDOrSlugConverter(BaseConverter):
@@ -102,7 +124,7 @@ class DisplayIDOrUUIDOrSlugConverter(BaseConverter):
 
     Matches any of:
     - Display ID: {prefix}_{base62}
-    - UUID: hyphenated (e.g., 550e8400-e29b-41d4-a716-446655440000)
+    - UUID: hyphenated, in either case
     - Slug: matches DISPLAY_IDS["SLUG_REGEX"] setting (default: [-a-zA-Z0-9_]+)
 
     Example:
@@ -116,7 +138,7 @@ class DisplayIDOrUUIDOrSlugConverter(BaseConverter):
         ]
     """
 
-    regex = rf"(?:{DISPLAY_ID_REGEX}|{UUID_REGEX}|{_SLUG_REGEX})"
+    regex: str = _SlugRegex(DISPLAY_ID_REGEX, UUID_REGEX)  # type: ignore[assignment]
 
 
 def make_display_id_or_slug_converter(
@@ -143,10 +165,9 @@ def make_display_id_or_slug_converter(
             path("products/<display_id_or_slug:id>/", ProductDetailView.as_view()),
         ]
     """
-    pattern = slug_regex if slug_regex is not None else get_setting("SLUG_REGEX")
 
     class CustomDisplayIDOrSlugConverter(DisplayIDOrSlugConverter):
-        regex = rf"(?:{DISPLAY_ID_REGEX}|{pattern})"
+        regex: str = _SlugRegex(DISPLAY_ID_REGEX, slug=slug_regex)  # type: ignore[assignment]
 
     return CustomDisplayIDOrSlugConverter
 
@@ -177,9 +198,8 @@ def make_display_id_or_uuid_or_slug_converter(
             path("products/<identifier:id>/", ProductDetailView.as_view()),
         ]
     """
-    pattern = slug_regex if slug_regex is not None else get_setting("SLUG_REGEX")
 
     class CustomDisplayIDOrUUIDOrSlugConverter(DisplayIDOrUUIDOrSlugConverter):
-        regex = rf"(?:{DISPLAY_ID_REGEX}|{UUID_REGEX}|{pattern})"
+        regex: str = _SlugRegex(DISPLAY_ID_REGEX, UUID_REGEX, slug=slug_regex)  # type: ignore[assignment]
 
     return CustomDisplayIDOrUUIDOrSlugConverter

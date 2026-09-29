@@ -1,8 +1,49 @@
 # Changelog
 
+## 0.8.0 — 2026-09-28
+
+The views, DRF, managers, admin search and `resolve_object()` used to disagree about which identifiers they accepted. They now share one lookup, so a value that works in one works in all of them. This release also adds `DisplayIDRelatedField`, so DRF APIs can accept display IDs in request bodies.
+
+### Breaking changes
+
+- The Django view mixin's `lookup_param` is now `lookup_url_kwarg`, the name the DRF mixin already used. Rename it in your views. A view that still sets `lookup_param` raises `TypeError` when it's defined, so you'll find out at startup.
+- The DRF mixin now runs `filter_queryset()` before looking up the object, as DRF's own `get_object()` does. Before, filter backends were skipped on detail lookups, so a backend that limits users to their own objects didn't apply there. An invalid identifier or wrong prefix is now a 404 instead of a 400. The mixin raises Django's `Http404` like DRF does, instead of `NotFound`; the response is the same, but tests that catch `NotFound` need updating.
+- In both view mixins, a slug that matches more than one row raises `MultipleObjectsReturned` instead of returning a 404, as Django and DRF do. Keep slug fields unique. A missing URL parameter raises `AttributeError` (Django) or `AssertionError` (DRF) instead of a 404 or 400.
+- A lookup that can never match now raises instead of treating everything as not found, for example `lookup_strategies = ("display_id",)` on a model without a prefix. It raises `MissingPrefixError`, or `ImproperlyConfigured` for a slug-only lookup on a model without the slug field. `get_by_display_id()` on a model without a prefix now raises for UUID objects too.
+- The managers and admin search no longer match a display ID with another model's prefix. Before, searching `cust_...` in the invoice admin, or `Order.objects.get_by_identifier("inv_...")` on a model without a prefix, could return a row that happened to share the UUID.
+- Admin search follows the `STRATEGIES` setting and adds exact slug matches, like the views. If your project limits `STRATEGIES`, admin search is limited the same way; set `lookup_strategies` on the `ModelAdmin` to override it.
+- `get_by_identifiers()` leaves out invalid identifiers and wrong prefixes, as it already did for missing rows, instead of raising for the whole batch.
+- `resolve_object()` and `id_param_description()` follow the `STRATEGIES` setting when not given strategies. Before, they used the built-in default.
+- Two models with the same class name in different modules can no longer share a prefix. This now raises `ValueError` when the second model is defined.
+- UUID strings must be in the standard hyphenated form, in either case, everywhere: lookups, admin search, converters, encoders and the template filter. 32 hex digits without hyphens, braces and `urn:uuid:` are no longer read as UUIDs; they're treated like any other string, so a slug like an MD5 hash can now be found. This includes `parse_identifier()` and `parse_uuid()` called directly, so check any code that passes them external input. It also changes what search boxes find: a UUID pasted without hyphens, as some database consoles print it, no longer matches in admin search or any other lookup, except as a slug. Before, they accepted any form `uuid.UUID()` does.
+- The drf-spectacular extension no longer reads `display_id_prefix` from the serializer class, which `DisplayIDField` never used. Set `prefix=` or `prefix_from=` on the field instead.
+
+### New
+
+- `DisplayIDRelatedField` for DRF serializers: shows the related object's display ID and accepts a display ID, UUID or slug in requests. It supports `many=True` (one query for the whole list), takes the same lookup options as the view mixins, avoids a query per row when serializing if the UUID is the primary key, and has a drf-spectacular schema.
+- The manager's `resolve_identifier()` is now `resolve_uuid()`, since it returns a UUID and `resolve_object()` returns an object. The old name still works but warns.
+- `resolve_objects()` looks up many identifiers in one query and maps each one to its object, or `None`.
+- The `<display_id_or_uuid:>` and `<identifier:>` converters accept uppercase UUIDs. `reverse()` accepts `uuid.UUID` objects.
+- Surrounding whitespace is ignored everywhere, not only in admin search.
+- `encode_uuid()`, `encode_display_id()` and the `display_id` template filter accept hyphenated UUID strings as well as UUID objects.
+- drf-spectacular documents the `{id}` path parameter of `DisplayIDMixin` views: a string described by the view's own strategies, prefix and slug field, instead of the primary key's `format: uuid`, which display IDs failed. A parameter set with `@extend_schema` still wins.
+- `id_param_description()` takes `strategies=`, and `None` as the prefix for models without one.
+- `DisplayIDAdminSearchMixin` takes `lookup_strategies`, `display_id_prefix` and `slug_field`, like the view mixins. Its helper for searching other UUID fields is now public as `parse_search_uuid()`, and takes `model=` to apply that model's prefix. `_parse_identifier()` still works but warns.
+- The Django view mixin works with only `queryset` set, without `model`.
+- `pip install "django-display-ids[drf]"` and `"django-display-ids[spectacular]"` install the optional dependencies. Only Django is required, as before.
+- Django 6.1 support.
+
+### Fixes
+
+- `DisplayIDOrSlugConverter` and `DisplayIDOrUUIDOrSlugConverter` read `SLUG_REGEX` when the URLs are loaded instead of at import, so `override_settings` affects them.
+- `parse_uuid()` returned `None` for a `uuid.UUID` object, and `parse_slug()` treated one as a slug.
+- The drf-spectacular extensions only registered if something imported `django_display_ids.contrib.drf_spectacular`, so `DisplayIDField` schemas were often missing. Importing the DRF integration now registers them.
+- `DisplayIDField`'s OpenAPI pattern includes the prefix when it's known.
+- The docs are rewritten and several errors are fixed, including wrong example values, `decode_display_id()`'s error type, and exception examples that weren't valid Python.
+
 ## 0.7.1 — 2026-07-30
 
-- **`DisplayIDAdminSearchMixin` strips surrounding whitespace**: `_parse_identifier()` now strips leading and trailing whitespace before parsing, so a display ID pasted from a terminal, email, or log line still matches. Previously a padded display ID failed to decode and the admin search silently returned no results; raw UUIDs were unaffected because `uuid.UUID()` already tolerates whitespace. Interior whitespace is untouched, so Django's multi-word `search_fields` behavior is unchanged.
+- **`DisplayIDAdminSearchMixin` strips surrounding whitespace**: `_parse_identifier()` now strips leading and trailing whitespace before parsing, so a display ID pasted from a terminal, email, or log line still matches. Previously a padded display ID or UUID failed to parse and the admin search silently returned no results. Interior whitespace is untouched, so Django's multi-word `search_fields` behavior is unchanged.
 
 ## 0.7.0 — 2026-05-18
 

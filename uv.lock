@@ -304,10 +304,19 @@ wheels = [
 
 [[package]]
 name = "django-display-ids"
-version = "0.7.1"
+version = "0.8.0"
 source = { editable = "." }
 dependencies = [
     { name = "django" },
+]
+
+[package.optional-dependencies]
+drf = [
+    { name = "djangorestframework" },
+]
+spectacular = [
+    { name = "djangorestframework" },
+    { name = "drf-spectacular" },
 ]
 
 [package.dev-dependencies]
@@ -333,7 +342,13 @@ docs = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "django", specifier = ">=4.2" }]
+requires-dist = [
+    { name = "django", specifier = ">=4.2" },
+    { name = "djangorestframework", marker = "extra == 'drf'", specifier = ">=3.14" },
+    { name = "djangorestframework", marker = "extra == 'spectacular'", specifier = ">=3.14" },
+    { name = "drf-spectacular", marker = "extra == 'spectacular'", specifier = ">=0.28" },
+]
+provides-extras = ["drf", "spectacular"]
 
 [package.metadata.requires-dev]
 dev = [

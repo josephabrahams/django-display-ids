@@ -12,81 +12,62 @@ from django_display_ids.encoding import encode_display_id
 from .models import Invoice
 
 
+def render(value, prefix="inv"):
+    template = Template(
+        f'{{% load display_ids %}}{{{{ value|display_id:"{prefix}" }}}}'
+    )
+    return template.render(Context({"value": value}))
+
+
 class TestDisplayIdFilter:
-    """Tests for the display_id filter."""
-
-    def test_filter_with_uuid(self) -> None:
-        """Filter encodes a UUID with prefix."""
+    def test_uuid(self) -> None:
         test_uuid = uuid.uuid4()
-        t = Template('{% load display_ids %}{{ my_uuid|display_id:"inv" }}')
-        result = t.render(Context({"my_uuid": test_uuid}))
-        assert result == encode_display_id("inv", test_uuid)
+        assert render(test_uuid) == encode_display_id("inv", test_uuid)
 
     @pytest.mark.django_db
-    def test_filter_with_model_uuid_field(self) -> None:
-        """Filter works with UUID field from model."""
+    def test_model_uuid_field(self) -> None:
         invoice = Invoice.objects.create(name="Test")
-        t = Template('{% load display_ids %}{{ invoice.id|display_id:"inv" }}')
-        result = t.render(Context({"invoice": invoice}))
-        assert result == encode_display_id("inv", invoice.id)
+        template = Template('{% load display_ids %}{{ invoice.id|display_id:"inv" }}')
+        assert template.render(Context({"invoice": invoice})) == invoice.display_id
 
-    @pytest.mark.django_db
-    def test_filter_with_foreign_key_uuid(self) -> None:
-        """Filter works with foreign key UUID."""
-        # Simulating a foreign key UUID scenario
-        customer_id = uuid.uuid4()
-        t = Template('{% load display_ids %}{{ customer_id|display_id:"cust" }}')
-        result = t.render(Context({"customer_id": customer_id}))
-        assert result == encode_display_id("cust", customer_id)
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "550e8400-e29b-41d4-a716-446655440000",
+            "550E8400-E29B-41D4-A716-446655440000",
+            " 550e8400-e29b-41d4-a716-446655440000 ",
+        ],
+    )
+    def test_uuid_string(self, value) -> None:
+        """Filter accepts UUID strings, like the lookup functions do."""
+        assert render(value) == "inv_2aUyqjCzEIiEcYMKj7TZtw"
 
-    def test_filter_with_none_returns_empty(self) -> None:
-        """Filter returns empty string for None."""
-        t = Template('{% load display_ids %}{{ my_uuid|display_id:"inv" }}')
-        result = t.render(Context({"my_uuid": None}))
-        assert result == ""
+    def test_none_returns_empty(self) -> None:
+        assert render(None) == ""
 
-    def test_filter_with_invalid_prefix(self) -> None:
-        """Filter raises error for invalid prefix format."""
-        test_uuid = uuid.uuid4()
-        t = Template('{% load display_ids %}{{ my_uuid|display_id:"INVALID" }}')
+    def test_invalid_prefix(self) -> None:
         with pytest.raises(TemplateSyntaxError, match="lowercase letters"):
-            t.render(Context({"my_uuid": test_uuid}))
+            render(uuid.uuid4(), prefix="INVALID")
 
-    def test_filter_with_non_uuid_raises(self) -> None:
-        """Filter raises error when value is not a UUID."""
-        t = Template('{% load display_ids %}{{ obj|display_id:"inv" }}')
-        with pytest.raises(TemplateSyntaxError, match="requires a UUID"):
-            t.render(Context({"obj": "not-a-uuid"}))
+    @pytest.mark.parametrize(
+        ("value", "message"),
+        [
+            ("not-a-uuid", "display_id filter"),
+            ("", "display_id filter"),
+            ("550e8400e29b41d4a716446655440000", "Invalid UUID"),
+            (12345, "got int"),
+        ],
+    )
+    def test_non_uuid_raises(self, value, message) -> None:
+        """Only None renders as empty; other non-UUIDs, including "", raise."""
+        with pytest.raises(TemplateSyntaxError, match=message):
+            render(value)
 
-    def test_filter_with_integer_raises(self) -> None:
-        """Filter raises error for integer value."""
-        t = Template('{% load display_ids %}{{ obj|display_id:"inv" }}')
-        with pytest.raises(TemplateSyntaxError, match="requires a UUID"):
-            t.render(Context({"obj": 12345}))
-
-    @pytest.mark.django_db
-    def test_filter_in_loop(self) -> None:
-        """Filter works correctly in a loop."""
+    def test_in_loop(self) -> None:
         uuids = [uuid.uuid4() for _ in range(3)]
-        t = Template(
+        template = Template(
             "{% load display_ids %}"
             '{% for u in uuids %}{{ u|display_id:"inv" }},{% endfor %}'
         )
-        result = t.render(Context({"uuids": uuids}))
         expected = ",".join(encode_display_id("inv", u) for u in uuids) + ","
-        assert result == expected
-
-
-class TestTemplatetagRegistration:
-    """Tests for template tag library registration."""
-
-    def test_library_loads(self) -> None:
-        """Template library can be loaded."""
-        t = Template("{% load display_ids %}")
-        t.render(Context())
-
-    def test_filter_registered(self) -> None:
-        """display_id filter is registered."""
-        from django_display_ids.templatetags.display_ids import register
-
-        assert "display_id" in register.filters
+        assert template.render(Context({"uuids": uuids})) == expected

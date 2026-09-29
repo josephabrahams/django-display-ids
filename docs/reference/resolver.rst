@@ -1,81 +1,69 @@
-Resolver Functions
-==================
-
-Core functions for resolving identifiers to database objects.
+Resolver
+========
 
 resolve_object
 --------------
 
-The central resolver function used by all mixins.
+Looks up an object from any identifier, outside a view:
 
 .. code-block:: python
 
    from django_display_ids import resolve_object
 
-   # Auto-detects prefix, uuid_field, slug_field, and strategies from the model
    invoice = resolve_object(Invoice, "inv_2aUyqjCzEIiEcYMKj7TZtw")
+   invoice = resolve_object(Invoice, value, queryset=Invoice.objects.filter(paid=True))
 
-Parameters
-~~~~~~~~~~
+``resolve_object(model, value, *, strategies=None, prefix=None, uuid_field=None, slug_field=None, queryset=None)``
 
-``model``
-   The Django model class to query.
+``value`` is a string or a ``uuid.UUID``. The keyword arguments override the
+model's settings for this call, as described in :doc:`settings`. Without
+``queryset``, it searches ``model._default_manager.all()``.
 
-``value``
-   The identifier string to resolve.
+It raises the library's own exceptions, rather than ``Model.DoesNotExist`` like
+the manager methods:
 
-``strategies``
-   Tuple of strategy names to try, in order. Defaults to ``("display_id", "uuid", "slug")``.
+- ``InvalidIdentifierError`` if no strategy can read the value
+- ``UnknownPrefixError`` if a display ID has another prefix
+- ``ObjectNotFoundError`` if nothing matches
+- ``AmbiguousIdentifierError`` if a slug matches more than one row
+- ``MissingPrefixError`` or ``ImproperlyConfigured`` if the strategies can
+  never be used for the model
+- ``TypeError`` if ``queryset`` is for a different model
 
-``prefix``
-   Expected display ID prefix. When ``None`` (the default), auto-detected
-   from the model's ``display_id_prefix`` attribute (set by
-   ``DisplayIDModel``).
+Each one also subclasses the matching Django or Python exception, so existing
+``except`` clauses still work. See :doc:`exceptions`.
 
-``uuid_field``
-   Name of the UUID field on the model. When ``None`` (the default),
-   auto-detected from the model's ``uuid_field`` attribute (set by
-   ``DisplayIDModel``), then the ``DISPLAY_IDS["UUID_FIELD"]`` setting,
-   then ``"id"``.
+resolve_objects
+---------------
 
-``slug_field``
-   Name of the slug field on the model. When ``None`` (the default),
-   auto-detected from the model's ``slug_field`` attribute (set by
-   ``DisplayIDModel``), then the ``DISPLAY_IDS["SLUG_FIELD"]`` setting,
-   then ``"slug"``.
+Looks up many identifiers in one query, and maps each one to its object:
 
-``queryset``
-   Optional pre-filtered queryset. If not provided, uses ``model.objects.all()``.
+.. code-block:: python
 
-Return Value
-~~~~~~~~~~~~
+   from django_display_ids import resolve_objects
 
-Returns the matched model instance.
+   found = resolve_objects(Invoice, ["inv_2aUyqjCzEIiEcYMKj7TZtw", "nope"])
+   found["inv_2aUyqjCzEIiEcYMKj7TZtw"]  # the invoice
+   found["nope"]  # None
 
-Exceptions
-~~~~~~~~~~
+It takes the same arguments as ``resolve_object()``, with an iterable of values
+instead of one. A value that ``resolve_object()`` would reject as invalid, as
+having the wrong prefix or as not found maps to ``None``. It still raises
+``AmbiguousIdentifierError`` for a slug that matches more than one row, and
+the configuration errors above.
 
-- ``InvalidIdentifierError`` — No strategy could parse the identifier
-- ``UnknownPrefixError`` — Display ID prefix doesn't match expected
-- ``ObjectNotFoundError`` — No database record matches
-- ``AmbiguousIdentifierError`` — Multiple records match (slug lookup)
+If you only need the objects, ``Invoice.objects.get_by_identifiers(values)``
+returns a queryset instead. See :doc:`/usage/models`.
 
 get_model_for_prefix
 --------------------
 
-Look up a model class by its registered display ID prefix.
+Returns the name of the model registered for a prefix, or ``None``:
 
 .. code-block:: python
 
-   from django_display_ids import get_model_for_prefix
+   >>> from django_display_ids import get_model_for_prefix
+   >>> get_model_for_prefix("inv")
+   'Invoice'
 
-   model_class = get_model_for_prefix("inv")
-   # -> <class 'myapp.models.Invoice'>
-
-Returns ``None`` if no model is registered with that prefix.
-
-Prefix Registration
-~~~~~~~~~~~~~~~~~~~
-
-Prefixes are automatically registered when a model class with
-``DisplayIDModel`` is defined. You don't need to manually register prefixes.
+Prefixes are registered when a ``DisplayIDModel`` subclass is defined.

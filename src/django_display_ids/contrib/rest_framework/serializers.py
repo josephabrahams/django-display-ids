@@ -2,21 +2,32 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import TYPE_CHECKING, Any
 
+from django.core.exceptions import ObjectDoesNotExist
+from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
+from rest_framework.relations import (
+    MANY_RELATION_KWARGS,
+    ManyRelatedField,
+    PKOnlyObject,
+)
 
 from django_display_ids.conf import get_setting
 from django_display_ids.encoding import PREFIX_PATTERN, encode_display_id
+from django_display_ids.exceptions import DisplayIDLookupError
+from django_display_ids.resolver import _Lookup, _LookupOptions
 
 if TYPE_CHECKING:
     from django.db import models
 
+    from django_display_ids.typing import StrategyName
+
 __all__ = [
     "DisplayIDField",
+    "DisplayIDRelatedField",
 ]
-
-_MISSING = object()
 
 
 class DisplayIDField(serializers.SerializerMethodField):
@@ -30,24 +41,23 @@ class DisplayIDField(serializers.SerializerMethodField):
     field raises ValueError unless ``required=False`` is passed.
 
     Example:
-        class UserSerializer(serializers.Serializer):
-            id = serializers.UUIDField(source="uid", read_only=True)
+        class InvoiceSerializer(serializers.ModelSerializer):
             display_id = DisplayIDField()
 
-        # Output: {"id": "...", "display_id": "user_2nBm7K8xYq1pLwZj"}
+        # Output: {"id": "...", "display_id": "inv_2aUyqjCzEIiEcYMKj7TZtw"}
 
     Example with custom prefix (overrides model's prefix):
-        class UserSerializer(serializers.Serializer):
-            display_id = DisplayIDField(prefix="usr")
+        class InvoiceSerializer(serializers.ModelSerializer):
+            display_id = DisplayIDField(prefix="bill")
 
     Example deriving the prefix from a referenced model class. Use this when
     the serialized row is a *projection* of another model (e.g. a
     database-view-backed report row) that mirrors that model's data but is
     not an instance of it and carries no ``display_id_prefix`` of its own:
 
-        class AppCatalogReportSerializer(serializers.ModelSerializer):
-            # AppCatalogReport is a view-backed projection of App.
-            display_id = DisplayIDField(prefix_from=App)
+        class InvoiceReportSerializer(serializers.ModelSerializer):
+            # InvoiceReport is a view-backed projection of Invoice.
+            display_id = DisplayIDField(prefix_from=Invoice)
 
     Example tolerating instances without a prefix (returns None instead of
     raising). Use this when a single serializer handles heterogeneous rows,
@@ -182,3 +192,128 @@ class DisplayIDField(serializers.SerializerMethodField):
             f"Cannot generate display_id: {obj.__class__.__name__} "
             f"has no display_id property."
         )
+
+
+class DisplayIDRelatedField(_LookupOptions, serializers.RelatedField):  # type: ignore[type-arg]
+    """Writable related field that uses display IDs.
+
+    Responses show the related object's display ID. Requests accept a display
+    ID, a UUID, or a slug, parsed with the same rules as the view mixins, so
+    a client can send back exactly what it read.
+
+    Example:
+        class InvoiceSerializer(serializers.ModelSerializer):
+            customer = DisplayIDRelatedField(queryset=Customer.objects.all())
+            tags = DisplayIDRelatedField(queryset=Tag.objects.all(), many=True)
+
+        # Output: {"customer": "cust_2aUyqjCzEIiEcYMKj7TZtw", "tags": [...]}
+        # Input accepts "cust_2aUy...", "550e8400-...", or a slug
+
+    The related model needs a ``display_id_prefix``, or pass
+    ``display_id_prefix=``. The other options work like the view mixins':
+    ``lookup_strategies``, ``uuid_field`` and ``slug_field`` default to the
+    related model's attributes, then the ``DISPLAY_IDS`` settings.
+    """
+
+    default_error_messages = {  # noqa: RUF012 - same as DRF's own fields
+        "does_not_exist": _('Object with identifier "{value}" does not exist.'),
+        "incorrect_type": _(
+            "Incorrect type. Expected an identifier string, received {data_type}."
+        ),
+    }
+
+    def __init__(
+        self,
+        *,
+        lookup_strategies: tuple[StrategyName, ...] | None = None,
+        display_id_prefix: str | None = None,
+        uuid_field: str | None = None,
+        slug_field: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        self.lookup_strategies = lookup_strategies
+        self.display_id_prefix = display_id_prefix
+        self.uuid_field = uuid_field
+        self.slug_field = slug_field
+        super().__init__(**kwargs)
+        # Resolved once per model. DRF re-runs __init__ when it copies fields
+        # for each serializer instance, so this never outlives a settings change.
+        self._lookups: dict[type[models.Model], _Lookup] = {}
+        # Fail at startup, not on the first request, when the related model
+        # can't have display IDs.
+        if self.queryset is not None:
+            self._lookup_for(self.queryset.model).require_prefix()
+
+    def _lookup_for(self, model: type[models.Model]) -> _Lookup:
+        if model not in self._lookups:
+            self._lookups[model] = self._get_lookup(model)
+        return self._lookups[model]
+
+    @classmethod
+    def many_init(cls, *args: Any, **kwargs: Any) -> ManyRelatedField:
+        # DRF's own many_init, with a list field that looks up in one query
+        list_kwargs: dict[str, Any] = {"child_relation": cls(*args, **kwargs)}
+        for key in kwargs:
+            if key in MANY_RELATION_KWARGS:
+                list_kwargs[key] = kwargs[key]
+        return _ManyDisplayIDRelatedField(**list_kwargs)
+
+    def use_pk_only_optimization(self) -> bool:
+        # Like PrimaryKeyRelatedField: when the UUID field is the primary key,
+        # the display ID can be built from the foreign key column alone, so
+        # serializing doesn't load each related object.
+        if self.queryset is None:
+            return False
+        model = self.queryset.model
+        return model._meta.pk.name == self._lookup_for(model).uuid_field  # type: ignore[no-any-return]
+
+    def to_internal_value(self, data: Any) -> Any:
+        queryset = self.get_queryset()
+        # Outside the try: a misconfigured lookup is an error, not bad input
+        lookup = self._lookup_for(queryset.model)
+        if not isinstance(data, str | uuid.UUID):
+            self.fail("incorrect_type", data_type=type(data).__name__)
+        try:
+            return queryset.get(**lookup.build(data))
+        except (DisplayIDLookupError, ObjectDoesNotExist):
+            # Unparseable input and wrong prefixes read as "not found",
+            # the same as the view mixins
+            self.fail("does_not_exist", value=data)
+
+    def _to_internal_values(self, data: list[Any]) -> list[Any]:
+        """``to_internal_value()`` for a list, in one query."""
+        queryset = self.get_queryset()
+        lookup = self._lookup_for(queryset.model)
+        for item in data:
+            if not isinstance(item, str | uuid.UUID):
+                self.fail("incorrect_type", data_type=type(item).__name__)
+        found = lookup.fetch_many(queryset, data)
+        for item in data:
+            if found[item] is None:
+                self.fail("does_not_exist", value=item)
+        return [found[item] for item in data]
+
+    def to_representation(self, value: Any) -> str:
+        if isinstance(value, PKOnlyObject):
+            # Only used when there's a queryset; see use_pk_only_optimization
+            return self._lookup_for(self.queryset.model).encode(value.pk)  # type: ignore[union-attr]
+        lookup = self._lookup_for(type(value))
+        return lookup.encode(getattr(value, lookup.uuid_field))
+
+
+class _ManyDisplayIDRelatedField(ManyRelatedField):
+    """``many=True`` list that looks up every item in one query.
+
+    DRF's ``ManyRelatedField`` runs one query per item.
+    """
+
+    child_relation: DisplayIDRelatedField
+
+    def to_internal_value(self, data: Any) -> list[Any]:
+        # The same checks as ManyRelatedField.to_internal_value()
+        if isinstance(data, str) or not hasattr(data, "__iter__"):
+            self.fail("not_a_list", input_type=type(data).__name__)
+        data = list(data)
+        if not self.allow_empty and len(data) == 0:
+            self.fail("empty")
+        return self.child_relation._to_internal_values(data)

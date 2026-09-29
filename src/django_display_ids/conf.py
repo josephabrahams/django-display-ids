@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING
 from django.conf import settings
 from django.urls.converters import SlugConverter
 
+from .typing import DEFAULT_STRATEGIES
+
 if TYPE_CHECKING:
     from .typing import StrategyName
 
@@ -31,7 +33,7 @@ SLUG_REGEX: str = SlugConverter.regex
 DEFAULTS: dict[str, str | tuple[str, ...]] = {
     "UUID_FIELD": "id",
     "SLUG_FIELD": "slug",
-    "STRATEGIES": ("display_id", "uuid", "slug"),
+    "STRATEGIES": DEFAULT_STRATEGIES,
     "SLUG_REGEX": SLUG_REGEX,
 }
 

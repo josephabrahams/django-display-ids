@@ -1,293 +1,126 @@
-"""Tests for Django admin integration."""
+"""Tests for the admin search mixin.
 
-import uuid  # Used for generating fake display IDs
+Which identifier forms are accepted or rejected, and how each option (prefix,
+strategies, fields) overrides the model, is covered for every entry
+point in test_consistency.py. These tests cover admin-specific behavior.
+"""
+
+import uuid
 
 import pytest
 from django.contrib import admin
 from django.contrib.admin.sites import AdminSite
-from django.test import RequestFactory
 
 from django_display_ids import DisplayIDAdminSearchMixin, encode_display_id
 
-from .models import Invoice, Product
+from .models import Invoice, Order
 
 
 class InvoiceAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
-    """Test admin for Invoice model."""
-
-    list_display = ("id", "name")
-    search_fields = ("name",)
-
-
-class ProductAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
-    """Test admin for Product model with custom uuid_field."""
-
-    list_display = ("uid", "name")
     search_fields = ("name",)
 
 
 @pytest.fixture
 def admin_site():
-    """Create an admin site for testing."""
     return AdminSite()
 
 
 @pytest.fixture
-def invoice_admin(admin_site):
-    """Create InvoiceAdmin instance."""
-    return InvoiceAdmin(Invoice, admin_site)
+def search(admin_site):
+    """Run an admin search and return the matching rows as a list."""
 
+    def _search(term, admin_class=InvoiceAdmin, model=Invoice, queryset=None):
+        model_admin = admin_class(model, admin_site)
+        if queryset is None:
+            queryset = model.objects.all()
+        results, _ = model_admin.get_search_results(None, queryset, term)
+        return list(results)
 
-@pytest.fixture
-def product_admin(admin_site):
-    """Create ProductAdmin instance."""
-    return ProductAdmin(Product, admin_site)
-
-
-@pytest.fixture
-def request_factory():
-    """Create a request factory."""
-    return RequestFactory()
+    return _search
 
 
 @pytest.mark.django_db
-class TestDisplayIDAdminSearchMixin:
-    """Tests for DisplayIDAdminSearchMixin."""
-
-    def test_search_by_display_id(self, invoice_admin, request_factory):
-        """Should find invoice by display_id search."""
-        invoice = Invoice.objects.create(name="Test Invoice")
-        display_id = encode_display_id("inv", invoice.id)
-
-        request = request_factory.get("/admin/tests/invoice/", {"q": display_id})
-        queryset = Invoice.objects.all()
-
-        result_qs, _ = invoice_admin.get_search_results(request, queryset, display_id)
-
-        assert invoice in result_qs
-        assert result_qs.count() == 1
-
-    def test_search_by_display_id_with_whitespace(self, invoice_admin, request_factory):
-        """Should find invoice when the pasted display ID has stray whitespace."""
-        invoice = Invoice.objects.create(name="Test Invoice")
-        padded = f"  {encode_display_id('inv', invoice.id)}\n"
-
-        request = request_factory.get("/admin/tests/invoice/", {"q": padded})
-        queryset = Invoice.objects.all()
-
-        result_qs, _ = invoice_admin.get_search_results(request, queryset, padded)
-
-        assert invoice in result_qs
-        assert result_qs.count() == 1
-
-    def test_search_by_multi_word_name(self, invoice_admin, request_factory):
-        """Interior whitespace must still split into per-word text search."""
+class TestSearch:
+    def test_text_search_still_works(self, search):
+        """Interior whitespace still splits into per-word text search."""
         invoice = Invoice.objects.create(name="Unique Name Here")
         Invoice.objects.create(name="Unique Other")
+        assert search("Unique Here") == [invoice]
 
-        request = request_factory.get("/admin/tests/invoice/", {"q": "Unique Here"})
-        queryset = Invoice.objects.all()
+    def test_combined_with_text_search(self, search):
+        """An ID match is added to the text-search results, not substituted."""
+        by_id = Invoice.objects.create(name="First")
+        by_name = Invoice.objects.create(name=str(by_id.id))
+        assert {*search(str(by_id.id))} == {by_id, by_name}
 
-        result_qs, _ = invoice_admin.get_search_results(
-            request, queryset, "Unique Here"
-        )
-
-        assert invoice in result_qs
-        assert result_qs.count() == 1
-
-    def test_search_by_name(self, invoice_admin, request_factory):
-        """Should still support regular search fields."""
-        invoice = Invoice.objects.create(name="Unique Name Here")
-
-        request = request_factory.get("/admin/tests/invoice/", {"q": "Unique"})
-        queryset = Invoice.objects.all()
-
-        result_qs, _ = invoice_admin.get_search_results(request, queryset, "Unique")
-
-        assert invoice in result_qs
-
-    def test_search_invalid_display_id(self, invoice_admin, request_factory):
-        """Should not error on invalid display_id format."""
+    def test_unparseable_term_is_not_an_error(self, search):
         Invoice.objects.create(name="Test Invoice")
+        assert search("invalid_xxx") == []
 
-        request = request_factory.get("/admin/tests/invoice/", {"q": "invalid_xxx"})
-        queryset = Invoice.objects.all()
+    def test_empty_search_returns_everything(self, search):
+        """Loading the changelist (empty search) doesn't add a slug match."""
+        Invoice.objects.create(name="x", slug=None)
+        assert len(search("")) == 1
+        assert len(search("   ")) == 1
 
-        # Should not raise, just return empty or original results
-        result_qs, _ = invoice_admin.get_search_results(
-            request, queryset, "invalid_xxx"
-        )
-
-        # No match expected
-        assert result_qs.count() == 0
-
-    def test_search_custom_uuid_field(self, product_admin, request_factory):
-        """Should work with custom uuid_field on model."""
-        product = Product.objects.create(name="Test Product")
-        display_id = encode_display_id("prod", product.uid)
-
-        request = request_factory.get("/admin/tests/product/", {"q": display_id})
-        queryset = Product.objects.all()
-
-        result_qs, _ = product_admin.get_search_results(request, queryset, display_id)
-
-        assert product in result_qs
-        assert result_qs.count() == 1
-
-    def test_search_nonexistent_display_id(self, invoice_admin, request_factory):
-        """Should return empty when display_id doesn't match any record."""
-        Invoice.objects.create(name="Test Invoice")
-        fake_display_id = encode_display_id("inv", uuid.uuid4())
-
-        request = request_factory.get("/admin/tests/invoice/", {"q": fake_display_id})
-        queryset = Invoice.objects.all()
-
-        result_qs, _ = invoice_admin.get_search_results(
-            request, queryset, fake_display_id
-        )
-
-        assert result_qs.count() == 0
-
-    def test_search_combines_with_text_search(self, invoice_admin, request_factory):
-        """Display ID search should combine with regular search results."""
-        invoice1 = Invoice.objects.create(name="First Invoice")
-        invoice2 = Invoice.objects.create(name="Second Invoice")
-        display_id = encode_display_id("inv", invoice1.id)
-
-        request = request_factory.get("/admin/tests/invoice/", {"q": display_id})
-        queryset = Invoice.objects.all()
-
-        result_qs, _ = invoice_admin.get_search_results(request, queryset, display_id)
-
-        # Should find invoice1 via display_id
-        assert invoice1 in result_qs
-        # Should not find invoice2
-        assert invoice2 not in result_qs
-
-    def test_search_by_raw_uuid(self, invoice_admin, request_factory):
-        """Should find invoice by raw UUID search."""
-        invoice = Invoice.objects.create(name="Test Invoice")
-        raw_uuid = str(invoice.id)
-
-        request = request_factory.get("/admin/tests/invoice/", {"q": raw_uuid})
-        queryset = Invoice.objects.all()
-
-        result_qs, _ = invoice_admin.get_search_results(request, queryset, raw_uuid)
-
-        assert invoice in result_qs
-        assert result_qs.count() == 1
-
-    def test_search_by_raw_uuid_no_hyphens(self, invoice_admin, request_factory):
-        """Should find invoice by raw UUID without hyphens."""
-        invoice = Invoice.objects.create(name="Test Invoice")
-        raw_uuid = invoice.id.hex
-
-        request = request_factory.get("/admin/tests/invoice/", {"q": raw_uuid})
-        queryset = Invoice.objects.all()
-
-        result_qs, _ = invoice_admin.get_search_results(request, queryset, raw_uuid)
-
-        assert invoice in result_qs
-        assert result_qs.count() == 1
-
-    def test_search_by_raw_uuid_custom_field(self, product_admin, request_factory):
-        """Should find product by raw UUID with custom uuid_field."""
-        product = Product.objects.create(name="Test Product")
-        raw_uuid = str(product.uid)
-
-        request = request_factory.get("/admin/tests/product/", {"q": raw_uuid})
-        queryset = Product.objects.all()
-
-        result_qs, _ = product_admin.get_search_results(request, queryset, raw_uuid)
-
-        assert product in result_qs
-        assert result_qs.count() == 1
-
-    def test_search_respects_queryset_scoping(self, invoice_admin, request_factory):
-        """UUID search should not return rows excluded from the input queryset.
-
-        Ensures the mixin filters against the passed-in queryset (which may be
-        tenant-scoped) rather than the default manager.
-        """
+    @pytest.mark.parametrize("form", ["display_id", "uuid"])
+    def test_respects_queryset_scoping(self, search, form):
+        """The ID match is filtered from the queryset passed in (e.g. per tenant),
+        not the default manager."""
         included = Invoice.objects.create(name="Included")
         excluded = Invoice.objects.create(name="Excluded")
-
-        # Search for the *excluded* invoice's display ID, but pass a queryset
-        # that only contains the *included* invoice — simulating tenant scoping.
-        display_id = encode_display_id("inv", excluded.id)
-        scoped_qs = Invoice.objects.filter(pk=included.pk)
-
-        request = request_factory.get("/admin/tests/invoice/", {"q": display_id})
-        result_qs, _ = invoice_admin.get_search_results(request, scoped_qs, display_id)
-
-        assert excluded not in result_qs
-        assert result_qs.count() == 0
-
-    def test_search_by_raw_uuid_respects_queryset_scoping(
-        self, invoice_admin, request_factory
-    ):
-        """Raw UUID search should not return rows excluded from the input queryset."""
-        included = Invoice.objects.create(name="Included")
-        excluded = Invoice.objects.create(name="Excluded")
-
-        raw_uuid = str(excluded.id)
-        scoped_qs = Invoice.objects.filter(pk=included.pk)
-
-        request = request_factory.get("/admin/tests/invoice/", {"q": raw_uuid})
-        result_qs, _ = invoice_admin.get_search_results(request, scoped_qs, raw_uuid)
-
-        assert excluded not in result_qs
-        assert result_qs.count() == 0
+        term = excluded.display_id if form == "display_id" else str(excluded.id)
+        assert search(term, queryset=Invoice.objects.filter(pk=included.pk)) == []
 
 
-class TestParseIdentifier:
-    """Tests for _parse_identifier static method."""
+class TestParseSearchUUID:
+    """The static helper for searching other UUID fields."""
 
-    def test_parse_display_id(self):
-        """Should parse a display ID and return the UUID."""
-        uid = uuid.uuid4()
-        display_id = encode_display_id("inv", uid)
-        assert DisplayIDAdminSearchMixin._parse_identifier(display_id) == uid
+    uid = uuid.uuid4()
+    parse = staticmethod(DisplayIDAdminSearchMixin.parse_search_uuid)
 
-    def test_parse_raw_uuid(self):
-        """Should parse a raw UUID with hyphens."""
-        uid = uuid.uuid4()
-        assert DisplayIDAdminSearchMixin._parse_identifier(str(uid)) == uid
+    @pytest.mark.parametrize(
+        "term",
+        [
+            encode_display_id("inv", uid),
+            str(uid),
+            str(uid).upper(),
+            f"  {encode_display_id('inv', uid)}\n",
+            f"  {uid}\n",
+        ],
+    )
+    def test_parses(self, term):
+        assert self.parse(term) == self.uid
 
-    def test_parse_raw_uuid_no_hyphens(self):
-        """Should parse a raw UUID without hyphens."""
-        uid = uuid.uuid4()
-        assert DisplayIDAdminSearchMixin._parse_identifier(uid.hex) == uid
+    @pytest.mark.parametrize(
+        "term",
+        [
+            "hello world",
+            "inv_notvalid",
+            "",
+            "   ",
+            f"inv_ {encode_display_id('inv', uid)}",  # interior whitespace
+            uid.hex,  # only the hyphenated form is a UUID
+        ],
+    )
+    def test_returns_none(self, term):
+        assert self.parse(term) is None
 
-    def test_parse_plain_text(self):
-        """Should return None for plain text."""
-        assert DisplayIDAdminSearchMixin._parse_identifier("hello world") is None
+    def test_model_prefix_must_match(self):
+        """With model=, display IDs must use that model's prefix."""
+        assert self.parse(encode_display_id("inv", self.uid), model=Invoice) == self.uid
+        assert self.parse(encode_display_id("prod", self.uid), model=Invoice) is None
+        assert self.parse(str(self.uid), model=Invoice) == self.uid
 
-    def test_parse_invalid_display_id(self):
-        """Should return None for invalid display ID."""
-        assert DisplayIDAdminSearchMixin._parse_identifier("inv_notvalid") is None
+    def test_model_without_prefix_matches_uuids_only(self):
+        assert self.parse(encode_display_id("inv", self.uid), model=Order) is None
+        assert self.parse(str(self.uid), model=Order) == self.uid
 
-    def test_parse_empty_string(self):
-        """Should return None for empty string."""
-        assert DisplayIDAdminSearchMixin._parse_identifier("") is None
-
-    def test_parse_display_id_with_surrounding_whitespace(self):
-        """Should strip whitespace around a pasted display ID."""
-        uid = uuid.uuid4()
-        display_id = encode_display_id("inv", uid)
-        assert DisplayIDAdminSearchMixin._parse_identifier(f"  {display_id}\n") == uid
-
-    def test_parse_raw_uuid_with_surrounding_whitespace(self):
-        """Should strip whitespace around a pasted raw UUID."""
-        uid = uuid.uuid4()
-        assert DisplayIDAdminSearchMixin._parse_identifier(f"  {uid}\n") == uid
-
-    def test_parse_whitespace_only(self):
-        """Should return None for a whitespace-only search term."""
-        assert DisplayIDAdminSearchMixin._parse_identifier("   ") is None
-
-    def test_parse_display_id_with_interior_whitespace(self):
-        """Should not match a display ID broken up by interior whitespace."""
-        uid = uuid.uuid4()
-        display_id = encode_display_id("inv", uid)
-        assert DisplayIDAdminSearchMixin._parse_identifier(f"inv_ {display_id}") is None
+    def test_old_name_warns_and_still_works(self):
+        term = encode_display_id("prod", self.uid)
+        with pytest.warns(DeprecationWarning, match="parse_search_uuid"):
+            assert DisplayIDAdminSearchMixin._parse_identifier(term) == self.uid
+        with pytest.warns(DeprecationWarning):
+            assert (
+                DisplayIDAdminSearchMixin._parse_identifier(term, model=Invoice) is None
+            )

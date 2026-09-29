@@ -1,209 +1,84 @@
-URL Path Converters
-===================
-
-Django path converters for validating identifier formats in URL patterns.
+URL Converters
+==============
 
 .. module:: django_display_ids.converters
 
-DisplayIDConverter
-------------------
-
-.. class:: DisplayIDConverter
-
-   Path converter for display IDs.
-
-   Matches the format ``{prefix}_{base62}`` where:
-
-   - ``prefix`` is 1-16 lowercase letters
-   - ``base62`` is exactly 22 alphanumeric characters
-
-   **Regex:** ``[a-z]{1,16}_[0-9A-Za-z]{22}``
-
-   **Example matches:**
-
-   - ``inv_2aUyqjCzEIiEcYMKj7TZtw``
-   - ``prod_0000000000000000000000``
-
-   **Does not match:**
-
-   - ``INV_2aUyqjCzEIiEcYMKj7TZtw`` (uppercase prefix)
-   - ``550e8400-e29b-41d4-a716-446655440000`` (UUID)
-
-DisplayIDOrUUIDConverter
-------------------------
-
-.. class:: DisplayIDOrUUIDConverter
-
-   Path converter for display IDs or UUIDs.
-
-   Matches either format:
-
-   - Display ID: ``{prefix}_{base62}``
-   - UUID: hyphenated (``550e8400-e29b-41d4-a716-446655440000``)
-
-   Consistent with Django's built-in ``<uuid:id>`` converter, only hyphenated
-   UUIDs are accepted.
-
-   **Example matches:**
-
-   - ``inv_2aUyqjCzEIiEcYMKj7TZtw`` (display ID)
-   - ``550e8400-e29b-41d4-a716-446655440000`` (UUID)
-
-DisplayIDOrSlugConverter
-------------------------
-
-.. class:: DisplayIDOrSlugConverter
-
-   Path converter for display IDs or slugs.
-
-   Matches either format:
-
-   - Display ID: ``{prefix}_{base62}``
-   - Slug: Django's default slug pattern (``[-a-zA-Z0-9_]+``)
-
-   **Example matches:**
-
-   - ``inv_2aUyqjCzEIiEcYMKj7TZtw`` (display ID)
-   - ``my-product-slug`` (slug)
-   - ``product_123`` (slug)
-
-DisplayIDOrUUIDOrSlugConverter
-------------------------------
-
-.. class:: DisplayIDOrUUIDOrSlugConverter
-
-   Path converter for display IDs, UUIDs, or slugs.
-
-   Matches any of:
-
-   - Display ID: ``{prefix}_{base62}``
-   - UUID: hyphenated (``550e8400-e29b-41d4-a716-446655440000``)
-   - Slug: Django's default slug pattern (``[-a-zA-Z0-9_]+``)
-
-   This is the most permissive converter, useful when you want to accept
-   any identifier format.
-
-   **Example matches:**
-
-   - ``inv_2aUyqjCzEIiEcYMKj7TZtw`` (display ID)
-   - ``550e8400-e29b-41d4-a716-446655440000`` (UUID)
-   - ``my-product-slug`` (slug)
-
-Factory Functions
------------------
-
-For custom slug patterns, use the factory functions:
-
-.. function:: make_display_id_or_slug_converter(slug_regex=None)
-
-   Create a :class:`DisplayIDOrSlugConverter` with a custom slug regex.
-
-   :param slug_regex: Custom slug regex pattern. If ``None``, uses the
-       ``DISPLAY_IDS["SLUG_REGEX"]`` setting.
-   :returns: A :class:`DisplayIDOrSlugConverter` subclass with the custom regex.
-
-   .. code-block:: python
-
-      from django_display_ids.converters import make_display_id_or_slug_converter
-
-      # Lowercase slugs only
-      LowercaseConverter = make_display_id_or_slug_converter(r"[a-z0-9-]+")
-      register_converter(LowercaseConverter, "lowercase_id")
-
-.. function:: make_display_id_or_uuid_or_slug_converter(slug_regex=None)
-
-   Create a :class:`DisplayIDOrUUIDOrSlugConverter` with a custom slug regex.
-
-   :param slug_regex: Custom slug regex pattern. If ``None``, uses the
-       ``DISPLAY_IDS["SLUG_REGEX"]`` setting.
-   :returns: A :class:`DisplayIDOrUUIDOrSlugConverter` subclass with the custom regex.
-
-   .. code-block:: python
-
-      from django_display_ids.converters import make_display_id_or_uuid_or_slug_converter
-
-      # Lowercase slugs only
-      Converter = make_display_id_or_uuid_or_slug_converter(r"[a-z0-9-]+")
-      register_converter(Converter, "identifier")
-
-Converter Summary
------------------
-
-.. list-table::
-   :widths: 40 15 15 15
-   :header-rows: 1
-
-   * - Converter
-     - display_id
-     - uuid
-     - slug
-   * - :class:`DisplayIDConverter`
-     - ✓
-     -
-     -
-   * - :class:`DisplayIDOrUUIDConverter`
-     - ✓
-     - ✓
-     -
-   * - :class:`DisplayIDOrSlugConverter`
-     - ✓
-     -
-     - ✓
-   * - :class:`DisplayIDOrUUIDOrSlugConverter`
-     - ✓
-     - ✓
-     - ✓
-
-.. note::
-
-   For standalone UUID matching, use Django's built-in ``<uuid:param>`` converter.
-
-Usage
------
-
-Register converters in your URL configuration:
+Path converters that only let through values shaped like an identifier, so
+anything else is a 404 before your view runs. They don't check that a prefix
+belongs to the right model; the view mixin does that.
 
 .. code-block:: python
 
    from django.urls import path, register_converter
-   from django_display_ids.converters import (
-       DisplayIDConverter,
-       DisplayIDOrUUIDConverter,
-       DisplayIDOrSlugConverter,
-       DisplayIDOrUUIDOrSlugConverter,
-   )
+   from django_display_ids import DisplayIDOrUUIDOrSlugConverter
 
-   register_converter(DisplayIDConverter, "display_id")
-   register_converter(DisplayIDOrUUIDConverter, "display_id_or_uuid")
-   register_converter(DisplayIDOrSlugConverter, "display_id_or_slug")
    register_converter(DisplayIDOrUUIDOrSlugConverter, "identifier")
 
    urlpatterns = [
-       # Display ID only
-       path("invoices/<display_id:id>/", InvoiceDetailView.as_view()),
-
-       # Display ID or UUID
-       path("items/<display_id_or_uuid:id>/", ItemView.as_view()),
-
-       # Display ID or slug
-       path("products/<display_id_or_slug:id>/", ProductView.as_view()),
-
-       # Any identifier format
-       path("resources/<identifier:id>/", ResourceView.as_view()),
+       path("invoices/<identifier:id>/", InvoiceDetailView.as_view()),
    ]
 
-Regex Constants
----------------
+.. list-table::
+   :header-rows: 1
 
-The following regex constants are available for use in custom converters:
+   * - Converter
+     - Display ID
+     - UUID
+     - Slug
+   * - ``DisplayIDConverter``
+     - yes
+     -
+     -
+   * - ``DisplayIDOrUUIDConverter``
+     - yes
+     - yes
+     -
+   * - ``DisplayIDOrSlugConverter``
+     - yes
+     -
+     - yes
+   * - ``DisplayIDOrUUIDOrSlugConverter``
+     - yes
+     - yes
+     - yes
 
-.. data:: DISPLAY_ID_REGEX
+What each part matches:
 
-   Regex pattern for display IDs: ``[a-z]{1,16}_[0-9A-Za-z]{22}``
+Display ID
+   ``[a-z]{1,16}_[0-9A-Za-z]{22}``, for example ``inv_2aUyqjCzEIiEcYMKj7TZtw``.
+   An uppercase prefix doesn't match.
 
-.. data:: SLUG_REGEX
+UUID
+   The hyphenated form in either case: ``550e8400-e29b-41d4-a716-446655440000``
+   or ``550E8400-E29B-41D4-A716-446655440000``. This is Django's ``<uuid:>``
+   pattern plus uppercase, which tools like ``uuidgen`` print. Other forms,
+   such as 32 hex digits without hyphens, don't match, the same as in lookups.
 
-   Django's default slug regex pattern: ``[-a-zA-Z0-9_]+``
+Slug
+   The ``SLUG_REGEX`` setting, which defaults to Django's slug pattern
+   ``[-a-zA-Z0-9_]+``. A UUID also matches this, so with
+   ``DisplayIDOrSlugConverter`` the view receives UUIDs as well.
 
-   This is imported from Django's :class:`~django.urls.converters.SlugConverter`
-   and can be overridden via the ``DISPLAY_IDS["SLUG_REGEX"]`` setting.
+Every converter passes the matched text to the view unchanged. When reversing,
+a ``uuid.UUID`` is turned into a string, so
+``reverse("invoice", kwargs={"id": invoice.id})`` works with any converter
+that accepts UUIDs.
+
+Custom slug patterns
+--------------------
+
+``make_display_id_or_slug_converter(slug_regex)`` and
+``make_display_id_or_uuid_or_slug_converter(slug_regex)`` return a converter
+with a different slug pattern for one route, without changing the setting:
+
+.. code-block:: python
+
+   from django_display_ids.converters import make_display_id_or_slug_converter
+
+   register_converter(make_display_id_or_slug_converter(r"[a-z0-9-]+"), "lower_id")
+
+Called without an argument, they use the ``SLUG_REGEX`` setting.
+
+The patterns are exported as ``DISPLAY_ID_REGEX``, ``UUID_REGEX`` and
+``SLUG_REGEX`` (Django's default slug pattern) for building your own
+converters.

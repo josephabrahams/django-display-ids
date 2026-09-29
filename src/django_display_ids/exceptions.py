@@ -1,16 +1,16 @@
 """Typed exceptions for identifier lookup errors.
 
-All exceptions inherit from both ``DisplayIDLookupError`` and a standard
-Django/Python exception, so they integrate naturally with existing error
-handling patterns::
+Each exception subclasses ``DisplayIDLookupError`` and the Django or Python
+exception it corresponds to, so existing ``except`` clauses keep working::
 
-    # Catch with library-specific base
-    except DisplayIDLookupError: ...
+    try:
+        invoice = resolve_object(Invoice, value)
+    except ObjectDoesNotExist:  # also catches ObjectNotFoundError
+        ...
 
-    # Or catch with standard Django/Python exceptions
-    except ObjectDoesNotExist: ...   # catches ObjectNotFoundError
-    except ValueError: ...           # catches InvalidIdentifierError, UnknownPrefixError
-    except ImproperlyConfigured: ... # catches MissingPrefixError
+``InvalidIdentifierError`` and ``UnknownPrefixError`` are ``ValueError``,
+``MissingPrefixError`` is ``ImproperlyConfigured``, and
+``AmbiguousIdentifierError`` is ``MultipleObjectsReturned``.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ class InvalidIdentifierError(DisplayIDLookupError, ValueError):
     This indicates the identifier string cannot be parsed as any
     of the supported formats (UUID, display ID, or slug).
 
-    Inherits from ``ValueError`` because it represents bad input — the
+    Inherits from ``ValueError`` because it represents bad input: the
     caller provided a value that isn't a valid identifier.
     """
 
@@ -59,7 +59,7 @@ class UnknownPrefixError(DisplayIDLookupError, ValueError):
     This occurs when prefix enforcement is enabled and the
     display ID's prefix doesn't match the expected value.
 
-    Inherits from ``ValueError`` because it represents bad input — the
+    Inherits from ``ValueError`` because it represents bad input: the
     caller provided a display ID with the wrong prefix.
     """
 
@@ -81,7 +81,7 @@ class MissingPrefixError(DisplayIDLookupError, ImproperlyConfigured):
     doesn't have display_id_prefix configured.
 
     Inherits from ``ImproperlyConfigured`` because it represents a
-    configuration problem — the model is missing a required setting.
+    configuration problem: the model is missing a required setting.
     """
 
     def __init__(self, model_name: str | None = None) -> None:
@@ -123,7 +123,7 @@ class AmbiguousIdentifierError(DisplayIDLookupError, MultipleObjectsReturned):
     or in edge cases with identifier collisions.
 
     Inherits from ``MultipleObjectsReturned`` because the semantics
-    are identical — a lookup that expected one result found many.
+    are identical: a lookup that expected one result found many.
     """
 
     def __init__(self, value: str, count: int) -> None:

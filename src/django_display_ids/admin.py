@@ -2,29 +2,28 @@
 
 from __future__ import annotations
 
-import contextlib
-import uuid
+import warnings
 from typing import TYPE_CHECKING, Any
 
-from .encoding import decode_display_id
-from .resolver import _resolve_uuid_field
+from .exceptions import DisplayIDLookupError
+from .resolver import _Lookup, _LookupOptions
+from .strategies import parse_identifier
 
 if TYPE_CHECKING:
+    import uuid
+
     from django.db.models import Model, QuerySet
     from django.http import HttpRequest
 
 __all__ = ["DisplayIDAdminSearchMixin"]
 
 
-class DisplayIDAdminSearchMixin:
-    """Mixin to enable searching by display ID or raw UUID in Django admin.
+class DisplayIDAdminSearchMixin(_LookupOptions):
+    """Mixin to enable searching by display ID, UUID, or slug in Django admin.
 
-    Add this mixin to your ModelAdmin to allow searching by display ID
-    (e.g., "inv_2aUyqjCzEIiEcYMKj7TZtw") or raw UUID (with or without
-    hyphens) in the admin search box.
-
-    The mixin decodes the display ID or parses the UUID and does an exact
-    match against the UUID field.
+    The search term is parsed with the same strategies, prefix check, and
+    field names as ``resolve_object()`` and the view mixins, and an exact
+    match is added to the normal ``search_fields`` results.
 
     Example:
         from django.contrib import admin
@@ -33,29 +32,37 @@ class DisplayIDAdminSearchMixin:
         @admin.register(Invoice)
         class InvoiceAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
             list_display = ["id", "display_id", "name"]
-            search_fields = ["name"]  # display ID and UUID search is automatic
+            search_fields = ["name"]  # display ID, UUID and slug are automatic
 
     Attributes:
-        uuid_field: Name of the UUID field to search. When ``None``,
-            auto-detected from the model's ``uuid_field`` attribute, then
-            the ``DISPLAY_IDS["UUID_FIELD"]`` setting, then ``"id"``.
+        lookup_strategies: Strategies to try. Defaults to the
+            ``DISPLAY_IDS["STRATEGIES"]`` setting.
+        display_id_prefix: Expected display ID prefix. Defaults to the
+            model's ``display_id_prefix``.
+        uuid_field: UUID field name. Defaults to the model's ``uuid_field``,
+            then the ``DISPLAY_IDS["UUID_FIELD"]`` setting, then ``"id"``.
+        slug_field: Slug field name. Defaults to the model's ``slug_field``,
+            then the ``DISPLAY_IDS["SLUG_FIELD"]`` setting, then ``"slug"``.
     """
 
-    uuid_field: str | None = None
     model: type[Model]
 
-    def _get_uuid_field(self) -> str:
-        """Get the UUID field name to search."""
-        return _resolve_uuid_field(self.model, self.uuid_field)
-
     @staticmethod
-    def _parse_identifier(search_term: str) -> uuid.UUID | None:
+    def parse_search_uuid(
+        search_term: str, *, model: type[Model] | None = None
+    ) -> uuid.UUID | None:
         """Parse a search term as a display ID or raw UUID.
 
         Leading and trailing whitespace is stripped, so identifiers pasted
-        from a terminal or email still match. Tries to decode as a display ID
-        first (if it contains an underscore), then falls back to raw UUID
-        parsing. Returns ``None`` if the search term is neither.
+        from a terminal or email still match. Returns ``None`` if the search
+        term is neither.
+
+        Args:
+            search_term: The admin search box input.
+            model: If given, the term is checked against that model's rules,
+                the same way its own lookups are: a display ID must use its
+                prefix, and on a model without a prefix only raw UUIDs match.
+                Without it, a display ID with any prefix is accepted.
 
         Subclasses can use this to search additional UUID fields::
 
@@ -64,26 +71,30 @@ class DisplayIDAdminSearchMixin:
                 queryset, use_distinct = super().get_search_results(
                     request, queryset, search_term
                 )
-                if uuid_val := self._parse_identifier(search_term):
-                    queryset |= original_queryset.filter(
-                        user__uid=uuid_val
-                    )
+                if uuid_val := self.parse_search_uuid(search_term, model=Customer):
+                    queryset |= original_queryset.filter(customer_id=uuid_val)
                 return queryset, use_distinct
         """
-        search_term = search_term.strip()
-        uuid_val = None
+        try:
+            if model is None:
+                return parse_identifier(search_term, ("display_id", "uuid")).uuid
+            lookup = _Lookup.for_model(model, strategies=("display_id", "uuid"))
+            (uuid_val,) = lookup.build(search_term).values()
+        except DisplayIDLookupError:
+            return None
+        return uuid_val  # type: ignore[no-any-return]
 
-        # Try to decode as display_id if it contains an underscore
-        if "_" in search_term:
-            with contextlib.suppress(ValueError, TypeError):
-                _prefix, uuid_val = decode_display_id(search_term)
-
-        # Try to parse as a raw UUID
-        if uuid_val is None:
-            with contextlib.suppress(ValueError):
-                uuid_val = uuid.UUID(search_term)
-
-        return uuid_val
+    @staticmethod
+    def _parse_identifier(
+        search_term: str, *, model: type[Model] | None = None
+    ) -> uuid.UUID | None:
+        """Deprecated alias for ``parse_search_uuid()``."""
+        warnings.warn(
+            "_parse_identifier() is deprecated, use parse_search_uuid() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return DisplayIDAdminSearchMixin.parse_search_uuid(search_term, model=model)
 
     def get_search_results(
         self,
@@ -91,15 +102,18 @@ class DisplayIDAdminSearchMixin:
         queryset: QuerySet[Any],
         search_term: str,
     ) -> tuple[QuerySet[Any], bool]:
-        """Extend search to handle display IDs and raw UUIDs."""
+        """Add an exact display ID, UUID, or slug match to the search results."""
         original_queryset = queryset
         queryset, use_distinct = super().get_search_results(  # type: ignore[misc]
             request, queryset, search_term
         )
 
-        uuid_val = self._parse_identifier(search_term)
-        if uuid_val is not None:
-            uuid_field = self._get_uuid_field()
-            queryset |= original_queryset.filter(**{uuid_field: uuid_val})
+        # Outside the try: a misconfigured lookup is an error, not "no match"
+        lookup = self._get_lookup(self.model)
+        try:
+            kwargs = lookup.build(search_term)
+        except DisplayIDLookupError:
+            return queryset, use_distinct
 
+        queryset |= original_queryset.filter(**kwargs)
         return queryset, use_distinct

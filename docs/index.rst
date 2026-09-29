@@ -1,39 +1,61 @@
 django-display-ids
 ==================
 
-Stripe-like prefixed IDs for Django. Works with existing UUIDs — no schema changes.
+Stripe-style prefixed IDs for Django, like ``inv_2aUyqjCzEIiEcYMKj7TZtw``, on top
+of the UUID fields you already have. No new fields and no migrations.
 
-Why?
-----
+.. code-block:: python
 
-UUIDv7 (native in Python 3.14+) offers excellent database performance with time-ordered
-indexing. But they lack context — seeing ``550e8400-e29b-41d4-a716-446655440000`` in a
-URL or log doesn't tell you what kind of object it refers to.
+   from django_display_ids import DisplayIDMixin, DisplayIDModel
 
-Display IDs like ``inv_2aUyqjCzEIiEcYMKj7TZtw`` solve this: the prefix identifies the
-object type at a glance, and base62 encoding keeps them compact and URL-safe. This format,
-popularized by Stripe, is easy to recognize in URLs, logs, and emails. But storing display
-IDs in the database is far less efficient than native UUIDs.
+   class Invoice(DisplayIDModel):
+       display_id_prefix = "inv"
+       id = models.UUIDField(primary_key=True, default=uuid.uuid7)
+       slug = models.SlugField(unique=True)
 
-Different consumers have different needs:
+   invoice.display_id  # "inv_2aUyqjCzEIiEcYMKj7TZtw"
 
-- **Humans** prefer slugs (``my-invoice``) or display IDs (``inv_xxx``)
-- **APIs and integrations** work well with UUIDs
+   class InvoiceDetailView(DisplayIDMixin, DetailView):
+       model = Invoice
 
-This library gives you the best of both worlds: accept any format in your URLs and API
-endpoints, then translate to an efficient UUID lookup in the database. Store UUIDs,
-expose whatever format your users need.
+The view now finds the invoice from any of these in the URL:
 
-It focuses on **lookup only** — it works with your existing UUID fields and requires
-no migrations or schema changes.
+- ``inv_2aUyqjCzEIiEcYMKj7TZtw``, the display ID
+- ``550e8400-e29b-41d4-a716-446655440000``, the UUID, in either case
+- ``march-invoice``, the slug
 
-Features
---------
+Every lookup turns into a plain query on the UUID or slug column, so nothing
+extra is stored.
 
-- **Multiple identifier formats**: display ID (``prefix_base62uuid``), UUID (v4/v7), slug
-- **Framework support**: Django CBVs and Django REST Framework
-- **Zero model changes required**: Works with any existing UUID field
-- **Stateless**: Pure lookup, no database writes
+Why display IDs?
+----------------
+
+A UUID in a URL or a log line doesn't tell you what it points to. A display ID
+does: ``inv_`` is an invoice, ``cust_`` is a customer. The 22 characters after
+the prefix are the same UUID in base62, so it stays short and URL-safe and
+converts back without a database lookup.
+
+Storing display IDs would mean a string column and index for every model. A
+native UUID column is smaller and faster to index, especially time-ordered
+UUIDv7. So the database keeps the UUID, and display IDs only exist at the
+edges: in URLs, API responses and logs.
+
+People reading URLs and support tickets like display IDs and slugs. Other
+systems often already store your UUIDs. This library accepts all three and
+turns each into the same query, so you don't have to pick one.
+
+What's covered
+--------------
+
+- :doc:`usage/models`: the ``display_id`` property, and manager methods for
+  looking up one or many objects
+- :doc:`usage/views`: a mixin for class-based views, plus URL converters
+- :doc:`usage/drf`: a view mixin, serializer fields that show and accept
+  display IDs, and drf-spectacular schemas for both
+- :doc:`reference/resolver`: ``resolve_object()`` and ``resolve_objects()``
+  for lookups anywhere else
+- :doc:`usage/admin`: search the admin by display ID, UUID or slug
+- :doc:`usage/templatetags`: a filter to show any UUID as a display ID
 
 .. toctree::
    :maxdepth: 2

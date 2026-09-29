@@ -1,13 +1,11 @@
-API Reference
-=============
-
-Complete reference for all public functions, classes, and exceptions.
+Reference
+=========
 
 .. toctree::
    :maxdepth: 2
 
-   encoding
+   settings
    converters
    resolver
+   encoding
    exceptions
-   settings

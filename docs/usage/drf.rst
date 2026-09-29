@@ -1,16 +1,13 @@
 Django REST Framework
 =====================
 
-Full integration with Django REST Framework views and serializers.
+Install with ``pip install "django-display-ids[drf]"``. Everything here is
+imported from ``django_display_ids.contrib.rest_framework``.
 
-DisplayIDMixin
---------------------
+Views
+-----
 
-For ViewSets
-~~~~~~~~~~~~
-
-When your model extends ``DisplayIDModel``, the prefix is inherited
-automatically:
+Add ``DisplayIDMixin`` to a viewset or generic view:
 
 .. code-block:: python
 
@@ -22,177 +19,125 @@ automatically:
        serializer_class = InvoiceSerializer
        lookup_url_kwarg = "id"
 
-For APIView
-~~~~~~~~~~~
+It also works on a plain ``APIView`` that defines ``get_queryset()``.
 
-.. code-block:: python
+``get_object()`` works like DRF's own. It runs ``filter_queryset()`` first, so
+filter backends apply, and it checks object permissions. An identifier that
+can't be parsed, has another model's prefix, or matches nothing gives a 404. A
+slug that matches more than one row raises ``MultipleObjectsReturned``, and a
+missing URL keyword argument raises ``AssertionError``, both as in DRF.
 
-   from rest_framework.views import APIView
-   from rest_framework.response import Response
-   from django_display_ids.contrib.rest_framework import DisplayIDMixin
-
-   class InvoiceView(DisplayIDMixin, APIView):
-       lookup_url_kwarg = "id"
-
-       def get_queryset(self):
-           return Invoice.objects.all()
-
-       def get(self, request, *args, **kwargs):
-           invoice = self.get_object()
-           return Response({"id": str(invoice.id)})
-
-Configuration Attributes
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-``lookup_url_kwarg``
-   The URL parameter name. Defaults to ``"pk"``.
-
-``lookup_strategies``
-   Tuple of strategies to try. Defaults to ``("display_id", "uuid", "slug")``.
-
-``display_id_prefix``
-   Expected prefix. When ``None`` (the default), auto-detected by
-   ``resolve_object`` from the model's ``display_id_prefix`` attribute.
-
-``uuid_field``
-   UUID field name. When ``None`` (the default), auto-detected by
-   ``resolve_object`` from the model's ``uuid_field`` attribute, then
-   the ``DISPLAY_IDS["UUID_FIELD"]`` setting, then ``"id"``.
-
-``slug_field``
-   Slug field name. When ``None`` (the default), auto-detected by
-   ``resolve_object`` from the model's ``slug_field`` attribute, then
-   the ``DISPLAY_IDS["SLUG_FIELD"]`` setting, then ``"slug"``.
-
-Error Handling
-~~~~~~~~~~~~~~
-
-- ``ObjectNotFoundError`` → ``NotFound`` (404)
-- ``InvalidIdentifierError`` → ``ParseError`` (400)
-- ``UnknownPrefixError`` → ``ParseError`` (400)
+The mixin takes the same attributes as the Django view mixin
+(``lookup_strategies``, ``display_id_prefix``, ``uuid_field``,
+``slug_field``). See :doc:`/reference/settings`.
 
 DisplayIDField
 --------------
 
-Include display IDs in your API responses:
+Adds an object's display ID to a response:
 
 .. code-block:: python
 
-   from rest_framework import serializers
    from django_display_ids.contrib.rest_framework import DisplayIDField
 
-   class InvoiceSerializer(serializers.Serializer):
-       id = serializers.UUIDField(read_only=True)
+   class InvoiceSerializer(serializers.ModelSerializer):
        display_id = DisplayIDField()
-       name = serializers.CharField()
-
-   # Output: {"id": "...", "display_id": "inv_2aUyqjCzEIiEcYMKj7TZtw", ...}
-
-The field reads the prefix from the model's ``display_id_prefix``. Override it
-explicitly:
-
-.. code-block:: python
-
-   display_id = DisplayIDField(prefix="inv")
-
-The prefix must be 1-16 lowercase letters. Invalid prefixes raise ``ValueError``
-at initialization.
-
-When to use ``prefix_from``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Sometimes the row being serialized is a *projection* of another model — for
-example a database-view-backed report row that mirrors ``Invoice`` data but is
-not an ``Invoice`` instance and carries no ``display_id_prefix`` of its own. In
-that case, point the field at the source model rather than hardcoding its
-prefix string:
-
-.. code-block:: python
-
-   class InvoiceReportSerializer(serializers.ModelSerializer):
-       # InvoiceReport is a view-backed projection of Invoice.
-       display_id = DisplayIDField(prefix_from=Invoice)
 
        class Meta:
-           model = InvoiceReport
-           fields = ("display_id", "total", "issued_on")
+           model = Invoice
+           fields = ("id", "display_id", "name")
 
-``prefix_from=Invoice`` reads ``Invoice.display_id_prefix`` dynamically — it is
-equivalent to ``prefix="inv"`` but stays in sync if the model's prefix changes.
-``prefix`` and ``prefix_from`` are mutually exclusive. If ``prefix_from`` points
-at a class with no ``display_id_prefix``, a ``ValueError`` is raised at
-initialization (app startup), not on the first request.
+   # {"id": "550e8400-...", "display_id": "inv_2aUyqjCzEIiEcYMKj7TZtw", ...}
 
-Tolerating a missing prefix
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+It's read-only. The prefix comes from, in order:
 
-By default the field raises ``ValueError`` when no prefix can be resolved for an
-instance. When a single serializer handles heterogeneous rows — only some of
-which carry a prefix — pass ``required=False`` to return ``None`` instead:
+1. ``prefix="inv"`` on the field.
+2. ``prefix_from=Invoice``, which reads another model's prefix. Use it when
+   the serialized object isn't an ``Invoice`` itself, such as a row from a
+   database view built from invoices.
+3. The serialized object's ``display_id_prefix``.
+
+If there's no prefix, the field raises ``ValueError``. Pass ``required=False``
+to get ``None`` instead, for serializers that handle a mix of models.
+
+DisplayIDRelatedField
+---------------------
+
+A writable related field, like ``PrimaryKeyRelatedField`` but with display IDs:
 
 .. code-block:: python
 
-   display_id = DisplayIDField(required=False)
+   from django_display_ids.contrib.rest_framework import DisplayIDRelatedField
 
-Resolution precedence
-~~~~~~~~~~~~~~~~~~~~~~
+   class InvoiceSerializer(serializers.ModelSerializer):
+       customer = DisplayIDRelatedField(queryset=Customer.objects.all())
+       tags = DisplayIDRelatedField(queryset=Tag.objects.all(), many=True)
 
-The field resolves the prefix from (in order):
+       class Meta:
+           model = Invoice
+           fields = ("customer", "tags")
 
-1. Field's ``prefix=`` argument
-2. Field's ``prefix_from=`` model class
-3. The serialized instance's ``display_id_prefix`` attribute
+   # {"customer": "cust_2aUyqjCzEIiEcYMKj7TZtw", "tags": ["tag_..."]}
 
-If none resolve, the field raises ``ValueError`` unless ``required=False`` was
-passed, in which case it returns ``None``.
+Responses show the related object's display ID. Requests accept a display ID,
+UUID or slug, parsed like the view mixins do, so clients can send back what
+they read. Anything that doesn't match fails validation with the
+``does_not_exist`` error code. A slug that matches more than one row raises
+``MultipleObjectsReturned``, as ``SlugRelatedField`` does. With
+``many=True``, the whole list is looked up in one query.
 
-OpenAPI / drf-spectacular
--------------------------
+To accept display IDs only, pass ``lookup_strategies=("display_id",)``. The
+field takes the same options as the view mixins as keyword arguments.
 
-When drf-spectacular is installed, ``DisplayIDField`` automatically generates
-proper schema with prefix-specific examples. No configuration needed.
+The related model needs a prefix, or pass ``display_id_prefix=``. Otherwise
+the serializer raises ``MissingPrefixError`` when it's defined.
 
-The extension resolves the prefix from (in order):
+When the related model's UUID is its primary key, the display ID is built from
+the foreign key column without a query. Otherwise each related object is
+loaded, so add ``select_related()`` or ``prefetch_related()`` to the view's
+queryset.
 
-1. Field's ``prefix=`` or ``prefix_from=`` argument
-2. Serializer's ``Meta.model.display_id_prefix``
-3. View's queryset model
+OpenAPI schemas
+---------------
 
-Path Parameter Descriptions
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+With ``pip install "django-display-ids[spectacular]"``, drf-spectacular
+documents the fields and views. Nothing to register: importing
+``django_display_ids.contrib.rest_framework`` sets it up.
 
-Use the provided helper for consistent API documentation:
+- ``DisplayIDField`` is a string with the display ID pattern and a realistic
+  example. The prefix comes from the field, the serializer's model, or the
+  view's queryset.
+- ``DisplayIDRelatedField`` shows a display ID in responses. In requests the
+  description lists what the field accepts, for example "Identifier:
+  display_id (cust_xxx), UUID, or slug". A display-ID-only field also gets a
+  pattern, so clients can validate before sending.
+- A view using ``DisplayIDMixin`` gets the same kind of description for its
+  ``{id}`` path parameter, instead of the primary key's UUID format, which
+  display IDs and slugs would fail. It follows the view's
+  ``lookup_strategies``, and leaves out slugs when the model has no slug
+  field.
+
+For a view that doesn't use the mixin, ``id_param_description()`` builds the
+same text. On a ``DisplayIDMixin`` view, a parameter set with
+``@extend_schema`` replaces the automatic one.
 
 .. code-block:: python
 
    from django_display_ids.contrib.drf_spectacular import id_param_description
-   from drf_spectacular.utils import extend_schema, OpenApiParameter
-   from drf_spectacular.types import OpenApiTypes
+   from drf_spectacular.utils import OpenApiParameter, extend_schema
+   from rest_framework.views import APIView
 
    @extend_schema(
        parameters=[
            OpenApiParameter(
                "id",
-               OpenApiTypes.STR,
+               str,
                OpenApiParameter.PATH,
-               description=id_param_description("inv"),
-               # -> "Identifier: display_id (inv_xxx) or UUID"
+               description=id_param_description("inv", strategies=("display_id",)),
+               # "Identifier: display_id (inv_xxx)"
            )
        ],
    )
-   class InvoiceViewSet(DisplayIDMixin, ModelViewSet):
-       ...
+   class InvoicePDFView(APIView): ...
 
-For endpoints that also accept slugs:
-
-.. code-block:: python
-
-   description=id_param_description("app", with_slug=True)
-   # -> "Identifier: display_id (app_xxx), UUID, or slug"
-
-For display ID only (no UUID fallback):
-
-.. code-block:: python
-
-   description=id_param_description("inv", with_uuid=False)
-   # -> "Identifier: display_id (inv_xxx)"
+Without ``strategies=``, it lists the formats in the ``STRATEGIES`` setting.

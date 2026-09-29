@@ -28,9 +28,12 @@ jobs:
           - "tests-3.12(django='4.2')"
           - "tests-3.12(django='5.2')"
           - "tests-3.12(django='6.0')"
+          - "tests-3.12(django='6.1')"
           - "tests-3.13(django='5.2')"
           - "tests-3.13(django='6.0')"
+          - "tests-3.13(django='6.1')"
           - "tests-3.14(django='6.0')"
+          - "tests-3.14(django='6.1')"
 
     name: ${{ matrix.session }}
 

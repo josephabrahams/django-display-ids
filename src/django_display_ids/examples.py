@@ -10,7 +10,7 @@ import hashlib
 import uuid
 from typing import TYPE_CHECKING
 
-from .encoding import encode_uuid
+from .encoding import encode_display_id
 
 if TYPE_CHECKING:
     from django.db.models import Model
@@ -78,6 +78,4 @@ def example_display_id(prefix_or_model: str | type[Model]) -> str:
         'app_4ueEO5Nz4X7u9qc3FVHokM'
     """
     prefix = _get_prefix(prefix_or_model)
-    ex_uuid = example_uuid(prefix)
-    encoded = encode_uuid(ex_uuid)
-    return f"{prefix}_{encoded}"
+    return encode_display_id(prefix, example_uuid(prefix))

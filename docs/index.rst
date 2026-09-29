@@ -51,7 +51,9 @@ What's covered
   looking up one or many objects
 - :doc:`usage/views`: a mixin for class-based views, plus URL converters
 - :doc:`usage/drf`: a view mixin, serializer fields that show and accept
-  display IDs, and drf-spectacular schemas
+  display IDs, and drf-spectacular schemas for both
+- :doc:`reference/resolver`: ``resolve_object()`` and ``resolve_objects()``
+  for lookups anywhere else
 - :doc:`usage/admin`: search the admin by display ID, UUID or slug
 - :doc:`usage/templatetags`: a filter to show any UUID as a display ID
 

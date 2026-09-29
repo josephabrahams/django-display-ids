@@ -50,7 +50,7 @@ class InvoiceViewSet(DisplayIDMixin, ModelViewSet):
     serializer_class = InvoiceSerializer
 ```
 
-The viewset finds invoices by display ID, UUID or slug. `customer` shows up as `"cust_..."` in responses and accepts the same in requests, so clients can send back what they read. With drf-spectacular, both fields get OpenAPI schemas.
+The viewset finds invoices by display ID, UUID or slug. `customer` shows up as `"cust_..."` in responses and accepts the same in requests, so clients can send back what they read. With drf-spectacular, the fields and the viewset's `{id}` parameter get OpenAPI schemas.
 
 ## Admin
 
@@ -78,6 +78,7 @@ Requires Python 3.12+ and Django 4.2+.
 ## What's included
 
 - `DisplayIDModel` for the `display_id` property, and a manager with `get_by_identifier()`, `get_by_identifiers()` and `resolve_uuid()`
+- `resolve_object()` and `resolve_objects()` to look up one or many identifiers anywhere else
 - `DisplayIDMixin` for Django class-based views and for DRF views
 - `DisplayIDField` and `DisplayIDRelatedField` for DRF serializers, so APIs can both show and accept display IDs, with drf-spectacular schemas
 - `DisplayIDAdminSearchMixin` to search the admin by display ID, UUID or slug

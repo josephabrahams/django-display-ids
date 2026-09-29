@@ -7,11 +7,13 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 from django.core.exceptions import FieldDoesNotExist, ImproperlyConfigured
 from django.db import models
+from django.db.models import Q
 
 from .conf import get_setting
 from .encoding import PREFIX_PATTERN, encode_display_id
 from .exceptions import (
     AmbiguousIdentifierError,
+    DisplayIDLookupError,
     MissingPrefixError,
     ObjectNotFoundError,
 )
@@ -20,11 +22,13 @@ from .typing import StrategyName  # noqa: TC001
 
 if TYPE_CHECKING:
     import uuid
+    from collections.abc import Iterable
 
     from django.db.models import QuerySet
 
 __all__ = [
     "resolve_object",
+    "resolve_objects",
 ]
 
 M = TypeVar("M", bound=models.Model)
@@ -167,6 +171,64 @@ class _Lookup:
             return {self.slug_field: result.slug}
         return {self.uuid_field: result.uuid}
 
+    def build_many(
+        self, values: Iterable[str | uuid.UUID]
+    ) -> dict[str | uuid.UUID, tuple[str, Any]]:
+        """Build a ``(field, value)`` pair for each identifier that parses.
+
+        Identifiers ``build()`` rejects are left out, since they can't match
+        a row.
+        """
+        built = {}
+        for value in values:
+            try:
+                ((field, field_value),) = self.build(value).items()
+            except DisplayIDLookupError:
+                continue
+            built[value] = (field, field_value)
+        return built
+
+    def filter_many(self, built: Iterable[tuple[str, Any]]) -> Q | None:
+        """One ``__in`` filter per field, or None if there's nothing to match.
+
+        None, because an empty ``Q()`` would match every row.
+        """
+        by_field: dict[str, list[Any]] = {}
+        for field, field_value in built:
+            by_field.setdefault(field, []).append(field_value)
+        if not by_field:
+            return None
+        query = Q()
+        for field, field_values in by_field.items():
+            query |= Q(**{f"{field}__in": field_values})
+        return query
+
+    def fetch_many(
+        self, queryset: QuerySet[M], values: Iterable[str | uuid.UUID]
+    ) -> dict[str | uuid.UUID, M | None]:
+        """Map each identifier to its row in *queryset*, or None, in one query.
+
+        Raises:
+            AmbiguousIdentifierError: If a slug matches more than one row.
+        """
+        values = list(values)
+        built = self.build_many(values)
+        query = self.filter_many(built.values())
+        rows: dict[tuple[str, Any], list[M]] = {}
+        if query is not None:
+            fields = {field for field, _ in built.values()}
+            for obj in queryset.filter(query):
+                for field in fields:
+                    rows.setdefault((field, getattr(obj, field)), []).append(obj)
+
+        result: dict[str | uuid.UUID, M | None] = {}
+        for value in values:
+            matches = rows.get(built[value], []) if value in built else []
+            if len(matches) > 1:
+                raise AmbiguousIdentifierError(str(value), len(matches))
+            result[value] = matches[0] if matches else None
+        return result
+
     def require_prefix(self) -> str:
         """Return the prefix, or raise if the model can't have display IDs.
 
@@ -202,6 +264,17 @@ class _LookupOptions:
             uuid_field=self.uuid_field,
             slug_field=self.slug_field,
         )
+
+
+def _queryset_for(model: type[M], queryset: QuerySet[M] | None) -> QuerySet[M]:
+    if queryset is None:
+        return model._default_manager.all()
+    if queryset.model is not model:
+        raise TypeError(
+            f"queryset must be for {model.__name__}, "
+            f"got queryset for {queryset.model.__name__}"
+        )
+    return queryset
 
 
 def resolve_object(
@@ -248,16 +321,7 @@ def resolve_object(
         AmbiguousIdentifierError: If multiple objects match (slug lookup).
         TypeError: If queryset is not for the specified model.
     """
-    if queryset is not None:
-        if queryset.model is not model:
-            raise TypeError(
-                f"queryset must be for {model.__name__}, "
-                f"got queryset for {queryset.model.__name__}"
-            )
-        qs: QuerySet[M] = queryset
-    else:
-        qs = model._default_manager.all()
-
+    qs = _queryset_for(model, queryset)
     lookup = _Lookup.for_model(
         model,
         strategies=strategies,
@@ -273,3 +337,42 @@ def resolve_object(
     except model.MultipleObjectsReturned:  # type: ignore[attr-defined]
         count = qs.filter(**lookup).count()
         raise AmbiguousIdentifierError(str(value), count) from None
+
+
+def resolve_objects(
+    model: type[M],
+    values: Iterable[str | uuid.UUID],
+    *,
+    strategies: tuple[StrategyName, ...] | None = None,
+    prefix: str | None = None,
+    uuid_field: str | None = None,
+    slug_field: str | None = None,
+    queryset: QuerySet[M] | None = None,
+) -> dict[str | uuid.UUID, M | None]:
+    """Resolve many identifiers in one query.
+
+    Takes the same options as ``resolve_object()``. Each value is read the
+    same way, but a value that doesn't parse, has the wrong prefix or has no
+    row maps to ``None`` instead of raising.
+
+    Returns:
+        A dict from each input value to its object, or ``None``.
+
+    Raises:
+        AmbiguousIdentifierError: If a slug matches more than one object.
+        TypeError: If queryset is not for the specified model.
+
+    Example:
+        found = resolve_objects(Invoice, ["inv_2aUyqjCzEIiEcYMKj7TZtw", "nope"])
+        found["inv_2aUyqjCzEIiEcYMKj7TZtw"]  # the invoice
+        found["nope"]  # None
+    """
+    qs = _queryset_for(model, queryset)
+    lookup = _Lookup.for_model(
+        model,
+        strategies=strategies,
+        prefix=prefix,
+        uuid_field=uuid_field,
+        slug_field=slug_field,
+    )
+    return lookup.fetch_many(qs, values)

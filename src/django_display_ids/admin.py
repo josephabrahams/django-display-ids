@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING, Any
 
 from .exceptions import DisplayIDLookupError
@@ -47,7 +48,7 @@ class DisplayIDAdminSearchMixin(_LookupOptions):
     model: type[Model]
 
     @staticmethod
-    def _parse_identifier(
+    def parse_search_uuid(
         search_term: str, *, model: type[Model] | None = None
     ) -> uuid.UUID | None:
         """Parse a search term as a display ID or raw UUID.
@@ -70,7 +71,7 @@ class DisplayIDAdminSearchMixin(_LookupOptions):
                 queryset, use_distinct = super().get_search_results(
                     request, queryset, search_term
                 )
-                if uuid_val := self._parse_identifier(search_term, model=Customer):
+                if uuid_val := self.parse_search_uuid(search_term, model=Customer):
                     queryset |= original_queryset.filter(customer_id=uuid_val)
                 return queryset, use_distinct
         """
@@ -82,6 +83,18 @@ class DisplayIDAdminSearchMixin(_LookupOptions):
         except DisplayIDLookupError:
             return None
         return uuid_val  # type: ignore[no-any-return]
+
+    @staticmethod
+    def _parse_identifier(
+        search_term: str, *, model: type[Model] | None = None
+    ) -> uuid.UUID | None:
+        """Deprecated alias for ``parse_search_uuid()``."""
+        warnings.warn(
+            "_parse_identifier() is deprecated, use parse_search_uuid() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return DisplayIDAdminSearchMixin.parse_search_uuid(search_term, model=model)
 
     def get_search_results(
         self,

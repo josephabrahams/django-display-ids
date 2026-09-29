@@ -77,7 +77,7 @@ Requires Python 3.12+ and Django 4.2+.
 
 ## What's included
 
-- `DisplayIDModel` for the `display_id` property, and a manager with `get_by_identifier()`, `get_by_identifiers()` and `resolve_identifier()`
+- `DisplayIDModel` for the `display_id` property, and a manager with `get_by_identifier()`, `get_by_identifiers()` and `resolve_uuid()`
 - `DisplayIDMixin` for Django class-based views and for DRF views
 - `DisplayIDField` and `DisplayIDRelatedField` for DRF serializers, so APIs can both show and accept display IDs, with drf-spectacular schemas
 - `DisplayIDAdminSearchMixin` to search the admin by display ID, UUID or slug

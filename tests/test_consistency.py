@@ -20,6 +20,7 @@ from django_display_ids import (
     DisplayIDAdminSearchMixin,
     DisplayIDLookupError,
     resolve_object,
+    resolve_objects,
 )
 from django_display_ids.contrib.rest_framework import DisplayIDMixin as DRFMixin
 from django_display_ids.contrib.rest_framework import DisplayIDRelatedField
@@ -53,6 +54,18 @@ def via_resolver(
         return _no_match(e)
 
 
+def via_resolve_objects(
+    model, value, lookup_strategies=None, display_id_prefix=None, **fields
+):
+    return resolve_objects(
+        model,
+        [value],
+        strategies=lookup_strategies,
+        prefix=display_id_prefix,
+        **fields,
+    )[value]
+
+
 def via_get_by_identifier(model, value, lookup_strategies=None, display_id_prefix=None):
     try:
         return model.objects.get_by_identifier(
@@ -62,11 +75,9 @@ def via_get_by_identifier(model, value, lookup_strategies=None, display_id_prefi
         return None
 
 
-def via_resolve_identifier(
-    model, value, lookup_strategies=None, display_id_prefix=None
-):
+def via_resolve_uuid(model, value, lookup_strategies=None, display_id_prefix=None):
     try:
-        uid = model.objects.resolve_identifier(
+        uid = model.objects.resolve_uuid(
             value, strategies=lookup_strategies, prefix=display_id_prefix
         )
     except model.DoesNotExist:
@@ -138,24 +149,37 @@ def via_related_field(model, value, **options):
         return None
 
 
+def via_related_field_many(model, value, **options):
+    field = DisplayIDRelatedField(queryset=model.objects.all(), many=True, **options)
+    try:
+        [obj] = field.to_internal_value([value])
+    except ValidationError:
+        return None
+    return obj
+
+
 ENTRY_POINTS = [
     via_resolver,
+    via_resolve_objects,
     via_get_by_identifier,
-    via_resolve_identifier,
+    via_resolve_uuid,
     via_get_by_identifiers,
     via_admin,
     via_django_view,
     via_drf_view,
     via_related_field,
+    via_related_field_many,
 ]
 
 # Entry points that take every lookup attribute, not just strategies/prefix
 WITH_FIELD_OPTIONS = [
     via_resolver,
+    via_resolve_objects,
     via_admin,
     via_django_view,
     via_drf_view,
     via_related_field,
+    via_related_field_many,
 ]
 
 UUID_FORMS = {
@@ -259,7 +283,8 @@ class TestConsistency:
 
 
 @pytest.mark.parametrize(
-    "lookup", [e for e in ENTRY_POINTS if e is not via_related_field]
+    "lookup",
+    [e for e in ENTRY_POINTS if e not in (via_related_field, via_related_field_many)],
 )
 class TestModelWithoutPrefix:
     """DisplayIDRelatedField refuses models without a prefix by design."""

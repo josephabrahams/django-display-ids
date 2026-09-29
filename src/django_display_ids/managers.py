@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING, Any, Self, TypeVar
 
 from django.db import models
-from django.db.models import Q
 
 from .exceptions import (
     DisplayIDLookupError,
@@ -24,6 +24,14 @@ __all__ = [
 ]
 
 M = TypeVar("M", bound=models.Model)
+
+
+def _warn_resolve_identifier() -> None:
+    warnings.warn(
+        "resolve_identifier() is deprecated, use resolve_uuid() instead.",
+        DeprecationWarning,
+        stacklevel=3,
+    )
 
 
 class DisplayIDQuerySet(models.QuerySet[M]):
@@ -125,7 +133,7 @@ class DisplayIDQuerySet(models.QuerySet[M]):
         lookup = _Lookup.for_model(self.model, strategies=strategies, prefix=prefix)
         return self.get(**self._build(lookup, value))
 
-    def resolve_identifier(
+    def resolve_uuid(
         self,
         value: str | uuid.UUID,
         *,
@@ -165,6 +173,17 @@ class DisplayIDQuerySet(models.QuerySet[M]):
         # Slug lookups need a query
         return getattr(self.get(**kwargs), lookup.uuid_field)  # type: ignore[no-any-return]
 
+    def resolve_identifier(
+        self,
+        value: str | uuid.UUID,
+        *,
+        strategies: tuple[StrategyName, ...] | None = None,
+        prefix: str | None = None,
+    ) -> uuid.UUID:
+        """Deprecated alias for ``resolve_uuid()``."""
+        _warn_resolve_identifier()
+        return self.resolve_uuid(value, strategies=strategies, prefix=prefix)
+
     def get_by_identifiers(
         self,
         values: Sequence[str | uuid.UUID],
@@ -198,28 +217,10 @@ class DisplayIDQuerySet(models.QuerySet[M]):
                 uuid.UUID('550e8400-e29b-41d4-a716-446655440000'),
             ])
         """
-        if not values:
-            return self.none()
-
         lookup = _Lookup.for_model(self.model, strategies=strategies, prefix=prefix)
-
-        # Group values by field so the query is one IN per field
-        by_field: dict[str, list[Any]] = {}
-        for value in values:
-            try:
-                kwargs = lookup.build(value)
-            except DisplayIDLookupError:
-                continue  # can't match anything, like a missing row
-            for field, field_value in kwargs.items():
-                by_field.setdefault(field, []).append(field_value)
-
-        # An empty Q() would match every row
-        if not by_field:
+        query = lookup.filter_many(lookup.build_many(values).values())
+        if query is None:
             return self.none()
-
-        query = Q()
-        for field, field_values in by_field.items():
-            query |= Q(**{f"{field}__in": field_values})
         return self.filter(query)
 
     def _build(self, lookup: _Lookup, value: str | uuid.UUID) -> dict[str, Any]:
@@ -274,7 +275,7 @@ class DisplayIDManager(models.Manager[M]):
             value, strategies=strategies, prefix=prefix
         )
 
-    def resolve_identifier(
+    def resolve_uuid(
         self,
         value: str | uuid.UUID,
         *,
@@ -283,9 +284,22 @@ class DisplayIDManager(models.Manager[M]):
     ) -> uuid.UUID:
         """Resolve an identifier to a UUID without fetching the object.
 
-        See DisplayIDQuerySet.resolve_identifier for details.
+        See DisplayIDQuerySet.resolve_uuid for details.
         """
-        return self.get_queryset().resolve_identifier(
+        return self.get_queryset().resolve_uuid(
+            value, strategies=strategies, prefix=prefix
+        )
+
+    def resolve_identifier(
+        self,
+        value: str | uuid.UUID,
+        *,
+        strategies: tuple[StrategyName, ...] | None = None,
+        prefix: str | None = None,
+    ) -> uuid.UUID:
+        """Deprecated alias for ``resolve_uuid()``."""
+        _warn_resolve_identifier()
+        return self.get_queryset().resolve_uuid(
             value, strategies=strategies, prefix=prefix
         )
 

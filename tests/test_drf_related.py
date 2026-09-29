@@ -125,6 +125,58 @@ class TestInput:
         item = s.save()
         assert set(item.products.all()) == {product, other}
 
+    def test_many_is_one_query(self, product, django_assert_num_queries):
+        other = Product.objects.create(name="Other", handle="gadget")
+        field = DisplayIDRelatedField(queryset=Product.objects.all(), many=True)
+        values = ["gadget", product.display_id, str(product.uid), "gadget"]
+        with django_assert_num_queries(1):
+            result = field.to_internal_value(values)
+        # Input order, duplicates kept, like DRF's own many=True fields
+        assert result == [other, product, product, other]
+
+    def test_many_reports_the_missing_value(self, product):
+        s = LineItemSerializer(
+            data={"name": "x", "products": [product.display_id, "missing"]}
+        )
+        assert not s.is_valid()
+        [error] = s.errors["products"]
+        assert error.code == "does_not_exist"
+        assert '"missing"' in str(error)
+
+    @pytest.mark.parametrize(
+        ("value", "code"),
+        [
+            ("test-product", "not_a_list"),
+            (["test-product", 123], "incorrect_type"),
+        ],
+    )
+    def test_many_rejects_bad_input(self, product, value, code):
+        s = LineItemSerializer(data={"name": "x", "products": value})
+        assert not s.is_valid()
+        assert s.errors["products"][0].code == code
+
+    def test_many_allow_empty(self):
+        field = DisplayIDRelatedField(
+            queryset=Product.objects.all(), many=True, allow_empty=False
+        )
+        with pytest.raises(serializers.ValidationError) as exc_info:
+            field.to_internal_value([])
+        assert exc_info.value.detail[0].code == "empty"
+
+    def test_many_duplicate_slug_raises(self):
+        from django.core.exceptions import MultipleObjectsReturned
+
+        Order.objects.create(name="dup")
+        Order.objects.create(name="dup")
+        field = DisplayIDRelatedField(
+            queryset=Order.objects.all(),
+            many=True,
+            display_id_prefix="ord",
+            slug_field="name",
+        )
+        with pytest.raises(MultipleObjectsReturned):
+            field.to_internal_value(["dup"])
+
     def test_round_trip(self, invoice, product):
         """A client can send back exactly what it read."""
         item = LineItem.objects.create(name="x", invoice=invoice)

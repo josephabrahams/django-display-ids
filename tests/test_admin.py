@@ -73,11 +73,11 @@ class TestSearch:
         assert search(term, queryset=Invoice.objects.filter(pk=included.pk)) == []
 
 
-class TestParseIdentifier:
+class TestParseSearchUUID:
     """The static helper for searching other UUID fields."""
 
     uid = uuid.uuid4()
-    parse = staticmethod(DisplayIDAdminSearchMixin._parse_identifier)
+    parse = staticmethod(DisplayIDAdminSearchMixin.parse_search_uuid)
 
     @pytest.mark.parametrize(
         "term",
@@ -115,3 +115,12 @@ class TestParseIdentifier:
     def test_model_without_prefix_matches_uuids_only(self):
         assert self.parse(encode_display_id("inv", self.uid), model=Order) is None
         assert self.parse(str(self.uid), model=Order) == self.uid
+
+    def test_old_name_warns_and_still_works(self):
+        term = encode_display_id("prod", self.uid)
+        with pytest.warns(DeprecationWarning, match="parse_search_uuid"):
+            assert DisplayIDAdminSearchMixin._parse_identifier(term) == self.uid
+        with pytest.warns(DeprecationWarning):
+            assert (
+                DisplayIDAdminSearchMixin._parse_identifier(term, model=Invoice) is None
+            )

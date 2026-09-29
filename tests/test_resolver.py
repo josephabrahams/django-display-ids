@@ -18,7 +18,7 @@ from django_display_ids.exceptions import (
     ObjectNotFoundError,
     UnknownPrefixError,
 )
-from django_display_ids.resolver import _Lookup, resolve_object
+from django_display_ids.resolver import _Lookup, resolve_object, resolve_objects
 
 from .models import Invoice, Order, Product
 
@@ -60,6 +60,58 @@ class TestErrors:
             resolve_object(
                 Order, "x", strategies=("display_id", "slug"), slug_field="missing"
             )
+
+
+class TestResolveObjects:
+    """The bulk lookup. Which values match is covered in test_consistency.py."""
+
+    def test_maps_each_input_in_one_query(self, invoice, django_assert_num_queries):
+        other = Invoice.objects.create(name="Other", slug="other")
+        values = [
+            invoice.display_id,
+            f"  {invoice.id}\n",
+            invoice.id,
+            "other",
+            "no-such-slug",
+            encode_display_id("prod", invoice.id),
+        ]
+        with django_assert_num_queries(1):
+            found = resolve_objects(Invoice, values)
+        assert found == {
+            invoice.display_id: invoice,
+            f"  {invoice.id}\n": invoice,
+            invoice.id: invoice,
+            "other": other,
+            "no-such-slug": None,
+            encode_display_id("prod", invoice.id): None,
+        }
+
+    def test_nothing_parses_runs_no_query(self, django_assert_num_queries):
+        with django_assert_num_queries(0):
+            assert resolve_objects(Invoice, []) == {}
+            assert resolve_objects(Invoice, ["x"], strategies=("uuid",)) == {"x": None}
+
+    def test_queryset(self, invoice):
+        found = resolve_objects(
+            Invoice, [invoice.display_id], queryset=Invoice.objects.none()
+        )
+        assert found == {invoice.display_id: None}
+
+    def test_queryset_for_another_model(self):
+        with pytest.raises(TypeError, match="queryset must be for Invoice"):
+            resolve_objects(Invoice, [], queryset=Order.objects.all())
+
+    def test_ambiguous_slug(self):
+        Order.objects.create(name="dup")
+        Order.objects.create(name="dup")
+        Order.objects.create(name="single")
+        found = resolve_objects(
+            Order, ["single"], strategies=("slug",), slug_field="name"
+        )
+        assert found["single"].name == "single"
+        with pytest.raises(AmbiguousIdentifierError) as exc_info:
+            resolve_objects(Order, ["dup"], strategies=("slug",), slug_field="name")
+        assert (exc_info.value.value, exc_info.value.count) == ("dup", 2)
 
 
 class TestUUIDObjects:

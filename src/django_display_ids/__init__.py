@@ -54,7 +54,7 @@ from .exceptions import (
     UnknownPrefixError,
 )
 from .managers import DisplayIDManager, DisplayIDQuerySet
-from .resolver import resolve_object
+from .resolver import resolve_object, resolve_objects
 from .typing import DEFAULT_STRATEGIES, StrategyName
 from .views import DisplayIDMixin
 
@@ -95,6 +95,7 @@ __all__ = [  # noqa: RUF022 - keep categorized order for readability
     "make_display_id_or_uuid_or_slug_converter",
     # Core resolver
     "resolve_object",
+    "resolve_objects",
     # Exceptions
     "DisplayIDLookupError",
     "InvalidIdentifierError",

@@ -91,14 +91,14 @@ def test_filtered_queryset(invoice, other):
 
     assert queryset.get_by_display_id(invoice.display_id) == invoice
     assert queryset.get_by_identifier(invoice.display_id) == invoice
-    assert queryset.resolve_identifier("test-invoice") == invoice.id
+    assert queryset.resolve_uuid("test-invoice") == invoice.id
 
     with pytest.raises(Invoice.DoesNotExist):
         queryset.get_by_display_id(other.display_id)
     with pytest.raises(Invoice.DoesNotExist):
         queryset.get_by_identifier(other.display_id)
     with pytest.raises(Invoice.DoesNotExist):
-        queryset.resolve_identifier("other-invoice")  # slugs need a query
+        queryset.resolve_uuid("other-invoice")  # slugs need a query
 
 
 class TestGetByIdentifiers:
@@ -159,26 +159,35 @@ class TestGetByIdentifiers:
         assert list(result) == [invoice]
 
 
-class TestResolveIdentifier:
+class TestResolveUUID:
+    @pytest.mark.parametrize(
+        "source", [lambda: Invoice.objects, lambda: Invoice.objects.all()]
+    )
+    def test_old_name_warns_and_still_works(self, invoice, source):
+        with pytest.warns(DeprecationWarning, match="resolve_uuid") as record:
+            assert source().resolve_identifier(invoice.display_id) == invoice.id
+        # Points at the caller, not at the library
+        assert record[0].filename == __file__
+
     def test_returns_uuid(self, invoice):
-        result = Invoice.objects.resolve_identifier(str(invoice.id))
+        result = Invoice.objects.resolve_uuid(str(invoice.id))
         assert isinstance(result, uuid.UUID)
         assert result == invoice.id
-        assert Invoice.objects.resolve_identifier(invoice.id) is invoice.id
+        assert Invoice.objects.resolve_uuid(invoice.id) is invoice.id
 
     def test_uuid_existence_not_checked(self, invoice):
         """A UUID or display ID is returned without checking the row exists."""
         fake = uuid.uuid4()
-        assert Invoice.objects.resolve_identifier(str(fake)) == fake
+        assert Invoice.objects.resolve_uuid(str(fake)) == fake
 
     def test_slug(self, invoice):
-        assert Invoice.objects.resolve_identifier("test-invoice") == invoice.id
+        assert Invoice.objects.resolve_uuid("test-invoice") == invoice.id
         with pytest.raises(Invoice.DoesNotExist):
-            Invoice.objects.resolve_identifier("nonexistent-slug")
+            Invoice.objects.resolve_uuid("nonexistent-slug")
 
     def test_explicit_prefix(self, invoice):
         custom = encode_display_id("custom", invoice.id)
-        assert Invoice.objects.resolve_identifier(custom, prefix="custom") == invoice.id
+        assert Invoice.objects.resolve_uuid(custom, prefix="custom") == invoice.id
 
     @pytest.mark.parametrize(
         ("form", "queries"),
@@ -193,4 +202,4 @@ class TestResolveIdentifier:
     def test_query_count(self, invoice, django_assert_num_queries, form, queries):
         """Only slugs need the database."""
         with django_assert_num_queries(queries):
-            Invoice.objects.resolve_identifier(form(invoice))
+            Invoice.objects.resolve_uuid(form(invoice))

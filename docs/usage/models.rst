@@ -86,14 +86,14 @@ get_by_display_id
 Accepts only display IDs (and ``uuid.UUID`` objects). On a model without a
 prefix it raises ``MissingPrefixError``, since no display ID could ever match.
 
-resolve_identifier
-~~~~~~~~~~~~~~~~~~
+resolve_uuid
+~~~~~~~~~~~~
 
 Returns the UUID without loading the object:
 
 .. code-block:: python
 
-   Invoice.objects.resolve_identifier("inv_2aUyqjCzEIiEcYMKj7TZtw")
+   Invoice.objects.resolve_uuid("inv_2aUyqjCzEIiEcYMKj7TZtw")
    # UUID('550e8400-e29b-41d4-a716-446655440000')
 
 Display IDs and UUIDs are decoded without a query, and the row isn't checked
@@ -115,4 +115,5 @@ Looks up several objects in one query and returns a queryset:
 
 Like ``filter()``, it leaves out identifiers that match nothing. That includes
 unparseable ones and display IDs with the wrong prefix. The results aren't in
-input order.
+input order. To see which identifier found which object, use
+``resolve_objects()`` (see :doc:`/reference/resolver`).

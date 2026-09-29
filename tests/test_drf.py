@@ -5,6 +5,9 @@ strategies, fields) overrides the model, is covered for every entry
 point in test_consistency.py. These tests cover DRF-specific behavior.
 """
 
+import os
+import subprocess
+import sys
 import uuid
 
 import pytest
@@ -21,8 +24,9 @@ from django_display_ids.contrib.rest_framework import (
     DisplayIDMixin,
 )
 from django_display_ids.encoding import encode_display_id
+from django_display_ids.examples import example_display_id
 
-from .models import Invoice, Order, Product
+from .models import Invoice, Order, Product, Tag
 
 
 class InvoiceAPIView(DisplayIDMixin, APIView):
@@ -313,23 +317,235 @@ class TestDisplayIDFieldSchema:
 
 
 @pytest.mark.parametrize(
-    ("kwargs", "expected"),
+    ("prefix", "kwargs", "expected"),
     [
-        ({}, "Identifier: display_id (user_xxx), UUID, or slug"),
-        ({"with_slug": False}, "Identifier: display_id (user_xxx) or UUID"),
-        ({"with_uuid": False}, "Identifier: display_id (user_xxx) or slug"),
-        ({"with_uuid": False, "with_slug": False}, "Identifier: display_id (user_xxx)"),
+        ("user", {}, "Identifier: display_id (user_xxx), UUID, or slug"),
+        ("user", {"with_slug": False}, "Identifier: display_id (user_xxx) or UUID"),
+        ("user", {"with_uuid": False}, "Identifier: display_id (user_xxx) or slug"),
+        (
+            "user",
+            {"with_uuid": False, "with_slug": False},
+            "Identifier: display_id (user_xxx)",
+        ),
+        (
+            "user",
+            {"strategies": ("display_id", "slug")},
+            "Identifier: display_id (user_xxx) or slug",
+        ),
+        ("user", {"strategies": ("uuid",)}, "Identifier: UUID"),
+        (None, {}, "Identifier: UUID or slug"),
     ],
 )
-def test_id_param_description(kwargs, expected):
+def test_id_param_description(prefix, kwargs, expected):
     from django_display_ids.contrib.drf_spectacular import id_param_description
 
-    assert id_param_description("user", **kwargs) == expected
+    assert id_param_description(prefix, **kwargs) == expected
 
 
 def test_id_param_description_follows_setting(settings):
-    """Without with_uuid/with_slug, the STRATEGIES setting decides."""
+    """Without strategies, with_uuid or with_slug, the STRATEGIES setting decides."""
     from django_display_ids.contrib.drf_spectacular import id_param_description
 
     settings.DISPLAY_IDS = {"STRATEGIES": ("display_id", "uuid")}
     assert id_param_description("user") == "Identifier: display_id (user_xxx) or UUID"
+
+
+def test_importing_drf_contrib_registers_schema_extensions():
+    """The extensions register without importing the drf_spectacular module."""
+    pytest.importorskip("drf_spectacular")
+    code = (
+        "import django; django.setup()\n"
+        "import django_display_ids.contrib.rest_framework\n"
+        "from drf_spectacular.extensions import (\n"
+        "    OpenApiSerializerFieldExtension, OpenApiViewExtension)\n"
+        "names = {e.__name__ for e in OpenApiSerializerFieldExtension._registry}\n"
+        "names |= {e.__name__ for e in OpenApiViewExtension._registry}\n"
+        "print(sorted(n for n in names if 'DisplayID' in n))\n"
+    )
+    env = {**os.environ, "DJANGO_SETTINGS_MODULE": "tests.settings"}
+    out = subprocess.run(
+        [sys.executable, "-c", code], env=env, capture_output=True, text=True
+    )
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == (
+        "['DisplayIDFieldExtension', 'DisplayIDMixinExtension', "
+        "'DisplayIDRelatedFieldExtension']"
+    )
+
+
+class TagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tag
+        fields = ("name",)
+
+
+class OrderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Order
+        fields = ("id",)
+
+
+@pytest.mark.django_db
+class TestPathParameterSchema:
+    """DisplayIDMixin views document the identifiers get_object() accepts."""
+
+    @pytest.fixture(autouse=True)
+    def _spectacular(self, settings):
+        pytest.importorskip("drf_spectacular")
+        settings.REST_FRAMEWORK = {
+            "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema"
+        }
+
+    def _paths(self, patterns):
+        from drf_spectacular.generators import SchemaGenerator
+
+        schema = SchemaGenerator(patterns=patterns).get_schema(public=True)
+        return {
+            path: ops["get"].get("parameters", [])
+            for path, ops in schema["paths"].items()
+        }
+
+    def _viewset(self, queryset, serializer, decorator=None, **attrs):
+        from rest_framework import viewsets
+        from rest_framework.routers import SimpleRouter
+
+        viewset = type(
+            "ViewSet",
+            (DisplayIDMixin, viewsets.ReadOnlyModelViewSet),
+            {"queryset": queryset, "serializer_class": serializer, **attrs},
+        )
+        if decorator is not None:
+            viewset = decorator(viewset)
+        router = SimpleRouter()
+        router.register("things", viewset, basename="thing")
+        return router.urls
+
+    def test_default_strategies(self):
+        paths = self._paths(
+            self._viewset(Invoice.objects.all(), InvoiceModelSerializer)
+        )
+        assert paths["/things/"] == []
+        # The router's {pk} is renamed {id}; the parameter follows it
+        [param] = paths["/things/{id}/"]
+        assert param["name"] == "id"
+        assert param["description"] == (
+            "Identifier: display_id (inv_xxx), UUID, or slug"
+        )
+        # Not the primary key's format: uuid, which display IDs would fail
+        assert param["schema"] == {
+            "type": "string",
+            "example": example_display_id("inv"),
+        }
+
+    def test_display_id_only_has_pattern(self):
+        paths = self._paths(
+            self._viewset(
+                Invoice.objects.all(),
+                InvoiceModelSerializer,
+                lookup_strategies=("display_id",),
+            )
+        )
+        [param] = paths["/things/{id}/"]
+        assert param["description"] == "Identifier: display_id (inv_xxx)"
+        assert param["schema"]["pattern"] == r"^inv_[0-9A-Za-z]{22}$"
+
+    def test_uuid_only_has_uuid_format(self):
+        paths = self._paths(
+            self._viewset(
+                Invoice.objects.all(),
+                InvoiceModelSerializer,
+                lookup_strategies=("uuid",),
+            )
+        )
+        [param] = paths["/things/{id}/"]
+        assert param["description"] == "Identifier: UUID"
+        assert param["schema"] == {"type": "string", "format": "uuid"}
+
+    def test_model_without_slug_field(self):
+        paths = self._paths(self._viewset(Tag.objects.all(), TagSerializer))
+        [param] = paths["/things/{id}/"]
+        assert param["description"] == "Identifier: display_id (tag_xxx) or UUID"
+
+    def test_model_without_prefix(self):
+        paths = self._paths(self._viewset(Order.objects.all(), OrderSerializer))
+        [param] = paths["/things/{id}/"]
+        assert param["description"] == "Identifier: UUID or slug"
+        assert param["schema"] == {"type": "string"}
+
+    def test_custom_lookup_url_kwarg(self):
+        from django.urls import path
+
+        class View(DisplayIDMixin, GenericAPIView):
+            lookup_url_kwarg = "invoice"
+            queryset = Invoice.objects.all()
+            serializer_class = InvoiceModelSerializer
+
+            def get(self, request, *args, **kwargs):
+                return Response()
+
+        paths = self._paths([path("invoices/<invoice>/", View.as_view())])
+        [param] = paths["/invoices/{invoice}/"]
+        assert param["description"] == (
+            "Identifier: display_id (inv_xxx), UUID, or slug"
+        )
+
+    def test_extend_schema_on_class_wins(self):
+        from drf_spectacular.utils import OpenApiParameter, extend_schema
+
+        decorator = extend_schema(
+            parameters=[
+                OpenApiParameter("id", str, OpenApiParameter.PATH, description="Mine")
+            ]
+        )
+        urls = self._viewset(
+            Invoice.objects.all(), InvoiceModelSerializer, decorator=decorator
+        )
+        [param] = self._paths(urls)["/things/{id}/"]
+        assert param["description"] == "Mine"
+
+    def test_action_with_its_own_extend_schema(self):
+        """An action decorated for something else still gets the parameter."""
+        from drf_spectacular.utils import extend_schema
+        from rest_framework.decorators import action
+
+        @extend_schema(summary="Fetch")
+        def retrieve(self, *args, **kwargs):
+            raise NotImplementedError
+
+        @extend_schema(summary="Icon")
+        @action(detail=True)
+        def icon(self, *args, **kwargs):
+            raise NotImplementedError
+
+        original_schema = retrieve.kwargs["schema"]
+        paths = self._paths(
+            self._viewset(
+                Invoice.objects.all(),
+                InvoiceModelSerializer,
+                retrieve=retrieve,
+                icon=icon,
+            )
+        )
+        expected = "Identifier: display_id (inv_xxx), UUID, or slug"
+        for path in ("/things/{id}/", "/things/{id}/icon/"):
+            [param] = paths[path]
+            assert param["description"] == expected, path
+        # The view's own methods are left alone
+        assert retrieve.kwargs["schema"] is original_schema
+
+    def test_extend_schema_on_method_wins(self):
+        from drf_spectacular.utils import OpenApiParameter, extend_schema
+
+        @extend_schema(
+            parameters=[
+                OpenApiParameter("id", str, OpenApiParameter.PATH, description="Mine")
+            ]
+        )
+        def retrieve(self, *args, **kwargs):
+            raise NotImplementedError
+
+        urls = self._viewset(
+            Invoice.objects.all(), InvoiceModelSerializer, retrieve=retrieve
+        )
+        [param] = self._paths(urls)["/things/{id}/"]
+        assert param["description"] == "Mine"

@@ -37,7 +37,7 @@ Searching related objects
 -------------------------
 
 To also find invoices by their customer's display ID, override
-``get_search_results`` and use ``_parse_identifier``:
+``get_search_results`` and use ``parse_search_uuid``:
 
 .. code-block:: python
 
@@ -50,10 +50,10 @@ To also find invoices by their customer's display ID, override
            queryset, use_distinct = super().get_search_results(
                request, queryset, search_term
            )
-           if uuid_val := self._parse_identifier(search_term, model=Customer):
+           if uuid_val := self.parse_search_uuid(search_term, model=Customer):
                queryset |= original_queryset.filter(customer_id=uuid_val)
            return queryset, use_distinct
 
-``_parse_identifier`` returns the UUID for a display ID or UUID, and ``None``
+``parse_search_uuid`` returns the UUID for a display ID or UUID, and ``None``
 for anything else. It never raises. With ``model=``, display IDs must use that
 model's prefix; without it, any prefix is accepted.

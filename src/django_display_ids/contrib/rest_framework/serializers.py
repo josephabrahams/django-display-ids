@@ -8,7 +8,11 @@ from typing import TYPE_CHECKING, Any
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
-from rest_framework.relations import PKOnlyObject
+from rest_framework.relations import (
+    MANY_RELATION_KWARGS,
+    ManyRelatedField,
+    PKOnlyObject,
+)
 
 from django_display_ids.conf import get_setting
 from django_display_ids.encoding import PREFIX_PATTERN, encode_display_id
@@ -245,6 +249,15 @@ class DisplayIDRelatedField(_LookupOptions, serializers.RelatedField):  # type: 
             self._lookups[model] = self._get_lookup(model)
         return self._lookups[model]
 
+    @classmethod
+    def many_init(cls, *args: Any, **kwargs: Any) -> ManyRelatedField:
+        # DRF's own many_init, with a list field that looks up in one query
+        list_kwargs: dict[str, Any] = {"child_relation": cls(*args, **kwargs)}
+        for key in kwargs:
+            if key in MANY_RELATION_KWARGS:
+                list_kwargs[key] = kwargs[key]
+        return _ManyDisplayIDRelatedField(**list_kwargs)
+
     def use_pk_only_optimization(self) -> bool:
         # Like PrimaryKeyRelatedField: when the UUID field is the primary key,
         # the display ID can be built from the foreign key column alone, so
@@ -267,9 +280,40 @@ class DisplayIDRelatedField(_LookupOptions, serializers.RelatedField):  # type: 
             # the same as the view mixins
             self.fail("does_not_exist", value=data)
 
+    def _to_internal_values(self, data: list[Any]) -> list[Any]:
+        """``to_internal_value()`` for a list, in one query."""
+        queryset = self.get_queryset()
+        lookup = self._lookup_for(queryset.model)
+        for item in data:
+            if not isinstance(item, str | uuid.UUID):
+                self.fail("incorrect_type", data_type=type(item).__name__)
+        found = lookup.fetch_many(queryset, data)
+        for item in data:
+            if found[item] is None:
+                self.fail("does_not_exist", value=item)
+        return [found[item] for item in data]
+
     def to_representation(self, value: Any) -> str:
         if isinstance(value, PKOnlyObject):
             # Only used when there's a queryset; see use_pk_only_optimization
             return self._lookup_for(self.queryset.model).encode(value.pk)  # type: ignore[union-attr]
         lookup = self._lookup_for(type(value))
         return lookup.encode(getattr(value, lookup.uuid_field))
+
+
+class _ManyDisplayIDRelatedField(ManyRelatedField):
+    """``many=True`` list that looks up every item in one query.
+
+    DRF's ``ManyRelatedField`` runs one query per item.
+    """
+
+    child_relation: DisplayIDRelatedField
+
+    def to_internal_value(self, data: Any) -> list[Any]:
+        # The same checks as ManyRelatedField.to_internal_value()
+        if isinstance(data, str) or not hasattr(data, "__iter__"):
+            self.fail("not_a_list", input_type=type(data).__name__)
+        data = list(data)
+        if not self.allow_empty and len(data) == 0:
+            self.fail("empty")
+        return self.child_relation._to_internal_values(data)

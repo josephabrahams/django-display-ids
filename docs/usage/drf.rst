@@ -83,7 +83,8 @@ Responses show the related object's display ID. Requests accept a display ID,
 UUID or slug, parsed like the view mixins do, so clients can send back what
 they read. Anything that doesn't match fails validation with the
 ``does_not_exist`` error code. A slug that matches more than one row raises
-``MultipleObjectsReturned``, as ``SlugRelatedField`` does.
+``MultipleObjectsReturned``, as ``SlugRelatedField`` does. With
+``many=True``, the whole list is looked up in one query.
 
 To accept display IDs only, pass ``lookup_strategies=("display_id",)``. The
 field takes the same options as the view mixins as keyword arguments.
@@ -100,7 +101,8 @@ OpenAPI schemas
 ---------------
 
 With ``pip install "django-display-ids[spectacular]"``, drf-spectacular
-documents both fields:
+documents the fields and views. Nothing to register: importing
+``django_display_ids.contrib.rest_framework`` sets it up.
 
 - ``DisplayIDField`` is a string with the display ID pattern and a realistic
   example. The prefix comes from the field, the serializer's model, or the
@@ -109,14 +111,21 @@ documents both fields:
   description lists what the field accepts, for example "Identifier:
   display_id (cust_xxx), UUID, or slug". A display-ID-only field also gets a
   pattern, so clients can validate before sending.
+- A view using ``DisplayIDMixin`` gets the same kind of description for its
+  ``{id}`` path parameter, instead of the primary key's UUID format, which
+  display IDs and slugs would fail. It follows the view's
+  ``lookup_strategies``, and leaves out slugs when the model has no slug
+  field.
 
-For identifiers in URL paths, ``id_param_description()`` builds the same kind
-of description. By default it lists the formats in the ``STRATEGIES`` setting:
+For a view that doesn't use the mixin, ``id_param_description()`` builds the
+same text. On a ``DisplayIDMixin`` view, a parameter set with
+``@extend_schema`` replaces the automatic one.
 
 .. code-block:: python
 
    from django_display_ids.contrib.drf_spectacular import id_param_description
    from drf_spectacular.utils import OpenApiParameter, extend_schema
+   from rest_framework.views import APIView
 
    @extend_schema(
        parameters=[
@@ -124,12 +133,11 @@ of description. By default it lists the formats in the ``STRATEGIES`` setting:
                "id",
                str,
                OpenApiParameter.PATH,
-               description=id_param_description("inv"),
-               # "Identifier: display_id (inv_xxx), UUID, or slug"
+               description=id_param_description("inv", strategies=("display_id",)),
+               # "Identifier: display_id (inv_xxx)"
            )
        ],
    )
-   class InvoiceViewSet(DisplayIDMixin, ModelViewSet): ...
+   class InvoicePDFView(APIView): ...
 
-If the view sets its own ``lookup_strategies``, pass ``with_uuid=`` and
-``with_slug=`` to match.
+Without ``strategies=``, it lists the formats in the ``STRATEGIES`` setting.

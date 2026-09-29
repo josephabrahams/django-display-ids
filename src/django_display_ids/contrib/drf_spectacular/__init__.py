@@ -1,8 +1,14 @@
 """drf-spectacular integration for django-display-ids.
 
-This module provides:
-- OpenAPI schema extension for DisplayIDField (auto-registers when imported)
-- Helper functions for documenting URL path parameters
+Importing ``django_display_ids.contrib.rest_framework`` registers these
+extensions when drf-spectacular is installed:
+
+- ``DisplayIDField`` and ``DisplayIDRelatedField`` get string schemas with
+  display ID examples.
+- Views using ``DisplayIDMixin`` get a path parameter that describes the
+  identifiers the view accepts.
+
+``id_param_description()`` works without drf-spectacular.
 """
 
 from __future__ import annotations
@@ -11,24 +17,34 @@ from typing import TYPE_CHECKING, Any
 
 from django_display_ids.conf import get_setting
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from django_display_ids.typing import StrategyName
+
 # OpenAPI parameter description helpers
 # These work regardless of whether drf-spectacular is installed
 
 
 def id_param_description(
-    prefix: str, *, with_uuid: bool | None = None, with_slug: bool | None = None
+    prefix: str | None,
+    *,
+    strategies: Sequence[StrategyName] | None = None,
+    with_uuid: bool | None = None,
+    with_slug: bool | None = None,
 ) -> str:
-    """Generate ID parameter description with the actual prefix.
+    """Describe the identifier formats a lookup accepts.
 
     Args:
-        prefix: The display_id prefix (e.g., "user", "app").
-        with_uuid: Include UUID as an identifier option. Defaults to whether
-            ``"uuid"`` is in the ``DISPLAY_IDS["STRATEGIES"]`` setting.
-        with_slug: Include slug as an identifier option. Defaults to whether
-            ``"slug"`` is in the ``DISPLAY_IDS["STRATEGIES"]`` setting.
+        prefix: The display ID prefix (e.g., "inv"). ``None`` leaves display
+            IDs out, like a lookup on a model without a prefix.
+        strategies: The lookup strategies to describe. Defaults to the
+            ``DISPLAY_IDS["STRATEGIES"]`` setting.
+        with_uuid: Include or leave out UUIDs, whatever *strategies* says.
+        with_slug: Include or leave out slugs, whatever *strategies* says.
 
     Returns:
-        Description string for OpenAPI parameter.
+        Description string for an OpenAPI parameter.
 
     Example:
         With the default strategies, ("display_id", "uuid", "slug"):
@@ -36,26 +52,30 @@ def id_param_description(
         >>> id_param_description("inv")
         'Identifier: display_id (inv_xxx), UUID, or slug'
 
-        >>> id_param_description("inv", with_slug=False)
+        >>> id_param_description("inv", strategies=("display_id", "uuid"))
         'Identifier: display_id (inv_xxx) or UUID'
 
-        >>> id_param_description("inv", with_uuid=False, with_slug=False)
+        >>> id_param_description("inv", strategies=("display_id",))
         'Identifier: display_id (inv_xxx)'
     """
-    strategies = get_setting("STRATEGIES")
+    if strategies is None:
+        strategies = get_setting("STRATEGIES")  # type: ignore[assignment]
+    assert strategies is not None
     if with_uuid is None:
         with_uuid = "uuid" in strategies
     if with_slug is None:
         with_slug = "slug" in strategies
 
-    parts = [f"display_id ({prefix}_xxx)"]
+    parts = []
+    if prefix is not None and "display_id" in strategies:
+        parts.append(f"display_id ({prefix}_xxx)")
     if with_uuid:
         parts.append("UUID")
     if with_slug:
         parts.append("slug")
 
-    if len(parts) == 1:
-        return f"Identifier: {parts[0]}"
+    if len(parts) <= 1:
+        return f"Identifier: {''.join(parts)}"
     elif len(parts) == 2:
         return f"Identifier: {parts[0]} or {parts[1]}"
     else:
@@ -67,7 +87,10 @@ __all__ = [
 ]
 
 try:
-    from drf_spectacular.extensions import OpenApiSerializerFieldExtension
+    from drf_spectacular.extensions import (
+        OpenApiSerializerFieldExtension,
+        OpenApiViewExtension,
+    )
 except ImportError:
     # drf-spectacular not installed, skip extension registration
     pass
@@ -75,7 +98,12 @@ else:
     if TYPE_CHECKING:
         from drf_spectacular.openapi import AutoSchema
 
-    from drf_spectacular.plumbing import follow_field_source
+    import uritemplate
+    from django.core.exceptions import ImproperlyConfigured
+    from drf_spectacular.drainage import get_view_method_names, isolate_view_method
+    from drf_spectacular.plumbing import follow_field_source, get_view_model
+    from drf_spectacular.utils import OpenApiParameter
+    from rest_framework.schemas.generators import get_pk_name
     from rest_framework.serializers import ManyRelatedField
 
     from django_display_ids.encoding import DISPLAY_ID_REGEX, ENCODED_UUID_REGEX
@@ -206,15 +234,98 @@ else:
                     prefix, f"Display ID of the related {model.__name__}"
                 )
             schema = _display_id_schema(
-                prefix,
-                id_param_description(
-                    prefix,
-                    with_uuid="uuid" in lookup.strategies,
-                    with_slug="slug" in lookup.strategies,
-                ),
+                prefix, id_param_description(prefix, strategies=lookup.strategies)
             )
             # Keep the pattern only when display IDs are the only accepted form;
             # otherwise it would reject valid UUIDs and slugs.
             if lookup.strategies != ("display_id",):
                 del schema["pattern"]
             return schema
+
+    def _path_variable(view: Any, path: str) -> str | None:
+        """The name of the view's identifier in *path*, or None if absent."""
+        variables = set(uritemplate.variables(path))
+        name: str = view.lookup_url_kwarg
+        if name in variables:
+            return name
+        # Schema generation renames {pk}, the same way as DRF's coerce_path()
+        if name == "pk":
+            model = getattr(getattr(view, "queryset", None), "model", None)
+            coerced: str = get_pk_name(model) if model is not None else "id"
+            if coerced in variables:
+                return coerced
+        return None
+
+    def _path_parameter(view: Any, path: str) -> OpenApiParameter | None:
+        """The identifier path parameter for a ``DisplayIDMixin`` view."""
+        name = _path_variable(view, path)
+        if name is None:
+            return None
+        model = get_view_model(view, emit_warnings=False)  # type: ignore[no-untyped-call]
+        if model is None:
+            return None
+        try:
+            lookup = view._get_lookup(model)
+        except (ValueError, ImproperlyConfigured):
+            # A broken lookup fails at request time; keep the default schema
+            return None
+
+        prefix = lookup.prefix
+        schema: dict[str, Any] = {"type": "string"}
+        if lookup.strategies == ("display_id",):
+            schema["pattern"] = f"^{prefix}_{ENCODED_UUID_REGEX}$"
+        elif lookup.strategies == ("uuid",):
+            schema["format"] = "uuid"
+        if prefix is not None and "display_id" in lookup.strategies:
+            schema["example"] = example_display_id(prefix)
+        return OpenApiParameter(
+            name,
+            schema,
+            OpenApiParameter.PATH,
+            description=id_param_description(prefix, strategies=lookup.strategies),
+        )
+
+    class _PathParameterSchema:
+        """Adds the identifier path parameter to a view's or action's schema."""
+
+        view: Any
+        path: str
+
+        def get_override_parameters(self) -> list[Any]:
+            parameter = _path_parameter(self.view, self.path)
+            # Earlier entries lose to later ones, so @extend_schema wins
+            own = [] if parameter is None else [parameter]
+            return [*own, *super().get_override_parameters()]  # type: ignore[misc]
+
+    def _with_path_parameter(schema: Any) -> type[Any]:
+        schema_class = schema if isinstance(schema, type) else schema.__class__
+        return type(schema_class.__name__, (_PathParameterSchema, schema_class), {})
+
+    class DisplayIDMixinExtension(OpenApiViewExtension):  # type: ignore[no-untyped-call]
+        """Document the identifier path parameter of ``DisplayIDMixin`` views.
+
+        The description, pattern and example come from the lookup that
+        ``get_object()`` uses, so they follow the view's ``lookup_strategies``
+        and the model's prefix and slug field. A parameter set with
+        ``@extend_schema`` still takes precedence.
+        """
+
+        target_class = "django_display_ids.contrib.rest_framework.views.DisplayIDMixin"
+        match_subclasses = True
+
+        def view_replacement(self) -> type[Any]:
+            view = type(
+                self.target.__name__,
+                (self.target,),
+                {"schema": _with_path_parameter(self.target.schema)()},
+            )
+            # An action decorated with @extend_schema brings its own schema
+            # class, which drf-spectacular uses instead of the view's. Give
+            # it the parameter too, on a copy so the original view is
+            # unchanged, the same way @extend_schema isolates methods.
+            for name in get_view_method_names(view):
+                action_schema = getattr(getattr(view, name), "kwargs", {}).get("schema")
+                if action_schema is not None:
+                    method = isolate_view_method(view, name)  # type: ignore[no-untyped-call]
+                    method.kwargs["schema"] = _with_path_parameter(action_schema)
+            return view

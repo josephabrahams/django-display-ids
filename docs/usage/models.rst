@@ -101,8 +101,10 @@ to exist. Slugs need one query. This is handy for cursor pagination, where you
 only need the UUID for a ``WHERE`` clause.
 
 Like the other manager methods, it raises ``Invoice.DoesNotExist`` for a value
-that can't be an identifier, such as a display ID with another prefix, even
-though it doesn't query the database for it.
+no strategy can read, even though it doesn't query the database for it. With
+the default strategies that includes a display ID with another prefix. If
+``slug`` comes first, any string is read as a slug, so that value is looked up
+as a slug instead.
 
 get_by_identifiers
 ~~~~~~~~~~~~~~~~~~

@@ -38,8 +38,32 @@ The mixin takes the same ``lookup_strategies``, ``display_id_prefix``,
 Searching related objects
 -------------------------
 
-To also find invoices by their customer's display ID, override
-``get_search_results`` and use ``parse_search_uuid``:
+To also find invoices by their customer's display ID, list the field in
+``display_id_search_fields``:
+
+.. code-block:: python
+
+   @admin.register(Invoice)
+   class InvoiceAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
+       search_fields = ["name"]
+       display_id_search_fields = {
+           "customer_id": Customer,  # cust_... or a UUID
+           "request_uid": None,      # a display ID with any prefix, or a UUID
+       }
+
+Searching a customer's display ID now also lists their invoices. Each key is a
+lookup that ends at a UUID, and each value is the model whose display IDs it
+holds:
+
+- ``customer_id`` works when the UUID is Customer's primary key. If Customer
+  keeps its UUID in a separate field, use ``customer__uid``.
+- With a model, a display ID must use that model's prefix. ``None`` accepts
+  any prefix, for IDs no model owns, like request IDs.
+- A path through a many-to-many relation turns on ``distinct()``, as it does
+  in ``search_fields``.
+
+For anything more than an exact match, override ``get_search_results`` and
+use ``parse_search_uuid``:
 
 .. code-block:: python
 

@@ -70,9 +70,13 @@ class LineItem(models.Model):
     """Test model with relations to display ID models.
 
     invoice points at a model whose UUID is the primary key; products at one
-    whose UUID is a separate field.
+    whose UUID is a separate field. Its own primary key is an integer, with
+    the UUID in uid.
     """
 
+    uuid_field = "uid"
+
+    uid = models.UUIDField(default=uuid.uuid4, unique=True)
     invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, null=True)
     products = models.ManyToManyField(Product, blank=True)
     name = models.CharField(max_length=100)

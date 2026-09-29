@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
+
+from django.db.models import Q
 
 from .exceptions import DisplayIDLookupError
 from .resolver import _Lookup, _LookupOptions
@@ -11,6 +13,7 @@ from .strategies import parse_identifier
 
 if TYPE_CHECKING:
     import uuid
+    from collections.abc import Mapping
 
     from django.db.models import Model, QuerySet
     from django.http import HttpRequest
@@ -43,9 +46,19 @@ class DisplayIDAdminSearchMixin(_LookupOptions):
             then the ``DISPLAY_IDS["UUID_FIELD"]`` setting, then ``"id"``.
         slug_field: Slug field name. Defaults to the model's ``slug_field``,
             then the ``DISPLAY_IDS["SLUG_FIELD"]`` setting, then ``"slug"``.
+        display_id_search_fields: Other UUID fields to search, mapped to the
+            model whose display IDs they hold. Each gets an exact match,
+            parsed like ``parse_search_uuid(term, model=...)``. ``None``
+            accepts a display ID with any prefix::
+
+                display_id_search_fields = {
+                    "customer_id": Customer,
+                    "request_uid": None,
+                }
     """
 
     model: type[Model]
+    display_id_search_fields: ClassVar[Mapping[str, type[Model] | None]] = {}
 
     @staticmethod
     def parse_search_uuid(
@@ -64,7 +77,9 @@ class DisplayIDAdminSearchMixin(_LookupOptions):
                 prefix, and on a model without a prefix only raw UUIDs match.
                 Without it, a display ID with any prefix is accepted.
 
-        Subclasses can use this to search additional UUID fields::
+        For a plain exact match on another UUID field, use
+        ``display_id_search_fields`` instead. For anything else, call this
+        from ``get_search_results()``::
 
             def get_search_results(self, request, queryset, search_term):
                 original_queryset = queryset
@@ -102,7 +117,14 @@ class DisplayIDAdminSearchMixin(_LookupOptions):
         queryset: QuerySet[Any],
         search_term: str,
     ) -> tuple[QuerySet[Any], bool]:
-        """Add an exact display ID, UUID, or slug match to the search results."""
+        """Add exact display ID, UUID, or slug matches to the search results.
+
+        Matches the model's own identifier, plus each field in
+        ``display_id_search_fields``.
+        """
+        # Imported here so importing this package doesn't load the admin
+        from django.contrib.admin.utils import lookup_spawns_duplicates
+
         original_queryset = queryset
         queryset, use_distinct = super().get_search_results(  # type: ignore[misc]
             request, queryset, search_term
@@ -111,9 +133,18 @@ class DisplayIDAdminSearchMixin(_LookupOptions):
         # Outside the try: a misconfigured lookup is an error, not "no match"
         lookup = self._get_lookup(self.model)
         try:
-            kwargs = lookup.build(search_term)
+            query = Q(**lookup.build(search_term))
         except DisplayIDLookupError:
-            return queryset, use_distinct
+            query = Q()
 
-        queryset |= original_queryset.filter(**kwargs)
+        for field, model in self.display_id_search_fields.items():
+            uuid_val = self.parse_search_uuid(search_term, model=model)
+            if uuid_val is not None:
+                query |= Q(**{field: uuid_val})
+                use_distinct = use_distinct or lookup_spawns_duplicates(
+                    self.model._meta, field
+                )
+
+        if query:
+            queryset |= original_queryset.filter(query)
         return queryset, use_distinct

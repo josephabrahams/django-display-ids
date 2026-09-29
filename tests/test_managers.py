@@ -13,6 +13,7 @@ from django.core.exceptions import ObjectDoesNotExist
 
 from django_display_ids.encoding import encode_display_id
 from django_display_ids.exceptions import MissingPrefixError
+from django_display_ids.managers import DisplayIDQuerySet
 
 from .models import Invoice, Order, Product
 
@@ -70,6 +71,39 @@ class TestGetByIdentifier:
             Invoice.objects.get_by_identifier(str(uuid.uuid4()))
 
 
+class TestFilterByIdentifier:
+    def test_returns_display_id_queryset(self, invoice):
+        """So get_by_identifier() and friends can be chained after it."""
+        result = Invoice.objects.filter_by_identifier(invoice.display_id)
+        assert isinstance(result, DisplayIDQuerySet)
+
+    def test_uuid_object(self, invoice, other):
+        assert list(Invoice.objects.filter_by_identifier(invoice.id)) == [invoice]
+
+    def test_explicit_strategies(self, invoice):
+        slug_only = {"strategies": ("slug",)}
+        assert list(Invoice.objects.filter_by_identifier("test-invoice", **slug_only))
+        assert not Invoice.objects.filter_by_identifier(invoice.display_id, **slug_only)
+
+    def test_explicit_prefix(self, invoice):
+        custom = encode_display_id("custom", invoice.id)
+        result = Invoice.objects.filter_by_identifier(custom, prefix="custom")
+        assert list(result) == [invoice]
+
+    @pytest.mark.parametrize(
+        "bad", ["not a valid identifier!", encode_display_id("prod", uuid.uuid4())]
+    )
+    def test_rejected_identifier_runs_no_query(
+        self, invoice, bad, django_assert_num_queries
+    ):
+        """Rejected input is known not to match, so there is nothing to query."""
+        result = Invoice.objects.filter_by_identifier(
+            bad, strategies=("display_id", "uuid")
+        )
+        with django_assert_num_queries(0):
+            assert list(result) == []
+
+
 @pytest.mark.parametrize("method", ["get_by_display_id", "get_by_identifier"])
 class TestUUIDObjects:
     def test_found(self, invoice, method):
@@ -92,6 +126,8 @@ def test_filtered_queryset(invoice, other):
     assert queryset.get_by_display_id(invoice.display_id) == invoice
     assert queryset.get_by_identifier(invoice.display_id) == invoice
     assert queryset.resolve_uuid("test-invoice") == invoice.id
+    assert list(queryset.filter_by_identifier(invoice.display_id)) == [invoice]
+    assert not queryset.filter_by_identifier(other.display_id)
 
     with pytest.raises(Invoice.DoesNotExist):
         queryset.get_by_display_id(other.display_id)

@@ -80,6 +80,22 @@ Accepts a display ID, a UUID (string or ``uuid.UUID``) or a slug:
 
 It takes ``strategies=`` and ``prefix=`` to override the defaults for one call.
 
+filter_by_identifier
+~~~~~~~~~~~~~~~~~~~~
+
+Reads the value like ``get_by_identifier()``, but returns a queryset instead
+of the object, so you can keep chaining:
+
+.. code-block:: python
+
+   Invoice.objects.filter_by_identifier("inv_2aUyqjCzEIiEcYMKj7TZtw").exists()
+   # True
+
+Anything ``get_by_identifier()`` would raise ``DoesNotExist`` for gives an
+empty queryset. Invalid input doesn't query the database at all. A lookup that
+can never match, like ``strategies=("display_id",)`` on a model without a
+prefix, still raises.
+
 get_by_display_id
 ~~~~~~~~~~~~~~~~~
 

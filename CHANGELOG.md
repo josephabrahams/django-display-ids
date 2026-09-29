@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### New
+
+- `filter_by_identifier()` on the manager and queryset. It reads a display ID, UUID or slug like `get_by_identifier()`, but returns a queryset, which is empty when nothing matches.
+
 ## 0.8.0 — 2026-09-28
 
 The views, DRF, managers, admin search and `resolve_object()` used to disagree about which identifiers they accepted. They now share one lookup, so a value that works in one works in all of them. This release also adds `DisplayIDRelatedField`, so DRF APIs can accept display IDs in request bodies.

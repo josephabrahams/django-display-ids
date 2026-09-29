@@ -75,6 +75,14 @@ def via_get_by_identifier(model, value, lookup_strategies=None, display_id_prefi
         return None
 
 
+def via_filter_by_identifier(
+    model, value, lookup_strategies=None, display_id_prefix=None
+):
+    return model.objects.filter_by_identifier(
+        value, strategies=lookup_strategies, prefix=display_id_prefix
+    ).first()
+
+
 def via_resolve_uuid(model, value, lookup_strategies=None, display_id_prefix=None):
     try:
         uid = model.objects.resolve_uuid(
@@ -162,6 +170,7 @@ ENTRY_POINTS = [
     via_resolver,
     via_resolve_objects,
     via_get_by_identifier,
+    via_filter_by_identifier,
     via_resolve_uuid,
     via_get_by_identifiers,
     via_admin,

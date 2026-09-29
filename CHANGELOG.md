@@ -6,6 +6,7 @@
 
 - `filter_by_identifier()` on the manager and queryset. It reads a display ID, UUID or slug like `get_by_identifier()`, but returns a queryset, which is empty when nothing matches.
 - `display_id_search_fields` on `DisplayIDAdminSearchMixin` searches other UUID fields, such as a foreign key, by display ID or UUID. Before, you had to override `get_search_results()`.
+- `manage.py check` warns about configuration that used to fail only on a request: a model or admin whose `uuid_field` isn't a `UUIDField`, a `display_id_search_fields` key that doesn't end at one, admin lookup options that can never match, and a slug field that isn't unique while the `slug` strategy is on. They're warnings for now. See the system checks reference.
 
 ## 0.8.0 — 2026-09-28
 

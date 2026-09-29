@@ -9,3 +9,4 @@ Reference
    resolver
    encoding
    exceptions
+   checks

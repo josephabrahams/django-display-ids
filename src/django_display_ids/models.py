@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.db import models
 
+from . import checks
 from .encoding import PREFIX_PATTERN, encode_display_id
 from .resolver import _resolve_uuid_field
+
+if TYPE_CHECKING:
+    from django.core.checks import CheckMessage
 
 __all__ = [
     "DisplayIDModel",
@@ -107,6 +111,11 @@ class DisplayIDModel(models.Model):
                         f"lowercase letters, got: {prefix!r}"
                     )
                 _register_prefix(prefix, cls)
+
+    @classmethod
+    def check(cls, **kwargs: Any) -> list[CheckMessage]:
+        """Add this library's checks to the model's (see ``checks.py``)."""
+        return [*super().check(**kwargs), *checks.check_model(cls)]
 
     @classmethod
     def get_display_id_prefix(cls) -> str | None:

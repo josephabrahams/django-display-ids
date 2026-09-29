@@ -53,8 +53,8 @@ Not every entry point raises these directly:
 
 Manager methods (``get_by_identifier()`` and friends)
    Raise ``Model.DoesNotExist`` for anything that doesn't match, like
-   ``QuerySet.get()``. ``get_by_identifiers()`` leaves non-matches out, like
-   ``filter()``.
+   ``QuerySet.get()``. ``filter_by_identifier()`` and ``get_by_identifiers()``
+   leave non-matches out, like ``filter()``.
 
 Django and DRF view mixins
    Return a 404 for anything that doesn't match. A slug that matches more than

@@ -48,6 +48,9 @@ class DisplayIDQuerySet(models.QuerySet[M]):
         # Works with filtered querysets
         invoice = Invoice.objects.filter(paid=True).get_by_identifier(value)
 
+        # Filter instead of get, to keep chaining
+        Invoice.objects.filter_by_identifier(value).update(paid=True)
+
         # Get by display ID only (stricter)
         invoice = Invoice.objects.get_by_display_id("inv_2aUyqjCzEIiEcYMKj7TZtw")
     """
@@ -132,6 +135,40 @@ class DisplayIDQuerySet(models.QuerySet[M]):
         """
         lookup = _Lookup.for_model(self.model, strategies=strategies, prefix=prefix)
         return self.get(**self._build(lookup, value))
+
+    def filter_by_identifier(
+        self,
+        value: str | uuid.UUID,
+        *,
+        strategies: tuple[StrategyName, ...] | None = None,
+        prefix: str | None = None,
+    ) -> Self:
+        """Filter to the objects matching any supported identifier type.
+
+        Reads the identifier like ``get_by_identifier()``, but returns a
+        queryset instead of fetching the object, so you can keep chaining.
+
+        Args:
+            value: The identifier string (display ID, UUID, or slug),
+                or a UUID instance for direct UUID lookup.
+            strategies: Strategies to try. Defaults to settings.
+            prefix: Expected display ID prefix for validation.
+
+        Returns:
+            A queryset of the matching objects, empty when nothing matches.
+
+        Raises:
+            MissingPrefixError: If only ``display_id`` was requested for a
+                model without a prefix.
+            ImproperlyConfigured: If only ``slug`` was requested for a model
+                without the slug field.
+        """
+        lookup = _Lookup.for_model(self.model, strategies=strategies, prefix=prefix)
+        try:
+            kwargs = lookup.build(value)
+        except DisplayIDLookupError:
+            return self.none()
+        return self.filter(**kwargs)
 
     def resolve_uuid(
         self,
@@ -275,6 +312,21 @@ class DisplayIDManager(models.Manager[M]):
         See DisplayIDQuerySet.get_by_identifier for details.
         """
         return self.get_queryset().get_by_identifier(
+            value, strategies=strategies, prefix=prefix
+        )
+
+    def filter_by_identifier(
+        self,
+        value: str | uuid.UUID,
+        *,
+        strategies: tuple[StrategyName, ...] | None = None,
+        prefix: str | None = None,
+    ) -> DisplayIDQuerySet[M]:
+        """Filter to the objects matching any supported identifier type.
+
+        See DisplayIDQuerySet.filter_by_identifier for details.
+        """
+        return self.get_queryset().filter_by_identifier(
             value, strategies=strategies, prefix=prefix
         )
 

@@ -4,6 +4,7 @@ import uuid
 
 import pytest
 from rest_framework import serializers
+from rest_framework.relations import SlugRelatedField
 
 from django_display_ids.contrib.rest_framework import DisplayIDRelatedField
 from django_display_ids.encoding import encode_display_id
@@ -83,18 +84,29 @@ class TestInput:
         "value",
         [
             "not-a-real-slug",  # parses as a slug, no row
-            encode_display_id("prod", uuid.uuid4()),  # wrong prefix, fails parsing
             encode_display_id("inv", uuid.uuid4()),  # valid display ID, no row
             str(uuid.uuid4()),  # valid UUID, no row
         ],
-        ids=["unknown_slug", "wrong_prefix", "unknown_display_id", "unknown_uuid"],
+        ids=["unknown_slug", "unknown_display_id", "unknown_uuid"],
     )
-    def test_no_match_is_does_not_exist(self, invoice, value):
-        """Every kind of no-match uses DRF's does_not_exist error code, whether
-        it fails while parsing or at the database query."""
+    def test_no_row_is_does_not_exist(self, invoice, value):
+        """DRF's SlugRelatedField message, with "identifier" as the field."""
         s = LineItemSerializer(data={"name": "x", "invoice": value})
         assert not s.is_valid()
-        assert s.errors["invoice"][0].code == "does_not_exist"
+        [error] = s.errors["invoice"]
+        assert error.code == "does_not_exist"
+        expected = str(SlugRelatedField.default_error_messages["does_not_exist"])
+        assert str(error) == expected.format(slug_name="identifier", value=value)
+
+    def test_unusable_value_is_invalid(self, invoice):
+        """A wrong prefix can't be looked up, so it's DRF's "invalid", as
+        SlugRelatedField reports a value it can't use."""
+        value = encode_display_id("prod", uuid.uuid4())
+        s = LineItemSerializer(data={"name": "x", "invoice": value})
+        assert not s.is_valid()
+        [error] = s.errors["invoice"]
+        assert error.code == "invalid"
+        assert str(error) == str(SlugRelatedField.default_error_messages["invalid"])
 
     @pytest.mark.parametrize("value", [123, True, ["inv_x"]])
     def test_rejects_wrong_type(self, invoice, value):
@@ -141,7 +153,15 @@ class TestInput:
         assert not s.is_valid()
         [error] = s.errors["products"]
         assert error.code == "does_not_exist"
-        assert '"missing"' in str(error)
+        assert "identifier=missing" in str(error)
+
+    def test_many_unusable_value_is_invalid(self, product):
+        wrong_prefix = encode_display_id("inv", uuid.uuid4())
+        s = LineItemSerializer(
+            data={"name": "x", "products": [product.display_id, wrong_prefix]}
+        )
+        assert not s.is_valid()
+        assert s.errors["products"][0].code == "invalid"
 
     @pytest.mark.parametrize(
         ("value", "code"),

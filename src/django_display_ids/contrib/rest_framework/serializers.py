@@ -6,12 +6,14 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 from django.core.exceptions import ObjectDoesNotExist
+from django.utils.encoding import smart_str
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 from rest_framework.relations import (
     MANY_RELATION_KWARGS,
     ManyRelatedField,
     PKOnlyObject,
+    SlugRelatedField,
 )
 
 from django_display_ids.conf import get_setting
@@ -216,7 +218,9 @@ class DisplayIDRelatedField(_LookupOptions, serializers.RelatedField):  # type: 
     """
 
     default_error_messages = {  # noqa: RUF012 - same as DRF's own fields
-        "does_not_exist": _('Object with identifier "{value}" does not exist.'),
+        # DRF's own messages, so DRF's translations apply
+        "does_not_exist": SlugRelatedField.default_error_messages["does_not_exist"],
+        "invalid": SlugRelatedField.default_error_messages["invalid"],
         "incorrect_type": _(
             "Incorrect type. Expected an identifier string, received {data_type}."
         ),
@@ -274,11 +278,17 @@ class DisplayIDRelatedField(_LookupOptions, serializers.RelatedField):  # type: 
         if not isinstance(data, str | uuid.UUID):
             self.fail("incorrect_type", data_type=type(data).__name__)
         try:
-            return queryset.get(**lookup.build(data))
-        except (DisplayIDLookupError, ObjectDoesNotExist):
-            # Unparseable input and wrong prefixes read as "not found",
-            # the same as the view mixins
-            self.fail("does_not_exist", value=data)
+            kwargs = lookup.build(data)
+        except DisplayIDLookupError:
+            # What SlugRelatedField reports for a value it can't use
+            self.fail("invalid")
+        try:
+            return queryset.get(**kwargs)
+        except ObjectDoesNotExist:
+            self._fail_does_not_exist(data)
+
+    def _fail_does_not_exist(self, value: Any) -> None:
+        self.fail("does_not_exist", slug_name="identifier", value=smart_str(value))
 
     def _to_internal_values(self, data: list[Any]) -> list[Any]:
         """``to_internal_value()`` for a list, in one query."""
@@ -287,10 +297,14 @@ class DisplayIDRelatedField(_LookupOptions, serializers.RelatedField):  # type: 
         for item in data:
             if not isinstance(item, str | uuid.UUID):
                 self.fail("incorrect_type", data_type=type(item).__name__)
+            try:
+                lookup.build(item)
+            except DisplayIDLookupError:
+                self.fail("invalid")
         found = lookup.fetch_many(queryset, data)
         for item in data:
             if found[item] is None:
-                self.fail("does_not_exist", value=item)
+                self._fail_does_not_exist(item)
         return [found[item] for item in data]
 
     def to_representation(self, value: Any) -> str:

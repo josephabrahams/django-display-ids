@@ -9,6 +9,7 @@
 ### Changes
 
 - The view mixins' 404s now match the frameworks' own. The DRF mixin answers a display ID it can't use (a wrong prefix, say) with DRF's plain "Not found.", the same as DRF does for a lookup value it can't use, instead of explaining why it failed. The Django mixin raises the same `Http404` as Django's `DetailView`, so its message is translated. The status codes don't change.
+- `DisplayIDRelatedField` uses `SlugRelatedField`'s validation errors, so DRF's translations apply. A value it can't use, such as another model's prefix, now has the code `invalid` ("Invalid value.") instead of `does_not_exist`. A value with no matching row is still `does_not_exist`, with DRF's wording: "Object with identifier=... does not exist."
 
 ### Fixes
 

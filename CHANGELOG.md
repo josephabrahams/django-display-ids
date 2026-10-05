@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### New
+
+- `DisplayIDType` for display IDs with no model behind them, like request IDs: `RequestID = DisplayIDType("req")`, then `generate()`, `encode()`, `parse()`, `is_valid()` and `regex`. Its prefix can't clash with a model's. `display_id_search_fields` and `parse_search_uuid(model=...)` accept one, so admin search can check its prefix.
+
+### Fixes
+
+- A prefix or display ID with a newline at the end is rejected. Before, `encode_display_id("inv\n", ...)` returned an ID with a newline inside it, a model could set `display_id_prefix = "inv\n"`, and `decode_display_id()` accepted an ID followed by a newline.
+
 ## 0.8.1 — 2026-09-29
 
 ### New

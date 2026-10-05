@@ -99,7 +99,9 @@ class TestEncodeDisplayId:
         test_uuid = uuid.UUID("550e8400-e29b-41d4-a716-446655440000")
         assert encode_display_id("inv", test_uuid) == "inv_2aUyqjCzEIiEcYMKj7TZtw"
 
-    @pytest.mark.parametrize("prefix", ["INV", "inv1", "inv_", "", "a" * 17])
+    @pytest.mark.parametrize(
+        "prefix", ["INV", "inv1", "inv_", "", "a" * 17, "inv\n", "\ninv"]
+    )
     def test_invalid_prefix(self, prefix):
         with pytest.raises(ValueError, match="must be 1-16 lowercase letters"):
             encode_display_id(prefix, uuid.uuid4())
@@ -122,6 +124,7 @@ class TestDecodeDisplayId:
             "inv1234567890123456789012",  # no underscore
             "inv_abc",  # encoded part too short
             "INV_" + "0" * 22,  # uppercase prefix
+            "inv_2aUyqjCzEIiEcYMKj7TZtw\n",  # trailing newline
         ],
     )
     def test_invalid_format(self, value):

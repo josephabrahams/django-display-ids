@@ -53,6 +53,7 @@ from .exceptions import (
     ObjectNotFoundError,
     UnknownPrefixError,
 )
+from .id_types import DisplayIDType
 from .managers import DisplayIDManager, DisplayIDQuerySet
 from .resolver import resolve_object, resolve_objects
 from .typing import DEFAULT_STRATEGIES, StrategyName
@@ -86,6 +87,8 @@ __all__ = [  # noqa: RUF022 - keep categorized order for readability
     "decode_display_id",
     "encode_uuid",
     "decode_uuid",
+    # Display IDs without a model
+    "DisplayIDType",
     # URL converters
     "DisplayIDConverter",
     "DisplayIDOrUUIDConverter",

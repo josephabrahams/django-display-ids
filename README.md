@@ -83,6 +83,7 @@ Requires Python 3.12+ and Django 4.2+.
 - `DisplayIDField` and `DisplayIDRelatedField` for DRF serializers, so APIs can both show and accept display IDs, with drf-spectacular schemas
 - `DisplayIDAdminSearchMixin` to search the admin by display ID, UUID or slug
 - URL converters, and a `display_id` template filter for any UUID
+- `DisplayIDType` for IDs with no model behind them, like request IDs
 
 ## Documentation
 

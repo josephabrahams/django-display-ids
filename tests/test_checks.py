@@ -159,7 +159,7 @@ class TestAdmin:
 
     @isolate_apps("tests")
     def test_model_without_uuid(self):
-        """The mixin on a model with only an integer key (RefillGenie's case)."""
+        """The mixin on a model with only an integer key and no UUID field."""
 
         class Plain(models.Model):
             name = models.CharField(max_length=10)

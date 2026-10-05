@@ -58,10 +58,10 @@ class TestPrefixRegistry:
     @pytest.fixture(autouse=True)
     def _isolated_registry(self, monkeypatch):
         """Models defined in these tests mustn't leak into the global registry."""
-        from django_display_ids import models as models_module
+        from django_display_ids import registry
 
         monkeypatch.setattr(
-            models_module, "_prefix_registry", dict(models_module._prefix_registry)
+            registry, "_prefix_registry", dict(registry._prefix_registry)
         )
 
     def test_get_model_for_prefix(self):
@@ -96,7 +96,7 @@ class TestPrefixRegistry:
 
     def test_reregistering_same_model_is_allowed(self):
         """Re-importing a module registers the same model again without error."""
-        from django_display_ids.models import _register_prefix
+        from django_display_ids.registry import _register_prefix
 
         _register_prefix("inv", Invoice)
         assert get_model_for_prefix("inv") == "Invoice"
@@ -121,7 +121,9 @@ class TestPrefixRegistry:
         # Abstract models are registered for collision detection
         assert get_model_for_prefix("abstract") == "AbstractModel"
 
-    @pytest.mark.parametrize("prefix", ["", "Invalid123", "waytoolongprefix123"])
+    @pytest.mark.parametrize(
+        "prefix", ["", "Invalid123", "waytoolongprefix123", "inv\n"]
+    )
     def test_invalid_prefix_fails_at_class_definition(self, prefix):
         with pytest.raises(ValueError, match="1-16 lowercase letters"):
             type(

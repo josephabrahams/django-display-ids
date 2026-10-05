@@ -32,7 +32,9 @@ def request_id():
 
 
 class TestPrefix:
-    @pytest.mark.parametrize("prefix", ["", "Req", "req1", "waytoolongprefixxx"])
+    @pytest.mark.parametrize(
+        "prefix", ["", "Req", "req1", "waytoolongprefixxx", "req\n"]
+    )
     def test_invalid_prefix(self, prefix):
         with pytest.raises(ValueError, match="1-16 lowercase letters"):
             DisplayIDType(prefix)

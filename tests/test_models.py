@@ -121,7 +121,9 @@ class TestPrefixRegistry:
         # Abstract models are registered for collision detection
         assert get_model_for_prefix("abstract") == "AbstractModel"
 
-    @pytest.mark.parametrize("prefix", ["", "Invalid123", "waytoolongprefix123"])
+    @pytest.mark.parametrize(
+        "prefix", ["", "Invalid123", "waytoolongprefix123", "inv\n"]
+    )
     def test_invalid_prefix_fails_at_class_definition(self, prefix):
         with pytest.raises(ValueError, match="1-16 lowercase letters"):
             type(

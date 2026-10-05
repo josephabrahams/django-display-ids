@@ -34,9 +34,10 @@ DISPLAY_ID_REGEX = rf"{PREFIX_REGEX}_{ENCODED_UUID_REGEX}"
 # confuse with other strings, such as slugs made from MD5 hashes.
 UUID_REGEX = rf"(?i:{UUIDConverter.regex})"
 
-PREFIX_PATTERN = re.compile(rf"^{PREFIX_REGEX}$")
-DISPLAY_ID_PATTERN = re.compile(rf"^({PREFIX_REGEX})_({ENCODED_UUID_REGEX})$")
-UUID_PATTERN = re.compile(rf"^{UUID_REGEX}$")
+# \Z, not $: $ also matches before a trailing newline, so "inv\n" would pass
+PREFIX_PATTERN = re.compile(rf"^{PREFIX_REGEX}\Z")
+DISPLAY_ID_PATTERN = re.compile(rf"^({PREFIX_REGEX})_({ENCODED_UUID_REGEX})\Z")
+UUID_PATTERN = re.compile(rf"^{UUID_REGEX}\Z")
 
 
 def parse_uuid_string(value: str) -> uuid.UUID:

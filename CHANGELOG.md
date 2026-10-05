@@ -6,6 +6,10 @@
 
 - `DisplayIDType` for display IDs with no model behind them, like request IDs: `RequestID = DisplayIDType("req")`, then `generate()`, `encode()`, `parse()`, `is_valid()` and `regex`. Its prefix can't clash with a model's. `display_id_search_fields` and `parse_search_uuid(model=...)` accept one, so admin search can check its prefix.
 
+### Changes
+
+- The view mixins' 404s now match the frameworks' own. The DRF mixin answers a display ID it can't use (a wrong prefix, say) with DRF's plain "Not found.", the same as DRF does for a lookup value it can't use, instead of explaining why it failed. The Django mixin raises the same `Http404` as Django's `DetailView`, so its message is translated. The status codes don't change.
+
 ### Fixes
 
 - A prefix or display ID with a newline at the end is rejected. Before, `encode_display_id("inv\n", ...)` returned an ID with a newline inside it, a model could set `display_id_prefix = "inv\n"`, and `decode_display_id()` accepted an ID followed by a newline.

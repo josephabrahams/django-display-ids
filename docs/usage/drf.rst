@@ -22,9 +22,10 @@ Add ``DisplayIDMixin`` to a viewset or generic view:
 It also works on a plain ``APIView`` that defines ``get_queryset()``.
 
 ``get_object()`` works like DRF's own. It runs ``filter_queryset()`` first, so
-filter backends apply, and it checks object permissions. An identifier that
-can't be parsed, has another model's prefix, or matches nothing gives a 404. A
-slug that matches more than one row raises ``MultipleObjectsReturned``, and a
+filter backends apply, and it checks object permissions. Misses give the same
+404 DRF does: ``"Not found."`` for an identifier it can't use (unparseable, or
+another model's prefix), and ``"No Invoice matches the given query."`` when no
+row matches. A slug that matches more than one row raises ``MultipleObjectsReturned``, and a
 missing URL keyword argument raises ``AssertionError``, both as in DRF.
 
 The mixin takes the same attributes as the Django view mixin

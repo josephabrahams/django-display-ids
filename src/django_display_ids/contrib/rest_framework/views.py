@@ -108,8 +108,9 @@ class DisplayIDMixin(_LookupOptions):
         lookup = self._get_lookup(queryset.model)
         try:
             kwargs = lookup.build(str(value))
-        except DisplayIDLookupError as e:
-            raise Http404(str(e)) from e
+        except DisplayIDLookupError:
+            # What DRF's get_object_or_404 raises for a value it can't use
+            raise Http404 from None
 
         # DRF's own 404 handling; MultipleObjectsReturned propagates
         obj = get_object_or_404(queryset, **kwargs)

@@ -66,7 +66,9 @@ Admin search
    to the results.
 
 ``DisplayIDRelatedField``
-   Reports non-matches as a ``does_not_exist`` validation error.
+   Reports errors like ``SlugRelatedField``: a value it can't use (unparseable,
+   or another model's prefix) is an ``invalid`` validation error, and a usable
+   identifier with no matching row is ``does_not_exist``.
 
 In all of them, configuration errors (``MissingPrefixError`` and
 ``ImproperlyConfigured``) are raised as they are, because they mean the code

@@ -28,6 +28,8 @@ from django_display_ids.examples import example_display_id
 
 from .models import Invoice, Order, Product, Tag
 
+UUID = uuid.UUID("550e8400-e29b-41d4-a716-446655440000")
+
 
 class InvoiceAPIView(DisplayIDMixin, APIView):
     lookup_url_kwarg = "id"
@@ -128,6 +130,31 @@ class TestResponses:
     def test_404_response(self, rf, value):
         response = InvoiceAPIView.as_view()(rf.get("/"), id=value)
         assert response.status_code == 404
+
+    @pytest.mark.parametrize(
+        ("ours", "drf"),
+        [
+            # A value DRF can't use as the lookup field: "Not found."
+            (encode_display_id("prod", uuid.uuid4()), "not-a-uuid"),
+            # A row that doesn't exist: "No Invoice matches the given query."
+            (str(UUID), str(UUID)),
+        ],
+        ids=["unusable", "missing"],
+    )
+    def test_404_body_matches_drf(self, rf, ours, drf):
+        """The 404 body is the one DRF's own get_object() gives."""
+
+        class PlainView(GenericAPIView):
+            queryset = Invoice.objects.all()
+            lookup_field = "id"
+
+            def get(self, request, *args, **kwargs):
+                return Response({"name": self.get_object().name})
+
+        expected = PlainView.as_view()(rf.get("/"), id=drf)
+        response = InvoiceAPIView.as_view()(rf.get("/"), id=ours)
+        assert expected.status_code == 404
+        assert response.data == expected.data
 
     def test_200_response(self, rf, invoice):
         response = InvoiceAPIView.as_view()(rf.get("/"), id=invoice.display_id)

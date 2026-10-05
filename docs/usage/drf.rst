@@ -22,9 +22,10 @@ Add ``DisplayIDMixin`` to a viewset or generic view:
 It also works on a plain ``APIView`` that defines ``get_queryset()``.
 
 ``get_object()`` works like DRF's own. It runs ``filter_queryset()`` first, so
-filter backends apply, and it checks object permissions. An identifier that
-can't be parsed, has another model's prefix, or matches nothing gives a 404. A
-slug that matches more than one row raises ``MultipleObjectsReturned``, and a
+filter backends apply, and it checks object permissions. Misses give the same
+404 DRF does: ``"Not found."`` for an identifier it can't use (unparseable, or
+another model's prefix), and ``"No Invoice matches the given query."`` when no
+row matches. A slug that matches more than one row raises ``MultipleObjectsReturned``, and a
 missing URL keyword argument raises ``AssertionError``, both as in DRF.
 
 The mixin takes the same attributes as the Django view mixin
@@ -81,8 +82,10 @@ A writable related field, like ``PrimaryKeyRelatedField`` but with display IDs:
 
 Responses show the related object's display ID. Requests accept a display ID,
 UUID or slug, parsed like the view mixins do, so clients can send back what
-they read. Anything that doesn't match fails validation with the
-``does_not_exist`` error code. A slug that matches more than one row raises
+they read. Validation errors use ``SlugRelatedField``'s codes and messages: a
+value it can't use, such as another model's prefix, is ``invalid`` ("Invalid
+value."), and one with no matching row is ``does_not_exist`` ("Object with
+identifier=cust_... does not exist."). A slug that matches more than one row raises
 ``MultipleObjectsReturned``, as ``SlugRelatedField`` does. With
 ``many=True``, the whole list is looked up in one query.
 

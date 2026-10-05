@@ -54,7 +54,8 @@ Errors
 ------
 
 - An identifier that can't be parsed, has another model's prefix, or matches
-  nothing raises ``Http404``.
+  nothing raises the same ``Http404`` as ``DetailView``, with its message
+  ("No invoice found matching the query").
 - A slug that matches more than one row raises ``MultipleObjectsReturned``, as
   Django's ``get_object()`` does. Keep slug fields unique.
 - A URL without the ``lookup_url_kwarg`` parameter raises ``AttributeError``.

@@ -5,11 +5,14 @@ strategies, fields) overrides the model, is covered for every entry
 point in test_consistency.py. These tests cover view-specific behavior.
 """
 
+import uuid
+
 import pytest
 from django.core.exceptions import ImproperlyConfigured, MultipleObjectsReturned
 from django.http import Http404
 from django.views.generic import DetailView, View
 
+from django_display_ids.encoding import encode_display_id
 from django_display_ids.views import DisplayIDMixin
 
 from .models import Invoice, Order
@@ -53,6 +56,29 @@ class TestGetObject:
 
         with pytest.raises(MultipleObjectsReturned):
             get_object(View, "dup", rf)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "value",
+    [str(uuid.uuid4()), encode_display_id("prod", uuid.uuid4()), "not-an-id"],
+    ids=["missing", "wrong prefix", "unparseable"],
+)
+def test_404_message_matches_detail_view(rf, value):
+    """Every miss raises the Http404 Django's own DetailView raises."""
+
+    class PlainView(DetailView):
+        model = Invoice
+
+    plain = PlainView()
+    plain.kwargs = {"pk": uuid.uuid4()}
+    plain.request = rf.get("/")
+    with pytest.raises(Http404) as expected:
+        plain.get_object()
+
+    with pytest.raises(Http404) as raised:
+        get_object(InvoiceDetailView, value, rf)
+    assert str(raised.value) == str(expected.value)
 
 
 @pytest.mark.django_db

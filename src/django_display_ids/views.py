@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from django.http import Http404
-from django.shortcuts import get_object_or_404
+from django.utils.translation import gettext as _
 
 from .exceptions import DisplayIDLookupError
 from .resolver import _LookupOptions
@@ -95,12 +95,22 @@ class DisplayIDMixin(_LookupOptions):
         # Use provided queryset or get from get_queryset()
         qs = queryset if queryset is not None else self.get_queryset()
 
+        # DetailView's 404 message. It's Django's own string, so Django's
+        # translations apply.
+        not_found = Http404(
+            _("No %(verbose_name)s found matching the query")
+            % {"verbose_name": qs.model._meta.verbose_name}
+        )
+
         # Outside the try: a misconfigured lookup is an error, not a 404
         lookup = self._get_lookup(qs.model)
         try:
             kwargs = lookup.build(str(value))
-        except DisplayIDLookupError as e:
-            raise Http404(str(e)) from e
+        except DisplayIDLookupError:
+            raise not_found from None
 
-        # Django's own 404 handling; MultipleObjectsReturned propagates
-        return get_object_or_404(qs, **kwargs)  # type: ignore[no-any-return]
+        # MultipleObjectsReturned propagates, as in DetailView
+        try:
+            return qs.get(**kwargs)  # type: ignore[no-any-return]
+        except qs.model.DoesNotExist:
+            raise not_found from None

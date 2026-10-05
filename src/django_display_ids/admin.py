@@ -9,6 +9,7 @@ from django.db.models import Q
 
 from . import checks
 from .exceptions import DisplayIDLookupError
+from .id_types import DisplayIDType
 from .resolver import _Lookup, _LookupOptions
 from .strategies import parse_identifier
 
@@ -49,18 +50,21 @@ class DisplayIDAdminSearchMixin(_LookupOptions):
         slug_field: Slug field name. Defaults to the model's ``slug_field``,
             then the ``DISPLAY_IDS["SLUG_FIELD"]`` setting, then ``"slug"``.
         display_id_search_fields: Other UUID fields to search, mapped to the
-            model whose display IDs they hold. Each gets an exact match,
-            parsed like ``parse_search_uuid(term, model=...)``. ``None``
-            accepts a display ID with any prefix::
+            model or ``DisplayIDType`` whose display IDs they hold. Each gets
+            an exact match, parsed like ``parse_search_uuid(term, model=...)``.
+            ``None`` accepts a display ID with any prefix::
 
                 display_id_search_fields = {
                     "customer_id": Customer,
-                    "request_uid": None,
+                    "request_uid": RequestID,
+                    "trace_uid": None,
                 }
     """
 
     model: type[Model]
-    display_id_search_fields: ClassVar[Mapping[str, type[Model] | None]] = {}
+    display_id_search_fields: ClassVar[
+        Mapping[str, type[Model] | DisplayIDType | None]
+    ] = {}
 
     def check(self, **kwargs: Any) -> list[CheckMessage]:
         """Add this library's checks to the admin's (see ``checks.py``)."""
@@ -68,7 +72,7 @@ class DisplayIDAdminSearchMixin(_LookupOptions):
 
     @staticmethod
     def parse_search_uuid(
-        search_term: str, *, model: type[Model] | None = None
+        search_term: str, *, model: type[Model] | DisplayIDType | None = None
     ) -> uuid.UUID | None:
         """Parse a search term as a display ID or raw UUID.
 
@@ -81,6 +85,7 @@ class DisplayIDAdminSearchMixin(_LookupOptions):
             model: If given, the term is checked against that model's rules,
                 the same way its own lookups are: a display ID must use its
                 prefix, and on a model without a prefix only raw UUIDs match.
+                A ``DisplayIDType`` works the same way, with its prefix.
                 Without it, a display ID with any prefix is accepted.
 
         For a plain exact match on another UUID field, use
@@ -97,8 +102,11 @@ class DisplayIDAdminSearchMixin(_LookupOptions):
                 return queryset, use_distinct
         """
         try:
-            if model is None:
-                return parse_identifier(search_term, ("display_id", "uuid")).uuid
+            if model is None or isinstance(model, DisplayIDType):
+                prefix = None if model is None else model.prefix
+                return parse_identifier(
+                    search_term, ("display_id", "uuid"), expected_prefix=prefix
+                ).uuid
             lookup = _Lookup.for_model(model, strategies=("display_id", "uuid"))
             (uuid_val,) = lookup.build(search_term).values()
         except DisplayIDLookupError:
@@ -107,7 +115,7 @@ class DisplayIDAdminSearchMixin(_LookupOptions):
 
     @staticmethod
     def _parse_identifier(
-        search_term: str, *, model: type[Model] | None = None
+        search_term: str, *, model: type[Model] | DisplayIDType | None = None
     ) -> uuid.UUID | None:
         """Deprecated alias for ``parse_search_uuid()``."""
         warnings.warn(

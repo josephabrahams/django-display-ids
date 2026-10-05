@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### New
+
+- `DisplayIDType` for display IDs with no model behind them, like request IDs: `RequestID = DisplayIDType("req")`, then `generate()`, `encode()`, `parse()`, `is_valid()` and `regex`. Its prefix can't clash with a model's. `display_id_search_fields` and `parse_search_uuid(model=...)` accept one, so admin search can check its prefix.
+
 ## 0.8.1 — 2026-09-29
 
 ### New

@@ -12,7 +12,11 @@ import pytest
 from django.contrib import admin
 from django.contrib.admin.sites import AdminSite
 
-from django_display_ids import DisplayIDAdminSearchMixin, encode_display_id
+from django_display_ids import (
+    DisplayIDAdminSearchMixin,
+    DisplayIDType,
+    encode_display_id,
+)
 
 from .models import Invoice, LineItem, Order, Product
 
@@ -82,6 +86,15 @@ class LineItemAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
     }
 
 
+# A display ID with no model, stored in a UUID column (here LineItem.uid)
+Reference = DisplayIDType("ref")
+
+
+class TypedLineItemAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
+    search_fields = ("name",)
+    display_id_search_fields: ClassVar = {"uid": Reference}
+
+
 class AnyPrefixLineItemAdmin(DisplayIDAdminSearchMixin, admin.ModelAdmin):
     search_fields = ("name",)
     display_id_search_fields: ClassVar = {"invoice_id": None}
@@ -138,6 +151,13 @@ class TestDisplayIDSearchFields:
         term = encode_display_id("req", invoice.id)
         assert self.search(admin_site, term, AnyPrefixLineItemAdmin)[0] == [line]
 
+    def test_display_id_type(self, admin_site, line):
+        """A DisplayIDType checks its prefix, like a model."""
+        own = Reference.encode(line.uid)
+        other = encode_display_id("evt", line.uid)
+        assert self.search(admin_site, own, TypedLineItemAdmin)[0] == [line]
+        assert self.search(admin_site, other, TypedLineItemAdmin)[0] == []
+
     def test_respects_queryset_scoping(self, admin_site, line, invoice):
         queryset = LineItem.objects.exclude(pk=line.pk)
         assert self.search(admin_site, invoice.display_id, queryset=queryset)[0] == []
@@ -181,6 +201,12 @@ class TestParseSearchUUID:
         assert self.parse(encode_display_id("inv", self.uid), model=Invoice) == self.uid
         assert self.parse(encode_display_id("prod", self.uid), model=Invoice) is None
         assert self.parse(str(self.uid), model=Invoice) == self.uid
+
+    def test_display_id_type(self):
+        ref = DisplayIDType("ref")
+        assert self.parse(ref.encode(self.uid), model=ref) == self.uid
+        assert self.parse(encode_display_id("evt", self.uid), model=ref) is None
+        assert self.parse(str(self.uid), model=ref) == self.uid
 
     def test_model_without_prefix_matches_uuids_only(self):
         assert self.parse(encode_display_id("inv", self.uid), model=Order) is None

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.db import models
 
-from . import checks
+from . import checks, registry
 from .encoding import PREFIX_PATTERN, encode_display_id
 from .resolver import _resolve_uuid_field
 
@@ -18,13 +18,6 @@ __all__ = [
     "get_model_for_prefix",
 ]
 
-# Registry of prefix -> model class (for collision detection)
-_prefix_registry: dict[str, type[models.Model]] = {}
-
-
-def _dotted_path(cls: type) -> str:
-    return f"{cls.__module__}.{cls.__qualname__}"
-
 
 def get_model_for_prefix(prefix: str) -> str | None:
     """Get the model name registered for a prefix.
@@ -35,32 +28,8 @@ def get_model_for_prefix(prefix: str) -> str | None:
     Returns:
         Model class name or None if not registered.
     """
-    cls = _prefix_registry.get(prefix)
+    cls = registry._prefix_registry.get(prefix)
     return cls.__name__ if cls is not None else None
-
-
-def _register_prefix(prefix: str, cls: type[models.Model]) -> None:
-    """Register a prefix for a model, checking for collisions.
-
-    Models are compared by module and class name, not identity, so a module
-    that gets imported twice (as Django's test runner can do) re-registers
-    cleanly, while two different models with the same class name still
-    collide.
-
-    Args:
-        prefix: The display ID prefix.
-        cls: The model class.
-
-    Raises:
-        ValueError: If prefix is already registered to a different model.
-    """
-    existing = _prefix_registry.get(prefix)
-    if existing is not None and _dotted_path(existing) != _dotted_path(cls):
-        raise ValueError(
-            f"Display ID prefix '{prefix}' is already used by "
-            f"{_dotted_path(existing)}, cannot reuse for {_dotted_path(cls)}"
-        )
-    _prefix_registry[prefix] = cls
 
 
 class DisplayIDModel(models.Model):
@@ -110,7 +79,7 @@ class DisplayIDModel(models.Model):
                         f"{cls.__name__}.display_id_prefix must be 1-16 "
                         f"lowercase letters, got: {prefix!r}"
                     )
-                _register_prefix(prefix, cls)
+                registry._register_prefix(prefix, cls)
 
     @classmethod
     def check(cls, **kwargs: Any) -> list[CheckMessage]:

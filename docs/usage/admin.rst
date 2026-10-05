@@ -48,7 +48,8 @@ To also find invoices by their customer's display ID, list the field in
        search_fields = ["name"]
        display_id_search_fields = {
            "customer_id": Customer,  # cust_... or a UUID
-           "request_uid": None,      # a display ID with any prefix, or a UUID
+           "request_uid": RequestID, # req_... or a UUID
+           "trace_uid": None,        # a display ID with any prefix, or a UUID
        }
 
 Searching a customer's display ID now also lists their invoices. Each key is a
@@ -57,8 +58,9 @@ holds:
 
 - ``customer_id`` works when the UUID is Customer's primary key. If Customer
   keeps its UUID in a separate field, use ``customer__uid``.
-- With a model, a display ID must use that model's prefix. ``None`` accepts
-  any prefix, for IDs no model owns, like request IDs.
+- With a model, a display ID must use that model's prefix. A
+  ``DisplayIDType`` works the same way, for IDs no model owns, like request
+  IDs (see :doc:`/reference/encoding`). ``None`` accepts any prefix.
 - A path through a many-to-many relation turns on ``distinct()``, as it does
   in ``search_fields``.
 - ``manage.py check`` warns about a key that doesn't end at a ``UUIDField``
